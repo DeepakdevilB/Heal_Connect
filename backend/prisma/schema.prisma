@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String?  @unique
+  email     String?  @unique
+  name      String?
+  dob       DateTime?
+  gender    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet    Wallet?
+  sessions  Session[]
+  reviews   Review[]
+}
+
+model Practitioner {
+  id             String   @id @default(uuid())
+  phone          String?  @unique
+  email          String?  @unique
+  name           String
+  bio            String?
+  specialties    String[]
+  languages      String[]
+  experienceYrs  Int      @default(0)
+  perMinuteRate  Float    @default(0)
+  isVerified     Boolean  @default(false)
+  isOnline       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sessions       Session[]
+  reviews        Review[]
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Float    @default(0)
+  currency  String   @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  amount      Float
+  type        String   // e.g., "RECHARGE", "DEBIT", "REFUND"
+  status      String   // e.g., "SUCCESS", "PENDING", "FAILED"
+  referenceId String?  // e.g., Razorpay Payment ID
+  createdAt   DateTime @default(now())
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  type           String   // e.g., "CHAT", "AUDIO", "VIDEO"
+  status         String   // e.g., "INITIATED", "ACTIVE", "COMPLETED", "CANCELLED"
+  startTime      DateTime?
+  endTime        DateTime?
+  totalCost      Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  review         Review?
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  rating         Int      // 1 to 5
+  comment        String?
+  createdAt      DateTime @default(now())
+}
