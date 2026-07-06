@@ -1,4 +1,4 @@
-name: Backend CI/CD
+name: Backend CI
 
 on:
   push:
@@ -31,56 +31,8 @@ jobs:
 
       - name: Generate Prisma Client
         working-directory: ./backend
-        run: npx prisma generate
+        run: npx prisma generate --config=""
 
-      - name: Build TypeScript
+      - name: Type Check
         working-directory: ./backend
-        run: npm run build
-
-      - name: Archive build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-build
-          path: |
-            backend/dist
-            backend/package.json
-            backend/package-lock.json
-            backend/prisma
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
-    
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-build
-          path: ./backend
-
-      - name: Install Production Dependencies
-        working-directory: ./backend
-        run: npm ci --omit=dev
-
-      # Azure Login (Requires AZURE_CREDENTIALS secret)
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Fetch secrets from Azure Key Vault
-      - name: Get KeyVault Secrets
-        uses: Azure/get-keyvault-secrets@v1
-        with:
-          keyvault: "healconnect-kv-${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}"
-          secrets: 'DATABASE-URL, JWT-SECRET'
-        id: kvSecrets
-
-      # Deploy to Azure App Service
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: "healconnect-api-${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}"
-          package: ./backend
+        run: npx tsc --noEmit
