@@ -206,7 +206,7 @@ router.post(
         audience: process.env.GOOGLE_CLIENT_ID ?? '',
       });
 
-      const gPayload = (ticket as Awaited<typeof ticket>).getPayload();
+      const gPayload = ticket.getPayload();
       if (!gPayload || !gPayload.sub) {
         res.status(400).json({ success: false, message: 'Invalid Google token' });
         return;
@@ -214,12 +214,16 @@ router.post(
 
       const { sub: googleId, email, name, email_verified } = gPayload;
 
-      // Find or create user
-      let user = await prisma.user.findFirst({
-        where: { OR: [{ googleId }, ...(email ? [{ email }] : [])] },
-      });
+      // First try to find by googleId
+      let user = await prisma.user.findUnique({ where: { googleId } });
+
+      // If not found by googleId, try by email
+      if (!user && email) {
+        user = await prisma.user.findUnique({ where: { email } });
+      }
 
       if (!user) {
+        // New user — create account
         user = await prisma.user.create({
           data: {
             googleId,
@@ -230,6 +234,7 @@ router.post(
           },
         });
       } else if (!user.googleId) {
+        // Existing email account — link Google ID to it
         user = await prisma.user.update({
           where: { id: user.id },
           data: { googleId, isEmailVerified: true },
