@@ -8,7 +8,7 @@ import {
   Search, ChevronRight, Zap, TrendingUp, Clock, Shield, User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { authApi, tokenStore } from '@/lib/api';
