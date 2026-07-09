@@ -14,6 +14,7 @@ import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
+import { blacklistToken } from '../lib/redis';
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -179,12 +180,25 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
 router.post('/logout', requireAuth, async (req: AuthRequest, res: Response) => {
   const { refreshToken } = req.body as { refreshToken?: string };
+  const authHeader = req.headers.authorization;
 
   if (refreshToken) {
     await prisma.refreshToken.updateMany({
       where: { token: refreshToken },
       data: { isRevoked: true },
     });
+  }
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    // Cast to access the standard exp claim
+    const exp = (req.user as any)?.exp;
+    if (token && exp) {
+      const expiresInMs = (exp * 1000) - Date.now();
+      if (expiresInMs > 0) {
+        await blacklistToken(token, expiresInMs);
+      }
+    }
   }
 
   res.json({ success: true, message: 'Logged out successfully' });
