@@ -64,17 +64,12 @@ jobs:
         working-directory: ./backend
         run: npm ci --omit=dev
 
-      # Azure Login (Requires AZURE_CREDENTIALS secret)
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Deploy to Azure App Service
+      # Deploy to Azure App Service using Publish Profile
       # Since Managed Identity & App Settings are configured in Azure Portal,
       # the App Service will automatically fetch the Key Vault secrets on boot!
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: "healconnect-backend"
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
           package: ./backend
