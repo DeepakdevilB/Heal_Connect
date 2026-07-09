@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 model User {
@@ -13,7 +13,10 @@ model User {
   passwordHash          String?
   name                  String?
   dob                   DateTime?
+  birthPlace            String?
   gender                String?
+  wellnessInterests     String[]
+  photoUrl              String?
   isEmailVerified       Boolean   @default(false)
   emailVerifyToken      String?
   emailVerifyExpiry     DateTime?
@@ -21,7 +24,7 @@ model User {
   passwordResetExpiry   DateTime?
   googleId              String?   @unique
   appleId               String?   @unique
-  provider              String    @default("email") // "email" | "google" | "apple"
+  provider              String    @default("email")
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -47,12 +50,15 @@ model Practitioner {
   id             String   @id @default(uuid())
   phone          String?  @unique
   email          String?  @unique
+  passwordHash   String?
   name           String
   bio            String?
   specialties    String[]
+  certifications String[]
   languages      String[]
   experienceYrs  Int      @default(0)
   perMinuteRate  Float    @default(0)
+  photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
   createdAt      DateTime @default(now())

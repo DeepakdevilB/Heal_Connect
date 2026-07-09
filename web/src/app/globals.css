@@ -8,6 +8,9 @@
   .text-balance {
     text-wrap: balance;
   }
+  .input-style {
+    @apply w-full text-sm rounded-lg bg-muted border border-border px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50;
+  }
 }
 
 @layer base {

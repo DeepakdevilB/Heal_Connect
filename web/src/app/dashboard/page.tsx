@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { authApi, tokenStore } from '@/lib/api';
+import { authApi, practitionersApi, tokenStore } from '@/lib/api';
 
 interface UserData {
   id: string;
@@ -20,19 +20,23 @@ interface UserData {
   isEmailVerified: boolean;
 }
 
-const experts = [
-  { initials: 'RS', name: 'Rahul Sharma', specialty: 'Vedic Astrologer', rating: 4.9, reviews: 1240, rate: 25, online: true, gradient: 'from-indigo-500 to-purple-600' },
-  { initials: 'AM', name: 'Anjali Menon', specialty: 'Tarot & Reiki', rating: 5.0, reviews: 987, rate: 30, online: true, gradient: 'from-emerald-500 to-teal-600' },
-  { initials: 'VK', name: 'Vikram Kapoor', specialty: 'Vastu Consultant', rating: 4.8, reviews: 654, rate: 20, online: false, gradient: 'from-cyan-500 to-blue-600' },
-  { initials: 'PD', name: 'Priya Doshi', specialty: 'Numerologist', rating: 4.7, reviews: 432, rate: 15, online: true, gradient: 'from-pink-500 to-rose-600' },
-  { initials: 'SK', name: 'Suresh Kumar', specialty: 'Palmist', rating: 4.6, reviews: 321, rate: 12, online: false, gradient: 'from-amber-500 to-orange-600' },
-  { initials: 'ND', name: 'Neha Das', specialty: 'Energy Healer', rating: 4.9, reviews: 876, rate: 35, online: true, gradient: 'from-violet-500 to-purple-600' },
-];
+interface Practitioner {
+  id: string;
+  name: string;
+  specialties: string[];
+  perMinuteRate: number;
+  photoUrl: string | null;
+  isOnline: boolean;
+  avgRating: number;
+  reviewCount: number;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [experts, setExperts] = useState<Practitioner[]>([]);
+  const [onlineCount, setOnlineCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'all' | 'astrology' | 'tarot' | 'vastu' | 'numerology'>('all');
 
   useEffect(() => {
@@ -43,6 +47,14 @@ export default function DashboardPage() {
       setUser((res.data as { user: UserData }).user);
     }).catch(() => { tokenStore.clear(); router.replace('/login'); })
       .finally(() => setLoading(false));
+
+    const specialty = activeTab !== 'all' ? activeTab : undefined;
+    practitionersApi.list({ limit: 6, ...(specialty ? { specialty } : {}) }).then((res) => {
+      if (res.success && res.data) {
+        setExperts(res.data.practitioners);
+        setOnlineCount(res.data.practitioners.filter((p) => p.isOnline).length);
+      }
+    });
   }, [router]);
 
   if (loading) {
@@ -57,6 +69,14 @@ export default function DashboardPage() {
   }
 
   const firstName = user?.name?.split(' ')[0] || 'there';
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    const specialty = tab !== 'all' ? tab : undefined;
+    practitionersApi.list({ limit: 6, ...(specialty ? { specialty } : {}) }).then((res) => {
+      if (res.success && res.data) setExperts(res.data.practitioners);
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
@@ -86,9 +106,9 @@ export default function DashboardPage() {
               <Wallet className="h-4 w-4 text-indigo-400" />
               <span className="text-sm font-semibold text-indigo-300">₹0.00</span>
             </div>
-            <button onClick={() => { tokenStore.clear(); router.push('/login'); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity" title="Logout">
+            <Link href="/dashboard/profile" className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity" title="My Profile">
               {user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -122,7 +142,7 @@ export default function DashboardPage() {
             { label: 'Wallet Balance', value: '₹0', icon: Wallet, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
             { label: 'Sessions Done', value: '0', icon: MessageCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
             { label: 'Minutes Used', value: '0 min', icon: Clock, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-            { label: 'Experts Online', value: '142', icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+            { label: 'Experts Online', value: String(onlineCount || '—'), icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
           ].map((stat) => (
             <Card key={stat.label} className="bg-card border-border">
               <CardContent className="p-4 flex items-center gap-3">
@@ -174,54 +194,72 @@ export default function DashboardPage() {
 
           <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
             {(['all', 'astrology', 'tarot', 'vastu', 'numerology'] as const).map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab ? 'bg-indigo-600 text-white' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
+              <button key={tab} onClick={() => handleTabChange(tab)} className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab ? 'bg-indigo-600 text-white' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {experts.map((expert) => (
-              <Card key={expert.name} className="bg-card border-border hover:border-indigo-500/30 transition-all group">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div className="relative shrink-0">
-                      <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${expert.gradient} flex items-center justify-center text-white text-lg font-bold shadow-lg`}>{expert.initials}</div>
-                      {expert.online && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-card rounded-full" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-foreground truncate">{expert.name}</p>
-                        <Badge variant="outline" className={`text-xs shrink-0 ml-2 ${expert.online ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-border text-muted-foreground'}`}>
-                          {expert.online ? 'Online' : 'Offline'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-indigo-400 font-medium">{expert.specialty}</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Star className="w-3.5 h-3.5 text-yellow-400 fill-current" />
-                        <span className="text-sm font-medium text-foreground">{expert.rating}</span>
-                        <span className="text-xs text-muted-foreground">({expert.reviews.toLocaleString()})</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                    <div>
-                      <span className="text-lg font-bold text-foreground">₹{expert.rate}</span>
-                      <span className="text-xs text-muted-foreground">/min</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="h-8 px-3 border-border hover:border-indigo-500/50 hover:text-indigo-400">
-                        <MessageCircle className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" className="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
-                        <Phone className="h-3.5 w-3.5 mr-1" /> Call
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {experts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p>No practitioners found. Check back soon!</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {experts.map((expert) => {
+                const gradients = ['from-indigo-500 to-purple-600', 'from-emerald-500 to-teal-600', 'from-cyan-500 to-blue-600', 'from-pink-500 to-rose-600', 'from-amber-500 to-orange-600', 'from-violet-500 to-purple-600'];
+                const gradient = gradients[expert.name.charCodeAt(0) % gradients.length];
+                const initials = expert.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                return (
+                  <Link key={expert.id} href={`/practitioners/${expert.id}`}>
+                    <Card className="bg-card border-border hover:border-indigo-500/30 transition-all group cursor-pointer">
+                      <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="relative shrink-0">
+                            {expert.photoUrl ? (
+                              <img src={expert.photoUrl} alt={expert.name} className="w-14 h-14 rounded-full object-cover shadow-lg" />
+                            ) : (
+                              <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-lg font-bold shadow-lg`}>{initials}</div>
+                            )}
+                            {expert.isOnline && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-card rounded-full" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-foreground truncate">{expert.name}</p>
+                              <Badge variant="outline" className={`text-xs shrink-0 ml-2 ${expert.isOnline ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-border text-muted-foreground'}`}>
+                                {expert.isOnline ? '● Online' : 'Offline'}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-indigo-400 font-medium truncate">{expert.specialties.slice(0, 2).join(' · ')}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Star className="w-3.5 h-3.5 text-yellow-400 fill-current" />
+                              <span className="text-sm font-medium text-foreground">{expert.avgRating || '—'}</span>
+                              <span className="text-xs text-muted-foreground">({expert.reviewCount})</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                          <div>
+                            <span className="text-lg font-bold text-foreground">₹{expert.perMinuteRate}</span>
+                            <span className="text-xs text-muted-foreground">/min</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" className="h-8 px-3 border-border hover:border-indigo-500/50 hover:text-indigo-400" onClick={(e) => e.preventDefault()}>
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="sm" disabled={!expert.isOnline} className="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 text-white border-0 disabled:opacity-40" onClick={(e) => e.preventDefault()}>
+                              <Phone className="h-3.5 w-3.5 mr-1" /> Call
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Recharge CTA ── */}
