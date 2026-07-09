@@ -9,8 +9,19 @@ import { uploadProfilePhoto, deleteProfilePhoto } from '../lib/azure';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-// ─── Directory (public) ───────────────────────────────────────────────────────
-// GET /api/practitioners?specialty=&language=&minRating=&maxRate=&onlineOnly=&page=&limit=
+function getParam(req: Request, key: string): string | undefined {
+  const val = req.params[key];
+  return Array.isArray(val) ? val[0] : val;
+}
+
+function getQuery(req: Request, key: string): string | undefined {
+  const val = req.query[key];
+  if (Array.isArray(val)) return String(val[0]);
+  if (val == null) return undefined;
+  return String(val);
+}
+
+// GET /api/practitioners
 router.get(
   '/',
   [
@@ -25,30 +36,31 @@ router.get(
   ],
   handleValidation,
   async (req: Request, res: Response) => {
-    const {
-      specialty, language, minRating, maxRate,
-      onlineOnly, page = '1', limit = '20', search,
-    } = req.query as Record<string, string>;
+    const specialty = getQuery(req, 'specialty');
+    const language = getQuery(req, 'language');
+    const minRating = getQuery(req, 'minRating');
+    const maxRate = getQuery(req, 'maxRate');
+    const onlineOnly = getQuery(req, 'onlineOnly');
+    const page = getQuery(req, 'page') ?? '1';
+    const limit = getQuery(req, 'limit') ?? '20';
+    const search = getQuery(req, 'search');
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
     try {
-      // Build where clause
       const where: Record<string, unknown> = { isVerified: true };
-
-      if (specialty) where.specialties = { has: specialty };
-      if (language) where.languages = { has: language };
-      if (maxRate) where.perMinuteRate = { lte: parseFloat(maxRate) };
-      if (onlineOnly === 'true') where.isOnline = true;
-      if (search) {
-        where.OR = [
+      if (specialty != null) where['specialties'] = { has: specialty };
+      if (language != null) where['languages'] = { has: language };
+      if (maxRate != null) where['perMinuteRate'] = { lte: parseFloat(maxRate) };
+      if (onlineOnly === 'true') where['isOnline'] = true;
+      if (search != null) {
+        where['OR'] = [
           { name: { contains: search, mode: 'insensitive' } },
           { bio: { contains: search, mode: 'insensitive' } },
         ];
       }
 
-      // Fetch practitioners with avg rating
       const [practitioners, total] = await Promise.all([
         prisma.practitioner.findMany({
           where,
@@ -65,14 +77,13 @@ router.get(
         prisma.practitioner.count({ where }),
       ]);
 
-      // Compute avg rating and filter by minRating
-      const minR = minRating ? parseFloat(minRating) : 0;
+      const minR = minRating != null ? parseFloat(minRating) : 0;
       const result = practitioners
         .map((p) => {
           const ratings = p.reviews.map((r) => r.rating);
           const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
           const reviewCount = ratings.length;
-          const { reviews: _, ...rest } = p;
+          const { reviews: _r, ...rest } = p;
           return { ...rest, avgRating: Math.round(avgRating * 10) / 10, reviewCount };
         })
         .filter((p) => p.avgRating >= minR);
@@ -93,9 +104,11 @@ router.get(
 
 // GET /api/practitioners/:id
 router.get('/:id', async (req: Request, res: Response) => {
+  const id = getParam(req, 'id');
+  if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
   try {
     const p = await prisma.practitioner.findUnique({
-      where: { id: req.params.id },
+      where: { id },
       select: {
         id: true, name: true, bio: true, specialties: true, languages: true,
         certifications: true, experienceYrs: true, perMinuteRate: true,
@@ -126,7 +139,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/practitioners (admin/self-registration — no auth guard for now, add role check later)
+// POST /api/practitioners
 router.post(
   '/',
   [
@@ -150,7 +163,16 @@ router.post(
 
     try {
       const practitioner = await prisma.practitioner.create({
-        data: { name, email, bio, specialties: specialties ?? [], certifications: certifications ?? [], languages: languages ?? [], experienceYrs: experienceYrs ?? 0, perMinuteRate: perMinuteRate ?? 0 },
+        data: {
+          name,
+          ...(email != null ? { email } : {}),
+          ...(bio != null ? { bio } : {}),
+          specialties: specialties ?? [],
+          certifications: certifications ?? [],
+          languages: languages ?? [],
+          experienceYrs: experienceYrs ?? 0,
+          perMinuteRate: perMinuteRate ?? 0,
+        },
       });
       res.status(201).json({ success: true, data: { practitioner } });
     } catch (err: unknown) {
@@ -162,7 +184,7 @@ router.post(
   }
 );
 
-// PATCH /api/practitioners/:id  (protected — practitioner updates own profile)
+// PATCH /api/practitioners/:id
 router.patch(
   '/:id',
   requireAuth,
@@ -177,6 +199,9 @@ router.patch(
   ],
   handleValidation,
   async (req: AuthRequest, res: Response) => {
+    const id = getParam(req, 'id');
+    if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
+
     const { name, bio, specialties, certifications, languages, experienceYrs, perMinuteRate } =
       req.body as {
         name?: string; bio?: string; specialties?: string[];
@@ -185,13 +210,19 @@ router.patch(
       };
 
     try {
-      const practitioner = await prisma.practitioner.update({
-        where: { id: req.params.id },
-        data: { name, bio, specialties, certifications, languages, experienceYrs, perMinuteRate },
-      });
+      const data: Parameters<typeof prisma.practitioner.update>[0]['data'] = {};
+      if (name != null) data.name = name;
+      if (bio != null) data.bio = bio;
+      if (specialties != null) data.specialties = { set: specialties };
+      if (certifications != null) data.certifications = { set: certifications };
+      if (languages != null) data.languages = { set: languages };
+      if (experienceYrs != null) data.experienceYrs = experienceYrs;
+      if (perMinuteRate != null) data.perMinuteRate = perMinuteRate;
+
+      const practitioner = await prisma.practitioner.update({ where: { id }, data });
       res.json({ success: true, data: { practitioner } });
     } catch (err: unknown) {
-      const e = err as { code?: string; message?: string };
+      const e = err as { code?: string };
       if (e.code === 'P2025') { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
       console.error(err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -213,17 +244,17 @@ router.post(
       return;
     }
 
+    const id = getParam(req, 'id');
+    if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
+
     try {
-      const existing = await prisma.practitioner.findUnique({
-        where: { id: req.params.id },
-        select: { photoUrl: true },
-      });
+      const existing = await prisma.practitioner.findUnique({ where: { id }, select: { photoUrl: true } });
       if (!existing) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
 
       if (existing.photoUrl) await deleteProfilePhoto(existing.photoUrl);
 
       const photoUrl = await uploadProfilePhoto(req.file.buffer, req.file.mimetype, 'practitioners');
-      await prisma.practitioner.update({ where: { id: req.params.id }, data: { photoUrl } });
+      await prisma.practitioner.update({ where: { id }, data: { photoUrl } });
 
       res.json({ success: true, data: { photoUrl } });
     } catch (err) {
@@ -240,8 +271,10 @@ router.patch('/:id/availability', requireAuth, async (req: AuthRequest, res: Res
     res.status(400).json({ success: false, message: 'isOnline (boolean) required' });
     return;
   }
+  const id = getParam(req, 'id');
+  if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
   try {
-    await prisma.practitioner.update({ where: { id: req.params.id }, data: { isOnline } });
+    await prisma.practitioner.update({ where: { id }, data: { isOnline } });
     res.json({ success: true, data: { isOnline } });
   } catch (err: unknown) {
     const e = err as { code?: string };
@@ -253,14 +286,13 @@ router.patch('/:id/availability', requireAuth, async (req: AuthRequest, res: Res
 
 // DELETE /api/practitioners/:id
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
   try {
-    const p = await prisma.practitioner.findUnique({
-      where: { id: req.params.id },
-      select: { photoUrl: true },
-    });
+    const p = await prisma.practitioner.findUnique({ where: { id }, select: { photoUrl: true } });
     if (!p) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
     if (p.photoUrl) await deleteProfilePhoto(p.photoUrl);
-    await prisma.practitioner.delete({ where: { id: req.params.id } });
+    await prisma.practitioner.delete({ where: { id } });
     res.json({ success: true, message: 'Practitioner deleted' });
   } catch (err) {
     console.error(err);
