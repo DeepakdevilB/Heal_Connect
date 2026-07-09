@@ -5,6 +5,8 @@ import express from 'express';
 import cors from 'cors';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
+import usersRouter from './routes/users';
+import practitionersRouter from './routes/practitioners';
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -39,6 +41,8 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/practitioners', practitionersRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 
