@@ -1,11 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, type JwtPayload } from '../lib/jwt';
+import { isTokenBlacklisted } from '../lib/redis';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -21,6 +22,12 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
 
   try {
+    const isBlacklisted = await isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      res.status(401).json({ success: false, message: 'Token has been revoked' });
+      return;
+    }
+
     const payload = verifyAccessToken(token);
     req.user = payload;
     next();

@@ -30,8 +30,8 @@ export default function GoogleCallbackPage() {
       }
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       router.replace('/dashboard');
-    }).catch(() => {
-      setError('Google sign-in failed. Please try again.');
+    }).catch((err) => {
+      setError(`Google sign-in failed. Please try again. [${err.message || String(err)}]`);
     });
   }, [router]);
 
