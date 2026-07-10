@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { MessageCircle, Phone, ShieldCheck, Wallet, Star, Sparkles, CheckCircle } from 'lucide-react';
 import Navbar from '@/components/navbar';
-import AstrologyAnimation from '@/components/astrology-animation';
 
 export default function LandingPage() {
   return (
@@ -68,11 +67,6 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              {/* Right — Lottie animation */}
-              <div className="flex-shrink-0 w-72 h-72 md:w-96 md:h-96 lg:w-[460px] lg:h-[460px]">
-                <AstrologyAnimation />
               </div>
 
             </div>

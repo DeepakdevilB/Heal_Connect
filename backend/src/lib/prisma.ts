@@ -3,7 +3,7 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import * as dotenv from 'dotenv';
 
 // Load env immediately so DATABASE_URL is available
-dotenv.config();
+dotenv.config({ path: require('path').resolve(__dirname, '../../../.env') });
 
 function createPrismaClient() {
   const connectionString = process.env['DATABASE_URL'];
