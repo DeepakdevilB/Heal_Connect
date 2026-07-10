@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
 import * as dotenv from 'dotenv';
 
 // Load env immediately so DATABASE_URL is available
@@ -10,9 +9,9 @@ function createPrismaClient() {
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
-  const adapter = new PrismaNeon({ connectionString });
+  
   return new PrismaClient({
-    adapter,
+    datasourceUrl: connectionString,
     log: process.env['NODE_ENV'] === 'development' ? ['error', 'warn'] : ['error'],
   });
 }
