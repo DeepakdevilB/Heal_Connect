@@ -1,4 +1,4 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   push:
@@ -31,8 +31,45 @@ jobs:
 
       - name: Generate Prisma Client
         working-directory: ./backend
-        run: npx prisma generate --config=""
+        run: npx prisma generate
 
-      - name: Type Check
+      - name: Build TypeScript
         working-directory: ./backend
-        run: npx tsc --noEmit
+        run: npm run build
+
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            backend/dist
+            backend/package.json
+            backend/package-lock.json
+            backend/prisma
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+          path: ./backend
+
+      - name: Install Production Dependencies
+        working-directory: ./backend
+        run: npm ci --omit=dev
+
+      # Deploy to Azure App Service using Publish Profile
+      # Since Managed Identity & App Settings are configured in Azure Portal,
+      # the App Service will automatically fetch the Key Vault secrets on boot!
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "healconnect-backend"
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
+          package: ./backend
