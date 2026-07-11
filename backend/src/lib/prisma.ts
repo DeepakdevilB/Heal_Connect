@@ -11,7 +11,11 @@ function createPrismaClient() {
   }
   
   return new PrismaClient({
-    datasourceUrl: connectionString,
+    datasources: {
+      db: {
+        url: connectionString,
+      },
+    },
     log: process.env['NODE_ENV'] === 'development' ? ['error', 'warn'] : ['error'],
   });
 }
