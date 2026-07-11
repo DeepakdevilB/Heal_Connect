@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@sendgrid/mail": "^8.1.6",
     "@types/bcryptjs": "^2.4.6",
@@ -27,6 +28,7 @@
     "google-auth-library": "^10.9.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
     "rate-limit-redis": "^5.0.0",
     "ws": "^8.21.0"
   },
@@ -34,6 +36,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.0.1",
+    "@types/pg": "^8.20.0",
     "prisma": "^7.8.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
