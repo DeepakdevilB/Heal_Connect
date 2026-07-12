@@ -43,7 +43,20 @@ app.use(generalLimiter);
 // Remove X-Powered-By header
 app.disable('x-powered-by');
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
+
+app.get('/api/migrate', async (_req, res) => {
+  try {
+    const { stdout, stderr } = await execAsync('npx prisma migrate deploy');
+    res.json({ success: true, stdout, stderr });
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
 
 app.use('/api/auth', authRouter);
 
