@@ -37,17 +37,9 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'healthy', service: 'healconnect-api' });
 });
 
-// Apply general rate limiter to all routes
-app.use(generalLimiter);
-
-// Remove X-Powered-By header
-app.disable('x-powered-by');
-
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/api/migrate', async (_req, res) => {
   try {
@@ -68,6 +60,9 @@ app.get('/api/migrate', async (_req, res) => {
     res.status(500).json({ success: false, error: String(error) });
   }
 });
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
 
 app.use('/api/auth', authRouter);
 
