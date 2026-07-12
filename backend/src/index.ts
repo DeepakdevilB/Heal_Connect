@@ -7,6 +7,11 @@ import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
 
 const app = express();
+
+// Trust the Azure App Service reverse proxy to parse X-Forwarded-For correctly
+// This strips the port number from the IP address, fixing express-rate-limit
+app.set('trust proxy', 1);
+
 const port = process.env.PORT || 8080;
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
