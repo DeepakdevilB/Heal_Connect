@@ -3,11 +3,11 @@ import RedisStore from 'rate-limit-redis';
 import { redis } from '../lib/redis';
 import { Request } from 'express';
 
-const extractIp = (req: Request) => {
-  let ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
+const extractIp = (req: Request): string => {
+  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
   // Strip port if it's an IPv4 address with port (e.g., 223.233.66.130:11279)
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-  if (match) {
+  if (match && match[1]) {
     return match[1];
   }
   return ip;
