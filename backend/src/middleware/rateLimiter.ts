@@ -1,12 +1,24 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redis } from '../lib/redis';
+import { Request } from 'express';
+
+const extractIp = (req: Request) => {
+  let ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
+  // Strip port if it's an IPv4 address with port (e.g., 223.233.66.130:11279)
+  const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+  if (match) {
+    return match[1];
+  }
+  return ip;
+};
 
 // General API rate limiter — 100 requests per 15 min
 export const generalLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
   }),
+  keyGenerator: extractIp,
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
@@ -19,6 +31,7 @@ export const authLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
   }),
+  keyGenerator: extractIp,
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -31,6 +44,7 @@ export const emailLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
   }),
+  keyGenerator: extractIp,
   windowMs: 60 * 60 * 1000,
   max: 5,
   standardHeaders: true,

@@ -1,16 +1,23 @@
 import Redis from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const isCluster = REDIS_URL.includes('azure.net');
 
 // Initialize the Redis client
-export const redis = new Redis(REDIS_URL, {
-  maxRetriesPerRequest: 3,
-  retryStrategy(times) {
-    // Retry strategy: exponential backoff, max 3 seconds
-    const delay = Math.min(times * 50, 3000);
-    return delay;
-  },
-});
+export const redis = isCluster
+  ? new Redis.Cluster([REDIS_URL], {
+      redisOptions: {
+        tls: { rejectUnauthorized: false },
+      },
+    })
+  : new Redis(REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        // Retry strategy: exponential backoff, max 3 seconds
+        const delay = Math.min(times * 50, 3000);
+        return delay;
+      },
+    });
 
 redis.on('error', (err) => {
   console.error('Redis Client Error:', err);
