@@ -43,16 +43,27 @@ app.use(generalLimiter);
 // Remove X-Powered-By header
 app.disable('x-powered-by');
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
-const execAsync = promisify(exec);
+import fs from 'fs';
+import path from 'path';
+import { Client } from 'pg';
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/api/migrate', async (_req, res) => {
   try {
-    const { stdout, stderr } = await execAsync('npm run migrate');
-    res.json({ success: true, stdout, stderr });
+    const sqlPath = path.join(__dirname, '../prisma/migrations/20260703111447_init/migration.sql');
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    
+    const client = new Client({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    await client.connect();
+    await client.query(sql);
+    await client.end();
+    
+    res.json({ success: true, message: 'Raw SQL migration executed successfully!' });
   } catch (error) {
     res.status(500).json({ success: false, error: String(error) });
   }
