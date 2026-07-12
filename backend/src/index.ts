@@ -42,22 +42,48 @@ import path from 'path';
 import { Client } from 'pg';
 
 app.get('/api/migrate', async (_req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.write('Starting migration process...\n');
+  
   try {
     const sqlPath = path.join(__dirname, '../prisma/migrations/20260703111447_init/migration.sql');
+    res.write('SQL Path resolved to: ' + sqlPath + '\n');
+    
+    if (!fs.existsSync(sqlPath)) {
+      res.write('ERROR: SQL file not found at this path!\n');
+      return res.end();
+    }
+    
     const sql = fs.readFileSync(sqlPath, 'utf8');
+    res.write(`Read SQL file successfully. Size: ${sql.length} bytes.\n`);
+    
+    res.write('Initializing pg Client...\n');
+    res.write(`DATABASE_URL exists? ${!!process.env.DATABASE_URL}\n`);
     
     const client = new Client({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      // Do not explicitly pass ssl to exactly match how Prisma's Pool connects
     });
     
-    await client.connect();
-    await client.query(sql);
-    await client.end();
+    res.write('Attempting to connect to database...\n');
     
-    res.json({ success: true, message: 'Raw SQL migration executed successfully!' });
+    const connectPromise = client.connect();
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 15 seconds!')), 15000));
+    
+    await Promise.race([connectPromise, timeoutPromise]);
+    res.write('Successfully connected to database!\n');
+    
+    res.write('Executing SQL queries...\n');
+    await client.query(sql);
+    res.write('SQL queries executed successfully!\n');
+    
+    await client.end();
+    res.write('Database connection closed.\n');
+    res.write('Migration completely finished!\n');
+    res.end();
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) });
+    res.write('\nFATAL ERROR: ' + String(error) + '\n');
+    res.end();
   }
 });
 
