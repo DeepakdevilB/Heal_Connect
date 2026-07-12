@@ -64,6 +64,10 @@ jobs:
         working-directory: ./backend
         run: npm ci --omit=dev
 
+      - name: Generate Prisma Client for Production
+        working-directory: ./backend
+        run: npx prisma@7.8.0 generate
+
       # Deploy to Azure App Service using Publish Profile
       # Since Managed Identity & App Settings are configured in Azure Portal,
       # the App Service will automatically fetch the Key Vault secrets on boot!
