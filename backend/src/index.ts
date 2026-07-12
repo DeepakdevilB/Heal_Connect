@@ -51,7 +51,7 @@ const execAsync = promisify(exec);
 
 app.get('/api/migrate', async (_req, res) => {
   try {
-    const { stdout, stderr } = await execAsync('npx prisma migrate deploy');
+    const { stdout, stderr } = await execAsync('npm run migrate');
     res.json({ success: true, stdout, stderr });
   } catch (error) {
     res.status(500).json({ success: false, error: String(error) });
