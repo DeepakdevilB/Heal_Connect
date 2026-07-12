@@ -26,6 +26,12 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' })); // Limit payload size
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
+// ─── Health Check (Before Rate Limiter) ───────────────────────────────────────
+app.get('/', (_req, res) => res.send('HealConnect API is running'));
+app.get('/health', (_req, res) => {
+  res.json({ status: 'healthy', service: 'healconnect-api' });
+});
+
 // Apply general rate limiter to all routes
 app.use(generalLimiter);
 
@@ -33,10 +39,6 @@ app.use(generalLimiter);
 app.disable('x-powered-by');
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'healthy', service: 'healconnect-api' });
-});
 
 app.use('/api/auth', authRouter);
 
