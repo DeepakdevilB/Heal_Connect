@@ -12,19 +12,19 @@
 
 ```mermaid
 graph TB
-    subgraph Client["🌐 Client (Browser)"]
+    subgraph Client["Client (Browser)"]
         style Client fill:#1e1b4b,stroke:#6366f1,color:#e0e7ff
         WEB["Next.js 14\nApp Router\nTailwindCSS + shadcn/ui"]
     end
 
-    subgraph Frontend["📦 /web — Frontend"]
+    subgraph Frontend["/web — Frontend"]
         style Frontend fill:#1e1b4b,stroke:#6366f1,color:#e0e7ff
         PAGES["Pages\n/ · /login · /signup\n/dashboard · /practitioners"]
         APICLIENT["lib/api.ts\nTyped Fetch Client"]
         TOKENSTORE["tokenStore\nlocalStorage\nhc_access · hc_refresh"]
     end
 
-    subgraph Backend["⚙️ /backend — API Server"]
+    subgraph Backend["/backend — API Server"]
         style Backend fill:#14532d,stroke:#22c55e,color:#dcfce7
         EXPRESS["Express 5\nTypeScript\nPort 8082"]
         AUTH["routes/auth.ts\nRegister · Login · OAuth\nRefresh · Logout · Verify"]
@@ -33,7 +33,7 @@ graph TB
         MW["Middleware\nJWT Auth · Rate Limiter\nValidator"]
     end
 
-    subgraph Services["☁️ External Services"]
+    subgraph Services["External Services"]
         style Services fill:#431407,stroke:#f97316,color:#ffedd5
         PG[("PostgreSQL\nAzure DB")]
         REDIS[("Redis\nAzure Cache")]
@@ -68,12 +68,12 @@ graph TB
 ```mermaid
 sequenceDiagram
     autonumber
-    participant U as 👤 User
-    participant FE as 🌐 Frontend
-    participant API as ⚙️ Backend API
-    participant DB as 🗄️ PostgreSQL
-    participant RD as ⚡ Redis
-    participant SG as 📧 SendGrid
+    participant U as User
+    participant FE as Frontend
+    participant API as Backend API
+    participant DB as PostgreSQL
+    participant RD as Redis
+    participant SG as SendGrid
 
     rect rgb(30, 27, 75)
         Note over U,SG: Registration Flow
@@ -132,13 +132,13 @@ flowchart LR
 
     A["Incoming Request"] --> B["CORS Check"]
     B --> C["Rate Limiter\nRedis-backed per IP"]
-    C -->|"429 Too Many"| H["❌ Error Response"]
+    C -->|"429 Too Many"| H["Error Response"]
     C --> D["Route Handler"]
     D -->|"Protected Route"| E["JWT Auth Middleware\nVerify + Blacklist Check"]
     E -->|"401 Unauthorized"| H
     E --> F["express-validator\nInput Validation"]
     F -->|"422 Validation Error"| H
-    F --> G["✅ Business Logic\n+ DB Query"]
+    F --> G["Business Logic\n+ DB Query"]
 ```
 
 ---

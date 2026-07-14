@@ -28,8 +28,7 @@ Production-grade Next.js frontend for the HealConnect wellness platform. Connect
 ```
 web/
 ├── public/
-│   ├── logo.png
-│   └── astrology-book.json    # Lottie animation asset
+│   └── logo.png
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                    # Landing page
@@ -54,8 +53,7 @@ web/
 │   │   │   └── badge.tsx
 │   │   ├── navbar.tsx                  # Top navigation bar
 │   │   ├── theme-toggle.tsx            # Dark/light mode toggle
-│   │   ├── theme-provider.tsx          # next-themes wrapper
-│   │   └── astrology-animation.tsx     # Lottie animation component
+│   │   └── theme-provider.tsx          # next-themes wrapper
 │   └── lib/
 │       ├── api.ts                      # Typed API client (authApi, usersApi, practitionersApi)
 │       └── utils.ts                    # cn() utility (clsx + tailwind-merge)
