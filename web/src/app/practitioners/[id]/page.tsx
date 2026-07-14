@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles, ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2 } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { practitionersApi } from '@/lib/api';
 
 interface Review {
@@ -35,6 +35,11 @@ interface PractitionerDetail {
   reviews: Review[];
 }
 
+const GRADIENTS = [
+  'from-yellow-400 to-orange-500', 'from-emerald-400 to-teal-500',
+  'from-pink-400 to-rose-500', 'from-blue-400 to-indigo-500',
+];
+
 export default function PractitionerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [p, setP] = useState<PractitionerDetail | null>(null);
@@ -49,53 +54,46 @@ export default function PractitionerDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-indigo-400 animate-spin" />
+      <div className="min-h-screen bg-[#fffbf0] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-[#f59e0b] animate-spin" />
       </div>
     );
   }
 
   if (!p) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <p className="text-muted-foreground">Practitioner not found.</p>
-        <Link href="/practitioners"><Button variant="outline">Back to Directory</Button></Link>
+      <div className="min-h-screen bg-[#fffbf0] flex flex-col items-center justify-center gap-4">
+        <p className="text-gray-500">Practitioner not found.</p>
+        <Link href="/practitioners"><Button variant="outline" className="border-yellow-200 text-[#d97706] hover:bg-yellow-50">Back to Directory</Button></Link>
       </div>
     );
   }
 
-  const gradients = [
-    'from-indigo-500 to-purple-600', 'from-emerald-500 to-teal-600',
-    'from-cyan-500 to-blue-600', 'from-pink-500 to-rose-600',
-  ];
-  const gradient = gradients[p.name.charCodeAt(0) % gradients.length];
+  const gradient = GRADIENTS[p.name.charCodeAt(0) % GRADIENTS.length];
   const initials = p.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur">
+    <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
+      <header className="sticky top-0 z-50 w-full border-b border-yellow-100 bg-white/80 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/practitioners" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="/practitioners" className="flex items-center gap-2 text-gray-500 hover:text-[#f59e0b] transition-colors">
             <ArrowLeft className="h-4 w-4" />
-            <Sparkles className="h-5 w-5 text-indigo-400" />
-            <span className="font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">HealConnect</span>
+            <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full" />
+            <span className="font-extrabold text-[#f59e0b]">HealConnect</span>
           </Link>
-          <ThemeToggle />
         </div>
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl space-y-6">
         {/* Hero Card */}
-        <Card className="bg-card border-border overflow-hidden">
+        <Card className="bg-white border border-yellow-100 shadow-sm overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-start gap-5">
               <div className="relative shrink-0">
                 {p.photoUrl ? (
-                  <img src={p.photoUrl} alt={p.name} className="w-24 h-24 rounded-2xl object-cover shadow-lg" />
+                  <img src={p.photoUrl} alt={p.name} className="w-24 h-24 rounded-2xl object-cover shadow" />
                 ) : (
-                  <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-3xl font-bold shadow-lg`}>
-                    {initials}
-                  </div>
+                  <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-3xl font-bold shadow`}>{initials}</div>
                 )}
                 {p.isOnline && (
                   <span className="absolute -bottom-1 -right-1 flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full shadow">
@@ -107,48 +105,40 @@ export default function PractitionerDetailPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div>
-                    <h1 className="text-xl font-extrabold text-foreground">{p.name}</h1>
-                    <p className="text-indigo-400 font-medium text-sm">{p.specialties.join(' · ')}</p>
+                    <h1 className="text-xl font-extrabold text-[#1a1a1a]">{p.name}</h1>
+                    <p className="text-[#f59e0b] font-medium text-sm">{p.specialties.join(' · ')}</p>
                   </div>
                   {p.isVerified && (
-                    <Badge variant="outline" className="border-cyan-500/30 text-cyan-400 bg-cyan-500/10 gap-1 shrink-0">
+                    <Badge variant="outline" className="border-yellow-300 text-[#d97706] bg-yellow-50 gap-1 shrink-0">
                       <Shield className="h-3 w-3" /> Verified
                     </Badge>
                   )}
                 </div>
-
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="font-semibold text-foreground">{p.avgRating || '—'}</span>
-                    <span className="text-sm text-muted-foreground">({p.reviewCount} reviews)</span>
+                    <span className="font-semibold text-[#1a1a1a]">{p.avgRating || '—'}</span>
+                    <span className="text-sm text-gray-400">({p.reviewCount} reviews)</span>
                   </div>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-sm text-muted-foreground">{p.experienceYrs} yrs exp</span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm text-gray-500">{p.experienceYrs} yrs exp</span>
                 </div>
-
-                {p.languages.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-1">🌐 {p.languages.join(', ')}</p>
-                )}
+                {p.languages.length > 0 && <p className="text-sm text-gray-400 mt-1">🌐 {p.languages.join(', ')}</p>}
               </div>
             </div>
 
-            {p.bio && <p className="text-sm text-muted-foreground mt-4 leading-relaxed">{p.bio}</p>}
+            {p.bio && <p className="text-sm text-gray-500 mt-4 leading-relaxed">{p.bio}</p>}
 
-            {/* CTA */}
-            <div className="flex items-center justify-between mt-5 pt-5 border-t border-border">
+            <div className="flex items-center justify-between mt-5 pt-5 border-t border-yellow-100">
               <div>
-                <span className="text-2xl font-extrabold text-foreground">₹{p.perMinuteRate}</span>
-                <span className="text-sm text-muted-foreground">/min</span>
+                <span className="text-2xl font-extrabold text-[#1a1a1a]">₹{p.perMinuteRate}</span>
+                <span className="text-sm text-gray-400">/min</span>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="border-border hover:border-indigo-500/50 hover:text-indigo-400 gap-2">
+                <Button variant="outline" className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] gap-2">
                   <MessageCircle className="h-4 w-4" /> Chat
                 </Button>
-                <Button
-                  disabled={!p.isOnline}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white border-0 gap-2 disabled:opacity-40"
-                >
+                <Button disabled={!p.isOnline} className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 gap-2 disabled:opacity-40">
                   <Phone className="h-4 w-4" /> {p.isOnline ? 'Call Now' : 'Offline'}
                 </Button>
               </div>
@@ -158,12 +148,12 @@ export default function PractitionerDetailPage() {
 
         {/* Certifications */}
         {p.certifications.length > 0 && (
-          <Card className="bg-card border-border">
+          <Card className="bg-white border border-yellow-100 shadow-sm">
             <CardContent className="p-5">
-              <h2 className="font-semibold text-foreground mb-3">Certifications</h2>
+              <h2 className="font-semibold text-[#1a1a1a] mb-3">Certifications</h2>
               <div className="flex flex-wrap gap-2">
                 {p.certifications.map((c) => (
-                  <Badge key={c} variant="outline" className="border-indigo-500/30 text-indigo-400 bg-indigo-500/10">{c}</Badge>
+                  <Badge key={c} variant="outline" className="border-yellow-300 text-[#d97706] bg-yellow-50">{c}</Badge>
                 ))}
               </div>
             </CardContent>
@@ -173,21 +163,21 @@ export default function PractitionerDetailPage() {
         {/* Reviews */}
         {p.reviews.length > 0 && (
           <div>
-            <h2 className="font-semibold text-foreground mb-3">Reviews ({p.reviewCount})</h2>
+            <h2 className="font-semibold text-[#1a1a1a] mb-3">Reviews ({p.reviewCount})</h2>
             <div className="space-y-3">
               {p.reviews.map((r) => (
-                <Card key={r.id} className="bg-card border-border">
+                <Card key={r.id} className="bg-white border border-yellow-100 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="font-medium text-sm text-foreground">{r.user.name || 'Anonymous'}</p>
-                      <div className="flex items-center gap-1">
+                      <p className="font-medium text-sm text-[#1a1a1a]">{r.user.name || 'Anonymous'}</p>
+                      <div className="flex items-center gap-0.5">
                         {Array.from({ length: 5 }).map((_, i) => (
-                          <Star key={i} className={`w-3.5 h-3.5 ${i < r.rating ? 'text-yellow-400 fill-current' : 'text-muted-foreground'}`} />
+                          <Star key={i} className={`w-3.5 h-3.5 ${i < r.rating ? 'text-yellow-400 fill-current' : 'text-gray-200'}`} />
                         ))}
                       </div>
                     </div>
-                    {r.comment && <p className="text-sm text-muted-foreground">{r.comment}</p>}
-                    <p className="text-xs text-muted-foreground mt-2">{new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    {r.comment && <p className="text-sm text-gray-500">{r.comment}</p>}
+                    <p className="text-xs text-gray-400 mt-2">{new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                   </CardContent>
                 </Card>
               ))}
