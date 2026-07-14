@@ -16,6 +16,7 @@ Production-grade Next.js frontend for the HealConnect wellness platform. Connect
 | Language | TypeScript |
 | Styling | TailwindCSS + shadcn/ui |
 | Theme | next-themes (Light / Dark mode) |
+| Animation | lottie-react |
 | Icons | lucide-react |
 | Fonts | Geist (Variable) |
 | Auth | JWT stored in localStorage |
@@ -28,7 +29,8 @@ Production-grade Next.js frontend for the HealConnect wellness platform. Connect
 ```
 web/
 ├── public/
-│   └── logo.png
+│   ├── logo.png
+│   └── HealConnect.json            # Lottie animation (hero section)
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                    # Landing page
@@ -52,6 +54,7 @@ web/
 │   │   │   ├── label.tsx
 │   │   │   └── badge.tsx
 │   │   ├── navbar.tsx                  # Top navigation bar
+│   │   ├── hero-animation.tsx          # Lottie animation component (hero section)
 │   │   ├── theme-toggle.tsx            # Dark/light mode toggle
 │   │   └── theme-provider.tsx          # next-themes wrapper
 │   └── lib/

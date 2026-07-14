@@ -252,6 +252,7 @@ Heal_Connect/
 │   └── README.md     # Frontend docs
 ├── docs/             # Project documentation & assets
 │   ├── logo.png                    # Project logo
+│   ├── HealConnect.json            # Lottie animation (hero section)
 │   ├── tech_stack_review.md        # Tech stack analysis & risks
 │   ├── HealConnect_Project_Plan.xlsx
 │   ├── HealConnect_Tech_Stack.docx
