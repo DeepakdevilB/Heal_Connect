@@ -1,38 +1,40 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependencies
+node_modules/
 
-# dependencies
-node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-.next/
-/out/
-build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# local env files
-.env*.local
+# Environment variables
 .env
+.env.*
+!.env.example
 
-# vercel
-.vercel
+# Next.js
+.next/
+out/
+build/
 
-# typescript
+# TypeScript compiled output
+dist/
 *.tsbuildinfo
 next-env.d.ts
 
-# backend compiled output
-backend/dist/
+# Prisma compiled config
+backend/prisma.config.d.ts
+backend/prisma.config.d.ts.map
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# macOS
+.DS_Store
+
+# Certificates
+*.pem
+*.key
+
+# Vercel
+.vercel
+
+# Extracted docs output
+docs/extracted_texts.txt
