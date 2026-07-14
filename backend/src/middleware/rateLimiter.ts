@@ -12,11 +12,16 @@ const extractIp = (req: Request): string => {
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
+const makeStore = (prefix: string) =>
+  new RedisStore({
+    prefix,
+    // Use SET/GET instead of EVALSHA — works on Redis Cluster
+    sendCommand: (...args: string[]) => (redis as any).call(...args),
+  });
+
 // General API rate limiter — 100 requests per 15 min
 export const generalLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-  }),
+  store: makeStore('rl_gen:'),
   keyGenerator: extractIp,
   validate: { xForwardedForHeader: false, default: false },
   windowMs: 15 * 60 * 1000,
@@ -28,9 +33,7 @@ export const generalLimiter = rateLimit({
 
 // Auth routes — 10 requests per 15 min (100 in development)
 export const authLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-  }),
+  store: makeStore('rl_auth:'),
   keyGenerator: extractIp,
   validate: { xForwardedForHeader: false, default: false },
   windowMs: 15 * 60 * 1000,
@@ -42,9 +45,7 @@ export const authLimiter = rateLimit({
 
 // Email verification — 5 requests per hour (50 in development)
 export const emailLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-  }),
+  store: makeStore('rl_email:'),
   keyGenerator: extractIp,
   validate: { xForwardedForHeader: false, default: false },
   windowMs: 60 * 60 * 1000,
