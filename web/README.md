@@ -1,5 +1,9 @@
 # HealConnect — Web Frontend
 
+<p align="center">
+  <img src="../docs/logo.png" alt="HealConnect Logo" width="140" />
+</p>
+
 Production-grade Next.js frontend for the HealConnect wellness platform. Connects users with verified energy healers, Vastu experts, numerologists, and tarot readers.
 
 ---
@@ -161,3 +165,10 @@ npm run build    # Production build
 npm start        # Start production server
 npm run lint     # ESLint check
 ```
+
+---
+
+## Docs
+
+- [Tech Stack Review & Risks](../docs/tech_stack_review.md)
+- [Project Plan](../docs/HealConnect_Project_Plan.xlsx)

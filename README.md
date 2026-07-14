@@ -1,5 +1,9 @@
 # HealConnect
 
+<p align="center">
+  <img src="docs/logo.png" alt="HealConnect Logo" width="180" />
+</p>
+
 > A professional wellness platform connecting users with verified energy healers, Vastu experts, numerologists, and tarot readers — instantly.
 
 ---
@@ -246,6 +250,12 @@ Heal_Connect/
 ├── web/              # Next.js 14 frontend
 │   ├── src/
 │   └── README.md     # Frontend docs
+├── docs/             # Project documentation & assets
+│   ├── logo.png                    # Project logo
+│   ├── tech_stack_review.md        # Tech stack analysis & risks
+│   ├── HealConnect_Project_Plan.xlsx
+│   ├── HealConnect_Tech_Stack.docx
+│   └── AstroTalk_Analysis.pptx
 └── README.md         # This file
 ```
 

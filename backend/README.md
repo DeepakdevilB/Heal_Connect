@@ -1,5 +1,9 @@
 # HealConnect — Backend API
 
+<p align="center">
+  <img src="../docs/logo.png" alt="HealConnect Logo" width="140" />
+</p>
+
 Production-grade REST API for the HealConnect wellness platform. Built with Node.js, Express, TypeScript, Prisma ORM, PostgreSQL, Redis, and Azure Blob Storage.
 
 ---
@@ -231,3 +235,11 @@ npm run dev       # ts-node dev server with hot reload
 npm run build     # Compile TypeScript to dist/
 npm start         # Run compiled dist/index.js
 ```
+
+---
+
+## Docs
+
+- [Tech Stack Review & Risks](../docs/tech_stack_review.md)
+- [Project Plan](../docs/HealConnect_Project_Plan.xlsx)
+- [Tech Stack Document](../docs/HealConnect_Tech_Stack.docx)
