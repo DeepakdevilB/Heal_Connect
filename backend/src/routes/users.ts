@@ -6,6 +6,10 @@ import { requireAuth, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { uploadProfilePhoto, deleteProfilePhoto } from '../lib/azure';
 
+interface MulterRequest extends AuthRequest {
+  file?: Express.Multer.File | undefined;
+}
+
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -84,7 +88,7 @@ router.post(
   '/me/photo',
   requireAuth,
   upload.single('photo'),
-  async (req: AuthRequest, res: Response) => {
+  async (req: MulterRequest, res: Response) => {
     if (!req.file) { res.status(400).json({ success: false, message: 'No file uploaded' }); return; }
 
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
