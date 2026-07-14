@@ -28,7 +28,7 @@ def parse_pptx(file_path):
     return "\n".join(text)
 
 if __name__ == "__main__":
-    folder = os.path.dirname(os.path.abspath(__file__))
+    folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root
     output_path = os.path.join(folder, "extracted_texts.txt")
 
     with open(output_path, "w", encoding="utf-8") as out:
