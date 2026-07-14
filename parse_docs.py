@@ -1,5 +1,4 @@
 import os
-import sys
 
 def parse_docx(file_path):
     import docx
@@ -29,24 +28,31 @@ def parse_pptx(file_path):
     return "\n".join(text)
 
 if __name__ == "__main__":
-    folder = "d:\\Tara_InfoTech_Projects\\Heal_Connect"
-    with open(os.path.join(folder, "extracted_texts.txt"), "w", encoding="utf-8") as out:
-        for f in os.listdir(folder):
-            if f.endswith(".docx") and not f.startswith("~"):
+    folder = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(folder, "extracted_texts.txt")
+
+    with open(output_path, "w", encoding="utf-8") as out:
+        for f in sorted(os.listdir(folder)):
+            full_path = os.path.join(folder, f)
+            if f.startswith("~") or not os.path.isfile(full_path):
+                continue
+            if f.endswith(".docx"):
                 out.write(f"=== {f} ===\n")
                 try:
-                    out.write(parse_docx(os.path.join(folder, f)) + "\n")
+                    out.write(parse_docx(full_path) + "\n")
                 except Exception as e:
                     out.write(f"Error reading docx: {e}\n")
-            elif f.endswith(".xlsx") and not f.startswith("~"):
+            elif f.endswith(".xlsx"):
                 out.write(f"=== {f} ===\n")
                 try:
-                    out.write(parse_xlsx(os.path.join(folder, f)) + "\n")
+                    out.write(parse_xlsx(full_path) + "\n")
                 except Exception as e:
                     out.write(f"Error reading xlsx: {e}\n")
-            elif f.endswith(".pptx") and not f.startswith("~"):
+            elif f.endswith(".pptx"):
                 out.write(f"=== {f} ===\n")
                 try:
-                    out.write(parse_pptx(os.path.join(folder, f)) + "\n")
+                    out.write(parse_pptx(full_path) + "\n")
                 except Exception as e:
                     out.write(f"Error reading pptx: {e}\n")
+
+    print(f"Done! Output saved to: {output_path}")
