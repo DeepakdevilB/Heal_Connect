@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import HeroAnimation from '@/components/hero-animation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,7 @@ export default function LandingPage() {
             <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
 
               {/* Left — text */}
-              <div className="flex-1 text-left">
+              <div className="flex-1 text-left lg:max-w-xl">
                 <Badge className="mb-6 bg-yellow-100 text-[#d97706] border border-yellow-300 px-4 py-1.5 rounded-full text-sm font-semibold">
                   ✨ Your 1st Chat is 100% Free
                 </Badge>
@@ -67,6 +68,11 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Right — Lottie */}
+              <div className="flex-1 flex items-center justify-center">
+                <HeroAnimation />
               </div>
 
             </div>
