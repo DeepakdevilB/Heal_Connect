@@ -30,7 +30,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [experts, setExperts] = useState<Practitioner[]>([]);
+  const [experts, setExperts] = useState<PractitionerProfile[]>([]);
   const [onlineCount, setOnlineCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'all' | 'astrology' | 'tarot' | 'vastu' | 'numerology'>('all');
 
