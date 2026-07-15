@@ -18,7 +18,7 @@ interface AuthData {
   refreshToken: string;
 }
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   email: string | null;
   name: string | null;
@@ -31,7 +31,7 @@ interface UserProfile {
   isEmailVerified: boolean;
 }
 
-interface PractitionerProfile {
+export interface PractitionerProfile {
   id: string;
   name: string;
   bio: string | null;
