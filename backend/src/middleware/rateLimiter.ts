@@ -31,11 +31,12 @@ export const generalLimiter = rateLimit({
 export const authLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
+    prefix: 'rl_auth:', // MUST have unique prefix!
   }),
   keyGenerator: extractIp,
   validate: { xForwardedForHeader: false, default: false },
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100, // Temporarily increased to 100 to allow heavy local testing
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
@@ -45,6 +46,7 @@ export const authLimiter = rateLimit({
 export const emailLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
+    prefix: 'rl_email:',
   }),
   keyGenerator: extractIp,
   validate: { xForwardedForHeader: false, default: false },
