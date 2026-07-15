@@ -3,17 +3,24 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 
-const app = express();
+const app  = express();
 const port = process.env.PORT || 8080;
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
 
-app.set('trust proxy', 1); // Trust first proxy (ngrok/nginx)
+app.set('trust proxy', 1); // Trust first proxy (ngrok / nginx)
+
+// Helmet — sets secure HTTP headers
+app.use(helmet({
+  crossOriginEmbedderPolicy: false, // Allow ngrok previews
+  contentSecurityPolicy: false,     // Adjust if serving HTML from this server
+}));
 
 app.use(cors({
   origin: [
@@ -25,14 +32,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json({ limit: '10kb' })); // Limit payload size
+app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// Apply general rate limiter to all routes
 app.use(generalLimiter);
-
-// Remove X-Powered-By header
-app.disable('x-powered-by');
+app.disable('x-powered-by'); // Belt-and-suspenders (helmet already removes this)
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +48,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 
-// ─── 404 Handler ─────────────────────────────────────────────────────────────
+// ─── 404 ─────────────────────────────────────────────────────────────────────
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -57,8 +61,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`✦ HealConnect API running on port ${port}`);
 });

@@ -1,56 +1,47 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { type Store } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redis } from '../lib/redis';
 import { Request } from 'express';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 const extractIp = (req: Request): string => {
   const ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-  if (match && match[1]) return match[1];
-  return ip;
+  return match?.[1] ?? ip;
 };
 
-const IS_DEV = process.env.NODE_ENV !== 'production';
-
-const makeStore = (prefix: string) =>
-  new RedisStore({
+/**
+ * Returns a RedisStore if Redis is configured, otherwise undefined
+ * (express-rate-limit falls back to its built-in MemoryStore).
+ */
+function makeStore(prefix: string): Store | undefined {
+  if (!redis) return undefined; // fall back to in-memory
+  return new RedisStore({
     prefix,
-    // Use SET/GET instead of EVALSHA — works on Redis Cluster
     sendCommand: (...args: string[]) => (redis as any).call(...args),
   });
+}
 
-// General API rate limiter — 100 requests per 15 min
-export const generalLimiter = rateLimit({
-  store: makeStore('rl_gen:'),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please try again later.' },
-});
+function limiter(windowMs: number, max: number, prefix: string) {
+  const store = makeStore(prefix);
+  return rateLimit({
+    ...(store ? { store } : {}),
+    keyGenerator: extractIp,
+    validate: { xForwardedForHeader: false, default: false },
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many requests, please try again later.' },
+  });
+}
 
-// Auth routes — 10 requests per 15 min (100 in development)
-export const authLimiter = rateLimit({
-  store: makeStore('rl_auth:'),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 15 * 60 * 1000,
-  max: IS_DEV ? 100 : 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
-});
+// General API — 100 req / 15 min
+export const generalLimiter = limiter(15 * 60 * 1000, 100, 'rl_gen:');
 
-// Email verification — 5 requests per hour (50 in development)
-export const emailLimiter = rateLimit({
-  store: makeStore('rl_email:'),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 60 * 60 * 1000,
-  max: IS_DEV ? 50 : 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many email requests, please try again in an hour.' },
-});
+// Auth routes — 10 req / 15 min (relaxed in dev)
+export const authLimiter = limiter(15 * 60 * 1000, IS_DEV ? 200 : 10, 'rl_auth:');
+
+// Email / OTP routes — 5 req / hour (relaxed in dev)
+export const emailLimiter = limiter(60 * 60 * 1000, IS_DEV ? 50 : 5, 'rl_email:');

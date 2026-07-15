@@ -17,14 +17,24 @@ model User {
   gender                String?
   wellnessInterests     String[]
   photoUrl              String?
+
+  // Email verification
   isEmailVerified       Boolean   @default(false)
-  emailVerifyToken      String?
+  emailVerifyToken      String?   // stores SHA-256 hash of the raw token
   emailVerifyExpiry     DateTime?
-  passwordResetToken    String?
+
+  // Phone / OTP verification
+  isPhoneVerified       Boolean   @default(false)
+
+  // Password reset
+  passwordResetToken    String?   // stores SHA-256 hash of the raw token
   passwordResetExpiry   DateTime?
+
+  // OAuth
   googleId              String?   @unique
   appleId               String?   @unique
   provider              String    @default("email")
+
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -32,6 +42,23 @@ model User {
   sessions              Session[]
   reviews               Review[]
   refreshTokens         RefreshToken[]
+  otps                  Otp[]
+}
+
+// ─── OTP model for SMS verification ──────────────────────────────────────────
+
+model Otp {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash     String   // SHA-256 hash of the 6-digit OTP
+  purpose     String   // "phone_verify" | "login" | "password_reset"
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 model RefreshToken {
@@ -85,9 +112,9 @@ model Transaction {
   walletId    String
   wallet      Wallet   @relation(fields: [walletId], references: [id])
   amount      Float
-  type        String   // e.g., "RECHARGE", "DEBIT", "REFUND"
-  status      String   // e.g., "SUCCESS", "PENDING", "FAILED"
-  referenceId String?  // e.g., Razorpay Payment ID
+  type        String   // "RECHARGE" | "DEBIT" | "REFUND"
+  status      String   // "SUCCESS" | "PENDING" | "FAILED"
+  referenceId String?
   createdAt   DateTime @default(now())
 }
 
@@ -97,8 +124,8 @@ model Session {
   user           User     @relation(fields: [userId], references: [id])
   practitionerId String
   practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  type           String   // e.g., "CHAT", "AUDIO", "VIDEO"
-  status         String   // e.g., "INITIATED", "ACTIVE", "COMPLETED", "CANCELLED"
+  type           String   // "CHAT" | "AUDIO" | "VIDEO"
+  status         String   // "INITIATED" | "ACTIVE" | "COMPLETED" | "CANCELLED"
   startTime      DateTime?
   endTime        DateTime?
   totalCost      Float    @default(0)
@@ -116,7 +143,7 @@ model Review {
   user           User     @relation(fields: [userId], references: [id])
   practitionerId String
   practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  rating         Int      // 1 to 5
+  rating         Int      // 1-5
   comment        String?
   createdAt      DateTime @default(now())
 }

@@ -1,47 +1,73 @@
 import Redis from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = process.env.REDIS_URL || '';
 
-// Initialize the Redis client with cluster-mode support (handles Azure Cache MOVED errors)
-export const redis = new Redis(REDIS_URL, {
-  maxRetriesPerRequest: 3,
-  enableAutoPipelining: false,
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 3000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    // Reconnect on MOVED/ASK so cluster redirects are handled
-    return err.message.includes('MOVED') || err.message.includes('ASK');
-  },
-});
+// ─── Redis client (optional) ──────────────────────────────────────────────────
+// If REDIS_URL is not set, redis will be null and all operations become no-ops.
+// When REDIS_URL starts with rediss:// (Azure Cache), TLS is enabled automatically.
 
-redis.on('error', (err) => {
-  console.error('Redis Client Error:', err);
-});
+let redis: Redis | null = null;
 
-redis.on('connect', () => {
-  console.log('Successfully connected to Redis');
-});
+if (REDIS_URL) {
+  const isTls = REDIS_URL.startsWith('rediss://');
+
+  redis = new Redis(REDIS_URL, {
+    // Azure Cache for Redis requires TLS — enable when scheme is rediss://
+    tls: isTls ? { rejectUnauthorized: false } : undefined,
+    maxRetriesPerRequest: 3,
+    enableAutoPipelining: false,
+    lazyConnect: true,
+    retryStrategy(times) {
+      if (times > 5) return null; // stop retrying after 5 attempts
+      return Math.min(times * 200, 3000);
+    },
+    reconnectOnError(err) {
+      // Handle Redis Cluster redirects (Azure uses single-node but safe to keep)
+      return err.message.includes('MOVED') || err.message.includes('ASK');
+    },
+  });
+
+  redis.on('error', (err) => {
+    console.error('Redis error:', err.message);
+  });
+
+  redis.on('connect', () => {
+    console.log('✓ Connected to Redis');
+  });
+
+  redis.on('ready', () => {
+    console.log('✓ Redis ready');
+  });
+} else {
+  console.warn('⚠  REDIS_URL not set — token blacklisting disabled, using in-memory rate limiting.');
+}
+
+export { redis };
 
 /**
- * Blacklists a JWT token by storing it in Redis until it expires.
- * @param token The JWT token to blacklist
- * @param expiresInMs Time in milliseconds until the token expires naturally
+ * Blacklists a JWT token until it expires.
+ * No-op if Redis is not configured.
  */
 export async function blacklistToken(token: string, expiresInMs: number): Promise<void> {
-  const key = `bl_${token}`;
-  // Store the token with an expiration (PX = milliseconds)
-  await redis.set(key, 'true', 'PX', expiresInMs);
+  if (!redis) return;
+  try {
+    await redis.set(`bl_${token}`, '1', 'PX', expiresInMs);
+  } catch (err) {
+    console.error('blacklistToken error:', err);
+  }
 }
 
 /**
- * Checks if a JWT token is currently in the Redis blacklist.
- * @param token The JWT token to check
- * @returns boolean True if blacklisted, false otherwise
+ * Returns true if the token has been blacklisted.
+ * Returns false (safe default) if Redis is not configured.
  */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
-  const key = `bl_${token}`;
-  const result = await redis.get(key);
-  return result === 'true';
+  if (!redis) return false;
+  try {
+    const result = await redis.get(`bl_${token}`);
+    return result === '1';
+  } catch (err) {
+    console.error('isTokenBlacklisted error:', err);
+    return false; // fail open — don't block legitimate requests
+  }
 }
