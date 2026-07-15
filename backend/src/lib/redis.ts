@@ -3,14 +3,18 @@ import Redis from 'ioredis';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const isAzure = REDIS_URL.includes('azure.net');
 
-// Initialize the Redis client
+// Initialize the Redis client with cluster-mode support (handles Azure Cache MOVED errors)
 export const redis = new Redis(REDIS_URL, {
   tls: isAzure ? { rejectUnauthorized: false } : undefined,
   maxRetriesPerRequest: 3,
+  enableAutoPipelining: false,
   retryStrategy(times) {
-    // Retry strategy: exponential backoff, max 3 seconds
     const delay = Math.min(times * 50, 3000);
     return delay;
+  },
+  reconnectOnError(err) {
+    // Reconnect on MOVED/ASK so cluster redirects are handled
+    return err.message.includes('MOVED') || err.message.includes('ASK');
   },
 });
 

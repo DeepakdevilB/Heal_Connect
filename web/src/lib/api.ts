@@ -18,6 +18,35 @@ interface AuthData {
   refreshToken: string;
 }
 
+interface UserProfile {
+  id: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  dob: string | null;
+  birthPlace: string | null;
+  gender: string | null;
+  wellnessInterests: string[];
+  photoUrl: string | null;
+  isEmailVerified: boolean;
+}
+
+interface PractitionerProfile {
+  id: string;
+  name: string;
+  bio: string | null;
+  specialties: string[];
+  certifications: string[];
+  languages: string[];
+  experienceYrs: number;
+  perMinuteRate: number;
+  photoUrl: string | null;
+  isVerified: boolean;
+  isOnline: boolean;
+  avgRating?: number;
+  reviewCount?: number;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options.headers },
@@ -25,6 +54,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
   });
   const data = await res.json() as ApiResponse<T>;
   return data;
+}
+
+function authHeader(token: string) {
+  return { Authorization: `Bearer ${token}` };
 }
 
 export const authApi = {
@@ -53,7 +86,87 @@ export const authApi = {
     }),
 
   me: (accessToken: string) =>
-    request('/api/auth/me', { headers: { Authorization: `Bearer ${accessToken}` } }),
+    request('/api/auth/me', { headers: authHeader(accessToken) }),
+};
+
+export const usersApi = {
+  getProfile: (token: string) =>
+    request<{ user: UserProfile }>('/api/users/me', { headers: authHeader(token) }),
+
+  updateProfile: (token: string, body: Partial<Omit<UserProfile, 'id' | 'email' | 'isEmailVerified' | 'photoUrl'>>) =>
+    request<{ user: UserProfile }>('/api/users/me', {
+      method: 'PATCH',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  uploadPhoto: (token: string, file: File) => {
+    const form = new FormData();
+    form.append('photo', file);
+    return fetch(`${API_URL}/api/users/me/photo`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: form,
+    }).then((r) => r.json() as Promise<ApiResponse<{ photoUrl: string }>>);
+  },
+
+  deletePhoto: (token: string) =>
+    request('/api/users/me/photo', { method: 'DELETE', headers: authHeader(token) }),
+
+  deleteAccount: (token: string) =>
+    request('/api/users/me', { method: 'DELETE', headers: authHeader(token) }),
+};
+
+export const practitionersApi = {
+  list: (params: {
+    search?: string; specialty?: string; language?: string;
+    minRating?: string; maxRate?: string; onlineOnly?: boolean;
+    page?: number; limit?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+    return fetch(`${API_URL}/api/practitioners?${q}`).then((r) => r.json() as Promise<ApiResponse<{
+      practitioners: PractitionerProfile[];
+      pagination: { total: number; page: number; limit: number; pages: number };
+    }>>);
+  },
+
+  get: (id: string) =>
+    request<{ practitioner: PractitionerProfile }>(`/api/practitioners/${id}`),
+
+  create: (token: string, body: Partial<PractitionerProfile> & { name: string }) =>
+    request<{ practitioner: PractitionerProfile }>('/api/practitioners', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  update: (token: string, id: string, body: Partial<PractitionerProfile>) =>
+    request<{ practitioner: PractitionerProfile }>(`/api/practitioners/${id}`, {
+      method: 'PATCH',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  uploadPhoto: (token: string, id: string, file: File) => {
+    const form = new FormData();
+    form.append('photo', file);
+    return fetch(`${API_URL}/api/practitioners/${id}/photo`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: form,
+    }).then((r) => r.json() as Promise<ApiResponse<{ photoUrl: string }>>);
+  },
+
+  setAvailability: (token: string, id: string, isOnline: boolean) =>
+    request(`/api/practitioners/${id}/availability`, {
+      method: 'PATCH',
+      headers: authHeader(token),
+      body: JSON.stringify({ isOnline }),
+    }),
+
+  delete: (token: string, id: string) =>
+    request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 };
 
 // ─── Token helpers (localStorage) ────────────────────────────────────────────

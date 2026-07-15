@@ -5,6 +5,8 @@ import express from 'express';
 import cors from 'cors';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
+import usersRouter from './routes/users';
+import practitionersRouter from './routes/practitioners';
 
 const app = express();
 
@@ -91,6 +93,8 @@ app.get('/api/migrate', async (_req, res) => {
 app.use(generalLimiter);
 
 app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/practitioners', practitionersRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 

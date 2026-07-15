@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8082/api/:path*',
+        destination: 'https://healconnect-backend-dqcsaqf4a6baffaz.centralindia-01.azurewebsites.net/api/:path*',
       },
     ];
   },
