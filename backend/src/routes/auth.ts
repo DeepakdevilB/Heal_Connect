@@ -266,9 +266,9 @@ router.post(
           refreshToken,
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Google auth error:', err);
-      res.status(400).json({ success: false, message: 'Google authentication failed' });
+      res.status(400).json({ success: false, message: `Google authentication failed: ${err?.message || 'Unknown error'}` });
     }
   }
 );
