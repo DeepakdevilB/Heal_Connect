@@ -27,7 +27,7 @@ export const generalLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 
-// Auth routes — stricter: 10 requests per 15 min
+// Auth routes — 100 requests per 15 min (increased for testing)
 export const authLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
