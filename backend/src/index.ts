@@ -48,7 +48,7 @@ app.get('/api/migrate', async (_req, res) => {
   res.write('Starting migration process...\n');
   
   try {
-    const sqlPath = path.join(__dirname, '../prisma/migrations/20260703111447_init/migration.sql');
+    const sqlPath = path.join(__dirname, '../prisma/migrations/20260716124500_add_abhishek_fields/migration.sql');
     res.write('SQL Path resolved to: ' + sqlPath + '\n');
     
     if (!fs.existsSync(sqlPath)) {
