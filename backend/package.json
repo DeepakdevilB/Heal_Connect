@@ -29,6 +29,7 @@
     "express-rate-limit": "^8.5.2",
     "express-validator": "^7.3.2",
     "google-auth-library": "^10.9.0",
+    "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
@@ -36,14 +37,17 @@
     "prisma": "^7.8.0",
     "rate-limit-redis": "^5.0.0",
     "razorpay": "^2.9.8",
+    "twilio": "^6.0.2",
     "uuid": "^14.0.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/helmet": "^0.0.48",
     "@types/node": "^26.0.1",
     "@types/pg": "^8.20.0",
+    "@types/twilio": "^3.19.2",
     "@types/uuid": "^10.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"

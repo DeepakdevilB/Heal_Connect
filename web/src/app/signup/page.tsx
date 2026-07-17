@@ -66,7 +66,7 @@ export default function SignupPage() {
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       setSuccess(res.message || 'Account created!');
 
-      const method = (res.data as any).verifyMethod as VerifyMethod | undefined;
+      const method = (res.data as { verifyMethod?: VerifyMethod })?.verifyMethod;
 
       if (method === 'sms' && phone) {
         setTimeout(() => router.push(`/verify-otp?phone=${encodeURIComponent(phone)}`), 1500);
