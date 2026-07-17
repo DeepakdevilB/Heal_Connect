@@ -60,6 +60,7 @@ import util from 'util';
 const execPromise = util.promisify(exec);
 
 app.get('/api/run-prisma-migrate', async (_req, res) => {
+  // Trigger build to apply Prisma migration fixes
   res.setHeader('Content-Type', 'text/plain');
   res.write('Starting prisma migrate deploy...\n');
   
