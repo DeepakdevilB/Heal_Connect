@@ -29,6 +29,14 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ email, password });
+
+      // Unverified account — show resend option
+      if (!res.success && (res as any).code === 'UNVERIFIED_ACCOUNT') {
+        setError(res.message || 'Please verify your account before logging in.');
+        setLoading(false);
+        return;
+      }
+
       if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       router.push('/dashboard');
@@ -125,7 +133,25 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-            {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 space-y-2">
+                <p>{error}</p>
+                {error.toLowerCase().includes('verify') && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!email) return;
+                      await authApi.resendVerification(email);
+                      setError('');
+                      setSuccess('Verification email resent. Please check your inbox.');
+                    }}
+                    className="text-[#f59e0b] underline text-xs font-medium"
+                  >
+                    Resend verification email
+                  </button>
+                )}
+              </div>
+            )}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
             {mode === 'login' && (

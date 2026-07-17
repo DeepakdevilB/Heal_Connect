@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// API_URL is intentionally empty — all /api/* calls go through Next.js rewrite proxy
+// which forwards to the backend (see next.config.mjs). This avoids CORS issues.
+const API_URL = '';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -12,10 +14,13 @@ interface AuthData {
     id: string;
     email: string | null;
     name: string | null;
+    phone: string | null;
     isEmailVerified: boolean;
+    isPhoneVerified: boolean;
   };
   accessToken: string;
   refreshToken: string;
+  verifyMethod?: 'email' | 'sms';
 }
 
 export interface UserProfile {
@@ -61,7 +66,10 @@ function authHeader(token: string) {
 }
 
 export const authApi = {
-  register: (body: { email: string; password: string; name: string }) =>
+  register: (body: {
+    email: string; password: string; name: string;
+    phone?: string; verifyMethod?: 'email' | 'sms';
+  }) =>
     request<AuthData>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
 
   login: (body: { email: string; password: string }) =>
@@ -76,8 +84,20 @@ export const authApi = {
   forgotPassword: (email: string) =>
     request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
 
+  resetPassword: (token: string, password: string) =>
+    request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+
   resendVerification: (email: string) =>
     request('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  sendOtp: (phone: string) =>
+    request('/api/auth/send-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
+
+  verifyOtp: (phone: string, otp: string) =>
+    request('/api/auth/verify-otp', { method: 'POST', body: JSON.stringify({ phone, otp }) }),
+
+  resendOtp: (phone: string) =>
+    request('/api/auth/resend-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
 
   refresh: (refreshToken: string) =>
     request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {

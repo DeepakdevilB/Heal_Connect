@@ -3,116 +3,169 @@ import sgMail from '@sendgrid/mail';
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@healconnect.app';
-const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const FROM_NAME  = process.env.SENDGRID_FROM_NAME  || 'HealConnect';
+const APP_URL    = process.env.APP_URL             || 'http://localhost:3000';
 
-export async function sendVerificationEmail(to: string, token: string): Promise<void> {
-  const verifyUrl = `${APP_URL}/verify-email?token=${token}`;
+// ─── Shared layout helpers ────────────────────────────────────────────────────
 
-  const msg = {
-    to,
-    from: FROM_EMAIL,
-    subject: 'Verify your HealConnect email',
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Verify your email</title>
-        </head>
-        <body style="margin:0;padding:0;background-color:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 0;">
-            <tr>
-              <td align="center">
-                <table width="560" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
-                  <tr>
-                    <td style="background:linear-gradient(135deg,#312e81,#1e1b4b);padding:36px 40px;text-align:center;">
-                      <h1 style="margin:0;color:#a5b4fc;font-size:28px;font-weight:800;letter-spacing:-0.5px;">✦ HealConnect</h1>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:40px;">
-                      <h2 style="color:#f1f5f9;font-size:22px;margin:0 0 16px;">Verify your email address</h2>
-                      <p style="color:#94a3b8;font-size:16px;line-height:1.6;margin:0 0 32px;">
-                        Thanks for signing up! Click the button below to verify your email and activate your HealConnect account.
-                      </p>
-                      <a href="${verifyUrl}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:50px;font-size:16px;font-weight:700;letter-spacing:0.3px;">
-                        Verify Email Address
-                      </a>
-                      <p style="color:#64748b;font-size:13px;margin:32px 0 0;">
-                        This link expires in 24 hours. If you didn't create an account, ignore this email.
-                      </p>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:20px 40px;border-top:1px solid #334155;text-align:center;">
-                      <p style="color:#475569;font-size:12px;margin:0;">© 2026 Tara Infotech. All rights reserved.</p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </body>
-      </html>
-    `,
-  };
-
-  await sgMail.send(msg);
+function wrap(body: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:0;background-color:#fffbf0;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbf0;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #fde68a;max-width:100%;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.3px;">
+                ✦ HealConnect
+              </h1>
+              <p style="margin:6px 0 0;color:#fef3c7;font-size:13px;">Your wellness journey starts here</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          ${body}
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px;border-top:1px solid #fde68a;text-align:center;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">
+                © 2026 Tara Infotech. All rights reserved.<br/>
+                If you didn't request this email, you can safely ignore it.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
-export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
-  const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+function btn(url: string, label: string): string {
+  return `<a href="${url}"
+      style="display:inline-block;background:#f59e0b;color:#ffffff;text-decoration:none;
+             padding:14px 40px;border-radius:50px;font-size:16px;font-weight:700;letter-spacing:0.3px;
+             margin:8px 0;">
+    ${label}
+  </a>`;
+}
 
-  const msg = {
+// ─── Welcome Email ─────────────────────────────────────────────────────────────
+
+export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
+  const dashboardUrl = `${APP_URL}/dashboard`;
+  const html = wrap(`
+    <tr>
+      <td style="padding:40px;">
+        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 12px;">Welcome to HealConnect, ${name}! 🎉</h2>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 24px;">
+          We're so glad you're here. Your account is ready — connect with verified wellness
+          experts for astrology, tarot, vastu, and more.
+        </p>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
+          Your <strong style="color:#d97706;">first session is completely free</strong>. No credit card needed.
+        </p>
+        <p style="text-align:center;">${btn(dashboardUrl, 'Go to Dashboard')}</p>
+        <p style="color:#9ca3af;font-size:13px;margin:28px 0 0;">
+          Please verify your email to unlock all features.
+        </p>
+      </td>
+    </tr>`);
+
+  await sgMail.send({
     to,
-    from: FROM_EMAIL,
-    subject: 'Reset your HealConnect password',
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Reset your password</title>
-        </head>
-        <body style="margin:0;padding:0;background-color:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 0;">
-            <tr>
-              <td align="center">
-                <table width="560" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
-                  <tr>
-                    <td style="background:linear-gradient(135deg,#312e81,#1e1b4b);padding:36px 40px;text-align:center;">
-                      <h1 style="margin:0;color:#a5b4fc;font-size:28px;font-weight:800;letter-spacing:-0.5px;">✦ HealConnect</h1>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:40px;">
-                      <h2 style="color:#f1f5f9;font-size:22px;margin:0 0 16px;">Reset your password</h2>
-                      <p style="color:#94a3b8;font-size:16px;line-height:1.6;margin:0 0 32px;">
-                        We received a request to reset your password. Click below to choose a new one.
-                      </p>
-                      <a href="${resetUrl}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:50px;font-size:16px;font-weight:700;letter-spacing:0.3px;">
-                        Reset Password
-                      </a>
-                      <p style="color:#64748b;font-size:13px;margin:32px 0 0;">
-                        This link expires in 1 hour. If you didn't request a password reset, ignore this email.
-                      </p>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:20px 40px;border-top:1px solid #334155;text-align:center;">
-                      <p style="color:#475569;font-size:12px;margin:0;">© 2026 Tara Infotech. All rights reserved.</p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </body>
-      </html>
-    `,
-  };
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: 'Welcome to HealConnect 🌟',
+    html,
+  });
+}
 
-  await sgMail.send(msg);
+// ─── Email Verification ────────────────────────────────────────────────────────
+
+export async function sendVerificationEmail(to: string, rawToken: string): Promise<void> {
+  const verifyUrl = `${APP_URL}/verify-email?token=${rawToken}`;
+  const html = wrap(`
+    <tr>
+      <td style="padding:40px;">
+        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Verify your email address</h2>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
+          Thanks for signing up! Click the button below to verify your email and activate your account.
+        </p>
+        <p style="text-align:center;">${btn(verifyUrl, 'Verify Email Address')}</p>
+        <p style="color:#9ca3af;font-size:13px;margin:32px 0 0;">
+          This link expires in <strong>24 hours</strong>.
+        </p>
+      </td>
+    </tr>`);
+
+  await sgMail.send({
+    to,
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: 'Verify your HealConnect email',
+    html,
+  });
+}
+
+// ─── Password Reset ────────────────────────────────────────────────────────────
+
+export async function sendPasswordResetEmail(to: string, rawToken: string): Promise<void> {
+  const resetUrl = `${APP_URL}/reset-password?token=${rawToken}`;
+  const html = wrap(`
+    <tr>
+      <td style="padding:40px;">
+        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Reset your password</h2>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
+          We received a request to reset your HealConnect password.
+          Click below to choose a new one.
+        </p>
+        <p style="text-align:center;">${btn(resetUrl, 'Reset Password')}</p>
+        <p style="color:#9ca3af;font-size:13px;margin:32px 0 0;">
+          This link expires in <strong>1 hour</strong>.
+          If you didn't request this, no action is needed — your password remains unchanged.
+        </p>
+      </td>
+    </tr>`);
+
+  await sgMail.send({
+    to,
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: 'Reset your HealConnect password',
+    html,
+  });
+}
+
+// ─── Password Changed Confirmation ────────────────────────────────────────────
+
+export async function sendPasswordChangedEmail(to: string, name: string): Promise<void> {
+  const loginUrl = `${APP_URL}/login`;
+  const html = wrap(`
+    <tr>
+      <td style="padding:40px;">
+        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Your password was changed ✓</h2>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 24px;">
+          Hi ${name}, your HealConnect password was successfully updated.
+        </p>
+        <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
+          If you made this change, great — you're all set!<br/>
+          If you <strong>did not</strong> change your password, please reset it immediately
+          and contact our support team.
+        </p>
+        <p style="text-align:center;">${btn(loginUrl, 'Log In to Your Account')}</p>
+      </td>
+    </tr>`);
+
+  await sgMail.send({
+    to,
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: 'Your HealConnect password was changed',
+    html,
+  });
 }

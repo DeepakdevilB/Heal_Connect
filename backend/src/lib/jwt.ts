@@ -32,6 +32,18 @@ export function getRefreshTokenExpiry(): Date {
   return new Date(Date.now() + REFRESH_EXPIRY_MS);
 }
 
+/** Generates a cryptographically secure 64-char hex token (raw — never stored directly). */
 export function generateSecureToken(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+/** SHA-256 hash a token before storing it in the database. */
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/** Generate a 6-digit OTP string. */
+export function generateOtp(): string {
+  const digits = crypto.randomInt(0, 1_000_000);
+  return digits.toString().padStart(6, '0');
 }

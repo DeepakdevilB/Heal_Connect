@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const isAzure = REDIS_URL.includes('azure.net');
+const isAzure = REDIS_URL.includes('azure.net') || REDIS_URL.startsWith('rediss://');
 
 // Initialize the Redis client with cluster-mode support (handles Azure Cache MOVED errors)
 export const redis = new Redis(REDIS_URL, {
@@ -38,9 +38,9 @@ export async function blacklistToken(token: string, expiresInMs: number): Promis
 }
 
 /**
- * Checks if a JWT token is currently in the Redis blacklist.
+ * Checks if a JWT token has been blacklisted.
  * @param token The JWT token to check
- * @returns boolean True if blacklisted, false otherwise
+ * @returns true if blacklisted, false otherwise
  */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
   const key = `bl_${token}`;

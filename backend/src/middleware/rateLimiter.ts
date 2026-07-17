@@ -3,56 +3,35 @@ import RedisStore from 'rate-limit-redis';
 import { redis } from '../lib/redis';
 import { Request } from 'express';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 const extractIp = (req: Request): string => {
   const ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
-  // Strip port if it's an IPv4 address with port (e.g., 223.233.66.130:11279)
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-  if (match && match[1]) {
-    return match[1];
-  }
-  return ip;
+  return match?.[1] ?? ip;
 };
 
-// General API rate limiter — 100 requests per 15 min
-export const generalLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-  }),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please try again later.' },
-});
+function limiter(windowMs: number, max: number, prefix: string) {
+  return rateLimit({
+    store: new RedisStore({
+      prefix,
+      sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
+    }),
+    keyGenerator: extractIp,
+    validate: { xForwardedForHeader: false, default: false },
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many requests, please try again later.' },
+  });
+}
 
-// Auth routes — 100 requests per 15 min (increased for testing)
-export const authLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-    prefix: 'rl_auth:', // MUST have unique prefix!
-  }),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 15 * 60 * 1000,
-  max: 100, // Temporarily increased to 100 to allow heavy local testing
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
-});
+// General API — 100 req / 15 min
+export const generalLimiter = limiter(15 * 60 * 1000, 100, 'rl_gen:');
 
-// Email verification — 5 requests per hour
-export const emailLimiter = rateLimit({
-  store: new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-    prefix: 'rl_email:',
-  }),
-  keyGenerator: extractIp,
-  validate: { xForwardedForHeader: false, default: false },
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many email requests, please try again in an hour.' },
-});
+// Auth routes — 10 req / 15 min (relaxed in dev)
+export const authLimiter = limiter(15 * 60 * 1000, IS_DEV ? 200 : 100, 'rl_auth:');
+
+// Email / OTP routes — 5 req / hour (relaxed in dev)
+export const emailLimiter = limiter(60 * 60 * 1000, IS_DEV ? 50 : 5, 'rl_email:');
