@@ -202,9 +202,9 @@ router.post(
           refreshToken,
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Internal server error: ' + (err?.message || String(err)), stack: err?.stack });
     }
   }
 );
