@@ -26,8 +26,13 @@ export function startBillingEngine() {
       for (const session of activeSessions) {
         const lockKey = `lock:billing:${session.id}`;
         
-        // 2. Try to acquire a 5-second distributed lock to prevent concurrent double-charging
-        const lockAcquired = await redis.set(lockKey, 'locked', 'EX', 5, 'NX');
+        // 2. Try to acquire a distributed lock
+        let lockAcquired = true;
+        if (redis) {
+          const res = await redis.set(lockKey, 'locked', 'EX', 5, 'NX');
+          lockAcquired = res !== null;
+        }
+
         if (!lockAcquired) {
           continue; // Another server instance is already processing this session right now
         }
@@ -44,12 +49,21 @@ export function startBillingEngine() {
   }, BILLING_INTERVAL_MS);
 }
 
+// In-memory fallback if Redis is disabled
+const memoryState = new Map<string, string>();
+
 async function processSessionBilling(session: any) {
   const stateKey = `billing:state:${session.id}`;
   const now = Date.now();
 
-  // Fetch session billing state from Redis
-  let stateStr = await redis.get(stateKey);
+  // Fetch session billing state
+  let stateStr = null;
+  if (redis) {
+    stateStr = await redis.get(stateKey);
+  } else {
+    stateStr = memoryState.get(stateKey) || null;
+  }
+
   let state = stateStr ? JSON.parse(stateStr) : null;
 
   // Initialize state if it doesn't exist
@@ -95,13 +109,22 @@ async function processSessionBilling(session: any) {
     // Update state
     state.lastBilledAt = now;
     state.gracePeriodStartedAt = null; // Reset grace period if they recharged mid-session
-    await redis.set(stateKey, JSON.stringify(state), 'EX', 86400); // Expire state after 24h
+    
+    if (redis) {
+      await redis.set(stateKey, JSON.stringify(state), 'EX', 86400); // Expire state after 24h
+    } else {
+      memoryState.set(stateKey, JSON.stringify(state));
+    }
   } else {
     // Insufficient balance -> Handle Grace Period
     if (!state.gracePeriodStartedAt) {
       console.log(`Insufficient balance for session ${session.id}. Starting 60s grace period.`);
       state.gracePeriodStartedAt = now;
-      await redis.set(stateKey, JSON.stringify(state), 'EX', 86400);
+      if (redis) {
+        await redis.set(stateKey, JSON.stringify(state), 'EX', 86400);
+      } else {
+        memoryState.set(stateKey, JSON.stringify(state));
+      }
       
       // TODO: Emit WebSocket event to client warning about low balance
     } else {
@@ -109,7 +132,11 @@ async function processSessionBilling(session: any) {
       if (timeInGrace >= GRACE_PERIOD_MS) {
         console.log(`Grace period expired for session ${session.id}. Terminating.`);
         await terminateSession(session.id);
-        await redis.del(stateKey); // Clean up state
+        if (redis) {
+          await redis.del(stateKey); // Clean up state
+        } else {
+          memoryState.delete(stateKey);
+        }
       }
     }
   }

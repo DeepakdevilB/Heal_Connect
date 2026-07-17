@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { type Store } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redis } from '../lib/redis';
 import { Request } from 'express';
@@ -11,12 +11,18 @@ const extractIp = (req: Request): string => {
   return match?.[1] ?? ip;
 };
 
+function makeStore(prefix: string): Store | undefined {
+  if (!redis) return undefined; // fall back to in-memory
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args: string[]) => (redis as any).call(...args),
+  });
+}
+
 function limiter(windowMs: number, max: number, prefix: string) {
+  const store = makeStore(prefix);
   return rateLimit({
-    store: new RedisStore({
-      prefix,
-      sendCommand: (...args: string[]) => redis.call(args[0]!, ...args.slice(1)) as any,
-    }),
+    ...(store ? { store } : {}),
     keyGenerator: extractIp,
     validate: { xForwardedForHeader: false, default: false },
     windowMs,
