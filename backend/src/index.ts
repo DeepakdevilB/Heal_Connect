@@ -62,10 +62,10 @@ const execPromise = util.promisify(exec);
 app.get('/api/run-prisma-migrate', async (_req, res) => {
   // Trigger build to apply Prisma migration fixes
   res.setHeader('Content-Type', 'text/plain');
-  res.write('Starting prisma migrate deploy...\n');
+  res.write('Starting prisma db push...\n');
   
   try {
-    const { stdout, stderr } = await execPromise('npx prisma migrate deploy');
+    const { stdout, stderr } = await execPromise('npx prisma db push --accept-data-loss');
     res.write('--- STDOUT ---\n');
     res.write(stdout);
     res.write('\n--- STDERR ---\n');
