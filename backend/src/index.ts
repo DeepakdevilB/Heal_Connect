@@ -55,45 +55,21 @@ import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
 
-app.get('/api/migrate', async (_req, res) => {
+import { exec } from 'child_process';
+import util from 'util';
+const execPromise = util.promisify(exec);
+
+app.get('/api/run-prisma-migrate', async (_req, res) => {
   res.setHeader('Content-Type', 'text/plain');
-  res.write('Starting migration process...\n');
+  res.write('Starting prisma migrate deploy...\n');
   
   try {
-    const sqlPath = path.join(__dirname, '../prisma/migrations/20260716124500_add_abhishek_fields/migration.sql');
-    res.write('SQL Path resolved to: ' + sqlPath + '\n');
-    
-    if (!fs.existsSync(sqlPath)) {
-      res.write('ERROR: SQL file not found at this path!\n');
-      return res.end();
-    }
-    
-    const sql = fs.readFileSync(sqlPath, 'utf8');
-    res.write(`Read SQL file successfully. Size: ${sql.length} bytes.\n`);
-    
-    res.write('Initializing pg Client...\n');
-    res.write(`DATABASE_URL exists? ${!!process.env.DATABASE_URL}\n`);
-    
-    const client = new Client({
-      connectionString: process.env.DATABASE_URL,
-      // Do not explicitly pass ssl to exactly match how Prisma's Pool connects
-    });
-    
-    res.write('Attempting to connect to database...\n');
-    
-    const connectPromise = client.connect();
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 15 seconds!')), 15000));
-    
-    await Promise.race([connectPromise, timeoutPromise]);
-    res.write('Successfully connected to database!\n');
-    
-    res.write('Executing SQL queries...\n');
-    await client.query(sql);
-    res.write('SQL queries executed successfully!\n');
-    
-    await client.end();
-    res.write('Database connection closed.\n');
-    res.write('Migration completely finished!\n');
+    const { stdout, stderr } = await execPromise('npx prisma migrate deploy');
+    res.write('--- STDOUT ---\n');
+    res.write(stdout);
+    res.write('\n--- STDERR ---\n');
+    res.write(stderr);
+    res.write('\nMigration completely finished!\n');
     res.end();
   } catch (error) {
     res.write('\nFATAL ERROR: ' + String(error) + '\n');
