@@ -11,6 +11,7 @@ on:
 
 env:
   NODE_VERSION: '20.x'
+  DATABASE_URL: 'postgresql://dummy:dummy@localhost:5432/dummy'
 
 jobs:
   build:
