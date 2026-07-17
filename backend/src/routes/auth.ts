@@ -70,6 +70,7 @@ router.post(
           emailVerifyToken,
           emailVerifyExpiry,
           provider: 'email',
+          wallet: { create: { balance: 0 } },
         },
       });
 
@@ -245,6 +246,7 @@ router.post(
             name: name ?? null,
             isEmailVerified: email_verified ?? false,
             provider: 'google',
+            wallet: { create: { balance: 0 } },
           },
         });
       } else if (!user.googleId) {
@@ -298,6 +300,7 @@ router.post(
             name: name ?? null,
             isEmailVerified: !!email,
             provider: 'apple',
+            wallet: { create: { balance: 0 } },
           },
         });
       } else if (!user.appleId) {

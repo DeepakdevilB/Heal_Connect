@@ -7,6 +7,8 @@ import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
+import walletRouter from './routes/wallet';
+import { startBillingEngine } from './workers/billingEngine';
 
 const app = express();
 
@@ -95,6 +97,7 @@ app.use(generalLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
+app.use('/api/wallet', walletRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 
@@ -113,4 +116,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  
+  // Start the background workers
+  startBillingEngine();
 });
