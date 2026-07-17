@@ -1,7 +1,7 @@
 export const loadRazorpay = (): Promise<boolean> => {
   return new Promise((resolve) => {
     // If already loaded
-    if ((window as any).Razorpay) {
+    if ('Razorpay' in window) {
       resolve(true);
       return;
     }

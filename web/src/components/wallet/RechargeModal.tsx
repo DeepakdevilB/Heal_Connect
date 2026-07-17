@@ -56,7 +56,8 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
         name: 'HealConnect',
         description: 'Wallet Recharge',
         order_id: orderId,
-        handler: function (response: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+        handler: function (_response: any) {
           // Payment successful! Webhook will handle the actual DB update.
           // We can just optimistically trigger onSuccess.
           onSuccess();
@@ -70,14 +71,16 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
         },
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (response: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+      rzp.on('payment.failed', function (_response: any) {
         setError('Payment failed. Please try again.');
       });
       rzp.open();
 
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

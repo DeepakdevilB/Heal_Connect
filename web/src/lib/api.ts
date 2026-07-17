@@ -171,7 +171,7 @@ export const practitionersApi = {
 
 export const walletApi = {
   getBalance: (token: string) =>
-    request<{ wallet: { id: string; balance: number; currency: string; transactions: any[] } }>('/api/wallet', {
+    request<{ wallet: { id: string; balance: number; currency: string; transactions: { id: string; type: string; status: string; amount: number; createdAt: string }[] } }>('/api/wallet', {
       headers: authHeader(token),
     }),
 

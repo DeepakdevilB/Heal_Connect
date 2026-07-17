@@ -18,7 +18,7 @@ import { walletApi, tokenStore } from '@/lib/api';
 import { RechargeModal } from '@/components/wallet/RechargeModal';
 
 export default function WalletPage() {
-  const [wallet, setWallet] = useState<any>(null);
+  const [wallet, setWallet] = useState<{ balance: number; transactions: Array<{ id: string; type: string; status: string; amount: number; createdAt: string }> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
 
@@ -100,7 +100,7 @@ export default function WalletPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {wallet.transactions.map((tx: any) => {
+                  {wallet.transactions.map((tx: { id: string; type: string; status: string; amount: number; createdAt: string }) => {
                     const isCredit = tx.type === 'RECHARGE' || tx.type === 'REFUND';
                     return (
                       <TableRow key={tx.id} className="border-yellow-100">
