@@ -29,6 +29,7 @@ function limiter(windowMs: number, max: number, prefix: string) {
     max,
     standardHeaders: true,
     legacyHeaders: false,
+    passOnStoreError: true, // IMPORTANT: Prevent 500 errors if Redis is down
     message: { success: false, message: 'Too many requests, please try again later.' },
   });
 }
