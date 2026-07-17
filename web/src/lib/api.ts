@@ -169,6 +169,20 @@ export const practitionersApi = {
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 };
 
+export const walletApi = {
+  getBalance: (token: string) =>
+    request<{ wallet: { id: string; balance: number; currency: string; transactions: any[] } }>('/api/wallet', {
+      headers: authHeader(token),
+    }),
+
+  recharge: (token: string, amount: number) =>
+    request<{ orderId: string; amount: number; currency: string; transactionId: string }>('/api/wallet/recharge', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
+};
+
 // ─── Token helpers (localStorage) ────────────────────────────────────────────
 
 export const tokenStore = {

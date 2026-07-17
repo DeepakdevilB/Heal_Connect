@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { authApi, practitionersApi, tokenStore, type PractitionerProfile } from '@/lib/api';
+import { authApi, practitionersApi, walletApi, tokenStore, type PractitionerProfile } from '@/lib/api';
+import { RechargeModal } from '@/components/wallet/RechargeModal';
 
 interface UserData {
   id: string;
@@ -33,6 +34,19 @@ export default function DashboardPage() {
   const [experts, setExperts] = useState<PractitionerProfile[]>([]);
   const [onlineCount, setOnlineCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'all' | 'astrology' | 'tarot' | 'vastu' | 'numerology'>('all');
+  
+  // Wallet State
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
+
+  const fetchWallet = () => {
+    const token = tokenStore.getAccess();
+    if (token) {
+      walletApi.getBalance(token).then((res) => {
+        if (res.success && res.data) setWalletBalance(res.data.wallet.balance);
+      });
+    }
+  };
 
   useEffect(() => {
     const token = tokenStore.getAccess();
@@ -49,6 +63,8 @@ export default function DashboardPage() {
         setOnlineCount(res.data.practitioners.filter((p) => p.isOnline).length);
       }
     });
+
+    fetchWallet();
   }, [router]);
 
   const handleTabChange = (tab: typeof activeTab) => {
@@ -95,10 +111,14 @@ export default function DashboardPage() {
               <Bell className="h-5 w-5 text-gray-500" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-[#f59e0b] rounded-full" />
             </Button>
-            <div className="hidden sm:flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5">
-              <Wallet className="h-4 w-4 text-[#f59e0b]" />
-              <span className="text-sm font-semibold text-[#d97706]">₹0.00</span>
-            </div>
+            <Link href="/dashboard/wallet">
+              <div className="hidden sm:flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5 cursor-pointer hover:bg-yellow-100 transition-colors">
+                <Wallet className="h-4 w-4 text-[#f59e0b]" />
+                <span className="text-sm font-semibold text-[#d97706]">
+                  {walletBalance !== null ? `₹${walletBalance.toFixed(2)}` : '...'}
+                </span>
+              </div>
+            </Link>
             <Link href="/dashboard/profile" className="w-9 h-9 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity" title="My Profile">
               {user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
             </Link>
@@ -154,11 +174,11 @@ export default function DashboardPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { icon: MessageCircle, label: 'Live Chat', desc: 'Text with an expert now', color: 'text-[#f59e0b]', bg: 'bg-yellow-50', border: 'hover:border-yellow-400' },
-            { icon: Phone, label: 'Audio Call', desc: 'Voice consultation', color: 'text-orange-500', bg: 'bg-orange-50', border: 'hover:border-orange-400' },
-            { icon: Wallet, label: 'Add Money', desc: 'Recharge your wallet', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'hover:border-emerald-400' },
+            { icon: MessageCircle, label: 'Live Chat', desc: 'Text with an expert now', color: 'text-[#f59e0b]', bg: 'bg-yellow-50', border: 'hover:border-yellow-400', action: () => document.getElementById('experts-section')?.scrollIntoView({ behavior: 'smooth' }) },
+            { icon: Phone, label: 'Audio Call', desc: 'Voice consultation', color: 'text-orange-500', bg: 'bg-orange-50', border: 'hover:border-orange-400', action: () => document.getElementById('experts-section')?.scrollIntoView({ behavior: 'smooth' }) },
+            { icon: Wallet, label: 'Add Money', desc: 'Recharge your wallet', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'hover:border-emerald-400', action: () => setIsRechargeModalOpen(true) },
           ].map((item) => (
-            <Card key={item.label} className={`bg-white border border-yellow-100 ${item.border} transition-colors cursor-pointer group shadow-sm`}>
+            <Card key={item.label} onClick={item.action} className={`bg-white border border-yellow-100 ${item.border} transition-colors cursor-pointer group shadow-sm`}>
               <CardContent className="p-5 flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-xl ${item.bg} flex items-center justify-center`}>
                   <item.icon className={`w-6 h-6 ${item.color}`} />
@@ -174,7 +194,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Experts Section */}
-        <div>
+        <div id="experts-section">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-xl font-extrabold text-[#1a1a1a]">Browse Experts</h2>
@@ -261,8 +281,11 @@ export default function DashboardPage() {
               <CardTitle className="text-[#1a1a1a] mb-1">Top up your wallet</CardTitle>
               <CardDescription className="text-gray-500">Add money and start connecting with experts instantly. No hidden fees.</CardDescription>
             </div>
-            <Button className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 rounded-full px-8 shrink-0 font-bold">
-              <Wallet className="h-4 w-4 mr-2" /> Add ₹100
+            <Button 
+              onClick={() => setIsRechargeModalOpen(true)}
+              className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 rounded-full px-8 shrink-0 font-bold"
+            >
+              <Wallet className="h-4 w-4 mr-2" /> Add Funds
             </Button>
           </CardContent>
         </Card>
@@ -273,6 +296,16 @@ export default function DashboardPage() {
           </Button>
         </div>
       </main>
+
+      <RechargeModal 
+        isOpen={isRechargeModalOpen} 
+        onClose={() => setIsRechargeModalOpen(false)} 
+        onSuccess={() => {
+          fetchWallet();
+          // Adding a slight delay fetch to ensure webhook has updated DB
+          setTimeout(fetchWallet, 2000);
+        }} 
+      />
     </div>
   );
 }
