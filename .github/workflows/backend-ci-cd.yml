@@ -47,6 +47,7 @@ jobs:
             backend/package.json
             backend/package-lock.json
             backend/prisma
+            backend/prisma.config.ts
 
   deploy:
     needs: build
