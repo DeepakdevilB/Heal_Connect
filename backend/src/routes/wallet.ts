@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { body } from 'express-validator';
 import Razorpay from 'razorpay';
+import Stripe from 'stripe';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
@@ -9,11 +10,13 @@ import { handleValidation } from '../middleware/validate';
 const router = Router();
 
 // Initialize Razorpay
-// Note: We use optional chaining and fallback to avoid crashing if env vars are missing
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret',
 });
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'dummy_stripe_secret');
 
 // ─── Get Wallet Balance & Transactions ────────────────────────────────────────
 
@@ -154,6 +157,140 @@ router.post('/webhook', async (req: Request, res: Response) => {
     console.error('Webhook processing error:', err);
     res.status(500).send('Webhook error');
   }
+});
+
+// ─── Initialize Recharge (Create Stripe Checkout Session) ─────────────────
+
+router.post(
+  '/recharge/stripe',
+  requireAuth,
+  [body('amount').isNumeric().custom((val) => val >= 10).withMessage('Amount must be at least ₹10 (equivalent)')],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    const { amount } = req.body as { amount: number };
+
+    try {
+      const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.userId } });
+      if (!wallet) {
+        res.status(404).json({ success: false, message: 'Wallet not found' });
+        return;
+      }
+
+      // Convert INR amount to USD (assuming 1 USD = 83 INR for simplicity)
+      // Stripe expects amount in cents
+      const exchangeRate = 83;
+      const usdAmount = amount / exchangeRate;
+      const amountInCents = Math.round(usdAmount * 100);
+
+      // Create a PENDING transaction in DB
+      const transaction = await prisma.transaction.create({
+        data: {
+          walletId: wallet.id,
+          amount,
+          type: 'RECHARGE',
+          status: 'PENDING',
+          // we'll update referenceId when session is created
+        },
+      });
+
+      const frontendUrl = process.env.APP_URL || (process.env.NODE_ENV === 'production' ? 'https://blue-plant-0d21bc900.7.azurestaticapps.net' : 'http://localhost:3000');
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'HealConnect Wallet Recharge',
+                description: `Recharge wallet with ₹${amount}`,
+              },
+              unit_amount: amountInCents,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${frontendUrl}/dashboard/wallet?recharge=success`,
+        cancel_url: `${frontendUrl}/dashboard/wallet?recharge=cancel`,
+        client_reference_id: transaction.id,
+      });
+
+      // Update the transaction with the Stripe Session ID
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { referenceId: session.id },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          url: session.url,
+          sessionId: session.id,
+        },
+      });
+    } catch (err) {
+      console.error('Stripe recharge init error:', err);
+      res.status(500).json({ success: false, message: 'Failed to initialize Stripe recharge' });
+    }
+  }
+);
+
+// ─── Stripe Webhook (Payment Captured) ────────────────────────────────────────
+
+router.post('/stripe-webhook', async (req: Request, res: Response) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'dummy_webhook_secret';
+  
+  // Notice we use req.rawBody which we set in index.ts
+  const rawBody = (req as any).rawBody;
+
+  let event;
+
+  try {
+    if (!sig || !rawBody) throw new Error('Missing stripe signature or raw body');
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+  } catch (err: any) {
+    console.error('Stripe Webhook Error:', err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  // Handle the event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const transactionId = session.client_reference_id;
+
+    if (transactionId) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          const transaction = await tx.transaction.findUnique({
+            where: { id: transactionId },
+          });
+
+          if (!transaction || transaction.status === 'SUCCESS') return;
+
+          // Mark transaction as SUCCESS
+          await tx.transaction.update({
+            where: { id: transactionId },
+            data: { status: 'SUCCESS' },
+          });
+
+          // Add amount to wallet
+          await tx.wallet.update({
+            where: { id: transaction.walletId },
+            data: { balance: { increment: transaction.amount } },
+          });
+        });
+        console.log(`Stripe recharge successful for transaction: ${transactionId}`);
+      } catch (dbErr) {
+        console.error('Failed to process Stripe transaction in DB:', dbErr);
+      }
+    }
+  }
+
+  // Return a 200 response to acknowledge receipt of the event
+  res.json({ received: true });
 });
 
 export default router;

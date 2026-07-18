@@ -38,7 +38,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({
+  limit: '10kb',
+  verify: (req, _res, buf) => {
+    // Keep raw body for Stripe webhook signature verification
+    (req as any).rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // ─── Health Check (Before Rate Limiter) ───────────────────────────────────────
@@ -71,6 +77,23 @@ app.get('/api/run-prisma-migrate', async (_req, res) => {
     res.write('\n--- STDERR ---\n');
     res.write(stderr);
     res.write('\nMigration completely finished!\n');
+    res.end();
+  } catch (error) {
+    res.write('\nFATAL ERROR: ' + String(error) + '\n');
+    res.end();
+  }
+});
+
+app.get('/api/run-seed', async (_req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.write('Starting db seed...\n');
+  try {
+    const { stdout, stderr } = await execPromise('npx tsx seed.ts');
+    res.write('--- STDOUT ---\n');
+    res.write(stdout);
+    res.write('\n--- STDERR ---\n');
+    res.write(stderr);
+    res.write('\nSeed completely finished!\n');
     res.end();
   } catch (error) {
     res.write('\nFATAL ERROR: ' + String(error) + '\n');

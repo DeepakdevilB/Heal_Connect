@@ -20,6 +20,7 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
   const [amount, setAmount] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'stripe'>('razorpay');
 
   const handleRecharge = async (rechargeAmount: number) => {
     if (rechargeAmount < 10) {
@@ -34,6 +35,17 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
       const token = tokenStore.getAccess();
       if (!token) throw new Error('Not authenticated');
 
+      if (paymentMethod === 'stripe') {
+        const res = await walletApi.rechargeStripe(token, rechargeAmount);
+        if (!res.success || !res.data?.url) {
+          throw new Error(res.message || 'Failed to initialize Stripe checkout');
+        }
+        // Redirect to Stripe Hosted Checkout
+        window.location.href = res.data.url;
+        return; // Execution stops here due to redirect
+      }
+
+      // ─── Razorpay Flow ───
       // 1. Initialize Razorpay order on backend
       const res = await walletApi.recharge(token, rechargeAmount);
       if (!res.success || !res.data) {
@@ -109,6 +121,31 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
               ₹{preset}
             </Button>
           ))}
+        </div>
+
+        <div className="space-y-3 pb-2">
+          <label className="text-sm font-semibold text-[#1a1a1a]">Payment Method</label>
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className={`h-12 border-gray-200 font-medium ${paymentMethod === 'razorpay' ? 'ring-2 ring-[#f59e0b] bg-yellow-50 text-[#d97706] border-transparent' : 'text-gray-600 hover:bg-gray-50'}`}
+              onClick={() => setPaymentMethod('razorpay')}
+            >
+              Domestic (INR)
+            </Button>
+            <Button
+              variant="outline"
+              className={`h-12 border-gray-200 font-medium ${paymentMethod === 'stripe' ? 'ring-2 ring-[#f59e0b] bg-yellow-50 text-[#d97706] border-transparent' : 'text-gray-600 hover:bg-gray-50'}`}
+              onClick={() => setPaymentMethod('stripe')}
+            >
+              International (USD)
+            </Button>
+          </div>
+          {paymentMethod === 'stripe' && (
+            <p className="text-xs text-gray-500">
+              * International payments are converted to USD (approx ${((amount || 0) / 83).toFixed(2)}) and processed securely via Stripe.
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">

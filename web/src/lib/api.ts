@@ -201,6 +201,13 @@ export const walletApi = {
       headers: authHeader(token),
       body: JSON.stringify({ amount }),
     }),
+    
+  rechargeStripe: (token: string, amount: number) =>
+    request<{ url: string; sessionId: string }>('/api/wallet/recharge/stripe', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
 };
 
 // ─── Token helpers (localStorage) ────────────────────────────────────────────
