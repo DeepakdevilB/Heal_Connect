@@ -110,13 +110,13 @@ export default function ProfilePage() {
         <Card className="bg-white border border-yellow-100 shadow-sm">
           <CardContent className="p-6 flex items-center gap-6">
             <div className="relative shrink-0">
-              {profile.photoUrl ? (
-                <img src={profile.photoUrl} alt={profile.name || ''} className="w-20 h-20 rounded-full object-cover shadow" />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-2xl font-bold shadow">
-                  {initials}
-                </div>
-              )}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-2xl font-bold overflow-hidden shadow">
+                {profile.photoUrl ? (
+                  <img src={profile.photoUrl} alt={profile.name || 'Profile'} className="w-full h-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
               <button onClick={() => fileRef.current?.click()} disabled={uploading} className="absolute bottom-0 right-0 w-7 h-7 bg-[#f59e0b] hover:bg-[#d97706] rounded-full flex items-center justify-center text-white shadow transition-colors">
                 {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
               </button>

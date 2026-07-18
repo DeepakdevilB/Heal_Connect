@@ -119,8 +119,14 @@ export default function DashboardPage() {
                 </span>
               </div>
             </Link>
-            <Link href="/dashboard/profile" className="w-9 h-9 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity" title="My Profile">
-              {user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+            <Link href="/dashboard/profile" className="w-9 h-9 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity overflow-hidden" title="My Profile">
+              {user?.photoUrl ? (
+                <img src={user.photoUrl} alt={user.name || 'Profile'} className="w-full h-full object-cover" />
+              ) : user?.name ? (
+                user.name.charAt(0).toUpperCase()
+              ) : (
+                <User className="h-4 w-4" />
+              )}
             </Link>
           </div>
         </div>
