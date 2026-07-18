@@ -46,7 +46,7 @@ router.patch(
   ],
   handleValidation,
   async (req: AuthRequest, res: Response) => {
-    const body = req.body as {
+    const body = (req.body || {}) as {
       name?: string; dob?: Date; birthPlace?: string;
       gender?: string; wellnessInterests?: string[]; phone?: string;
     };

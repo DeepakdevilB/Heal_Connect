@@ -53,9 +53,11 @@ export interface PractitionerProfile {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  // Extract headers from options so they don't overwrite the merged headers
+  const { headers, ...restOptions } = options;
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    ...restOptions,
   });
   const data = await res.json() as ApiResponse<T>;
   return data;
