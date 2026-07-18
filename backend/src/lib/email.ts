@@ -4,7 +4,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@healconnect.app';
 const FROM_NAME  = process.env.SENDGRID_FROM_NAME  || 'HealConnect';
-const APP_URL    = process.env.APP_URL             || 'http://localhost:3000';
+const APP_URL    = process.env.APP_URL             || (process.env.NODE_ENV === 'production' ? 'https://blue-plant-0d21bc900.7.azurestaticapps.net' : 'http://localhost:3000');
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
