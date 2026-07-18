@@ -19,6 +19,7 @@ interface UserData {
   name: string | null;
   email: string | null;
   isEmailVerified: boolean;
+  photoUrl?: string | null;
 }
 
 const GRADIENTS = [
