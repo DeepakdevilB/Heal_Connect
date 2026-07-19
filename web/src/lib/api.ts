@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// API_URL is intentionally empty — all /api/* calls go through Next.js rewrite proxy
+// which forwards to the backend (see next.config.mjs). This avoids CORS issues.
+const API_URL = '';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -12,13 +14,16 @@ interface AuthData {
     id: string;
     email: string | null;
     name: string | null;
+    phone: string | null;
     isEmailVerified: boolean;
+    isPhoneVerified: boolean;
   };
   accessToken: string;
   refreshToken: string;
+  verifyMethod?: 'email' | 'sms';
 }
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   email: string | null;
   name: string | null;
@@ -31,7 +36,7 @@ interface UserProfile {
   isEmailVerified: boolean;
 }
 
-interface PractitionerProfile {
+export interface PractitionerProfile {
   id: string;
   name: string;
   bio: string | null;
@@ -48,9 +53,11 @@ interface PractitionerProfile {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  // Extract headers from options so they don't overwrite the merged headers
+  const { headers, ...restOptions } = options;
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    ...restOptions,
   });
   const data = await res.json() as ApiResponse<T>;
   return data;
@@ -61,7 +68,10 @@ function authHeader(token: string) {
 }
 
 export const authApi = {
-  register: (body: { email: string; password: string; name: string }) =>
+  register: (body: {
+    email: string; password: string; name: string;
+    phone?: string; verifyMethod?: 'email' | 'sms';
+  }) =>
     request<AuthData>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
 
   login: (body: { email: string; password: string }) =>
@@ -76,8 +86,20 @@ export const authApi = {
   forgotPassword: (email: string) =>
     request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
 
+  resetPassword: (token: string, password: string) =>
+    request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+
   resendVerification: (email: string) =>
     request('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  sendOtp: (phone: string) =>
+    request('/api/auth/send-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
+
+  verifyOtp: (phone: string, otp: string) =>
+    request('/api/auth/verify-otp', { method: 'POST', body: JSON.stringify({ phone, otp }) }),
+
+  resendOtp: (phone: string) =>
+    request('/api/auth/resend-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
 
   refresh: (refreshToken: string) =>
     request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {
@@ -167,6 +189,66 @@ export const practitionersApi = {
 
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
+};
+
+export const sessionsApi = {
+  create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
+    request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ practitionerId, type }),
+    }),
+
+  get: (token: string, sessionId: string) =>
+    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
+      `/api/sessions/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+};
+
+export const agoraApi = {
+  getToken: (token: string, sessionId: string) =>
+    request<{ token: string; channelName: string; uid: number; appId: string; expireTs: number }>(
+      '/api/agora/token',
+      { method: 'POST', headers: authHeader(token), body: JSON.stringify({ sessionId }) }
+    ),
+
+  getChannel: (token: string, sessionId: string) =>
+    request<{ appId: string; channelName: string; sessionStatus: string; sessionType: string }>(
+      `/api/agora/channel/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+
+  submitFeedback: (token: string, body: {
+    sessionId: string; audioQuality: number; overallRating: number;
+    issues?: string[]; comment?: string;
+  }) =>
+    request('/api/agora/feedback', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+};
+
+export const walletApi = {
+  getBalance: (token: string) =>
+    request<{ wallet: { id: string; balance: number; currency: string; transactions: { id: string; type: string; status: string; amount: number; createdAt: string }[] } }>('/api/wallet', {
+      headers: authHeader(token),
+    }),
+
+  recharge: (token: string, amount: number) =>
+    request<{ orderId: string; amount: number; currency: string; transactionId: string }>('/api/wallet/recharge', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
+    
+  rechargeStripe: (token: string, amount: number) =>
+    request<{ url: string; sessionId: string }>('/api/wallet/recharge/stripe', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
 };
 
 // ─── Token helpers (localStorage) ────────────────────────────────────────────
