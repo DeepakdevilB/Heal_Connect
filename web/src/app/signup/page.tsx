@@ -66,13 +66,13 @@ export default function SignupPage() {
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       setSuccess(res.message || 'Account created!');
 
-      const method = (res.data as any).verifyMethod as VerifyMethod | undefined;
+      const method = res.data.verifyMethod as VerifyMethod | undefined;
 
       if (method === 'sms' && phone) {
         setTimeout(() => router.push(`/verify-otp?phone=${encodeURIComponent(phone)}`), 1500);
       } else {
-        // Email verify — just show success, don't redirect to dashboard yet
-        // User must verify email before logging in
+        // Email verify — redirect to a "check your inbox" holding page
+        setTimeout(() => router.push(`/verify-email/pending?email=${encodeURIComponent(email)}`), 1500);
       }
     } catch {
       setError('Something went wrong. Please try again.');

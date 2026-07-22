@@ -11,22 +11,69 @@ const extractIp = (req: Request): string => {
   return match?.[1] ?? ip;
 };
 
-/**
- * Returns a RedisStore if Redis is configured, otherwise undefined
- * (express-rate-limit falls back to its built-in MemoryStore).
- */
-function makeStore(prefix: string): Store | undefined {
-  if (!redis) return undefined; // fall back to in-memory
-  return new RedisStore({
-    prefix,
-    sendCommand: (...args: string[]) => (redis as any).call(...args),
-  });
+class FailSafeStore implements Store {
+  private redisStore?: RedisStore;
+  private localStore: any;
+
+  constructor(prefix: string) {
+    // Fall back to built-in in-memory store
+    this.localStore = new (rateLimit as any).MemoryStore();
+
+    if (redis) {
+      this.redisStore = new RedisStore({
+        prefix,
+        sendCommand: async (...args: string[]) => {
+          if (!redis || redis.status !== 'ready') {
+            throw new Error('Redis connection is closed or not ready.');
+          }
+          return (redis as any).call(...args);
+        },
+      });
+    }
+  }
+
+  async increment(key: string): Promise<any> {
+    if (this.redisStore && redis && redis.status === 'ready') {
+      try {
+        return await this.redisStore.increment(key);
+      } catch (err: any) {
+        console.warn(`RedisStore increment error for key ${key}, falling back to MemoryStore:`, err.message);
+      }
+    }
+    return this.localStore.increment(key);
+  }
+
+  async decrement(key: string): Promise<void> {
+    if (this.redisStore && redis && redis.status === 'ready') {
+      try {
+        return await this.redisStore.decrement(key);
+      } catch (err: any) {
+        console.warn(`RedisStore decrement error for key ${key}:`, err.message);
+      }
+    }
+    return this.localStore.decrement(key);
+  }
+
+  async resetKey(key: string): Promise<void> {
+    if (this.redisStore && redis && redis.status === 'ready') {
+      try {
+        return await this.redisStore.resetKey(key);
+      } catch (err: any) {
+        console.warn(`RedisStore resetKey error for key ${key}:`, err.message);
+      }
+    }
+    return this.localStore.resetKey(key);
+  }
+}
+
+function makeStore(prefix: string): Store {
+  return new FailSafeStore(prefix);
 }
 
 function limiter(windowMs: number, max: number, prefix: string) {
   const store = makeStore(prefix);
   return rateLimit({
-    ...(store ? { store } : {}),
+    store,
     keyGenerator: extractIp,
     validate: { xForwardedForHeader: false, default: false },
     windowMs,

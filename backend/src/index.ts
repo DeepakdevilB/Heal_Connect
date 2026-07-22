@@ -4,13 +4,21 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createServer } from 'http';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
+import consultationsRouter from './routes/consultations';
+import walletRouter from './routes/wallet';
+import { initSocketServer } from './lib/socket';
 
 const app  = express();
+const server = createServer(app);
 const port = process.env.PORT || 8080;
+
+// ─── Initialize Socket.IO ─────────────────────────────────────────────────────
+initSocketServer(server);
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
 
@@ -47,6 +55,8 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
+app.use('/api/consultations', consultationsRouter);
+app.use('/api/wallet', walletRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 
@@ -63,6 +73,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`✦ HealConnect API running on port ${port}`);
 });

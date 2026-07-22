@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { MessageCircle, Phone, ShieldCheck, Wallet, Star, Sparkles, CheckCircle } from 'lucide-react';
 import Navbar from '@/components/navbar';
+import { getAvatarUrl } from '@/lib/utils';
 
 export default function LandingPage() {
   return (
@@ -123,8 +124,8 @@ export default function LandingPage() {
                 { initials: 'VK', name: 'Vikram Kapoor', role: 'Vastu Consultant', rating: 4.8, desc: 'Transforming homes and businesses to align with positive cosmic energies.', from: 'from-blue-400', to: 'to-indigo-500' },
               ].map((e) => (
                 <Card key={e.name} className="bg-white border border-yellow-100 hover:border-yellow-300 hover:shadow-lg transition-all text-center pt-8">
-                  <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${e.from} ${e.to} mx-auto flex items-center justify-center text-2xl font-extrabold text-white shadow-md mb-4`}>
-                    {e.initials}
+                  <div className="relative w-20 h-20 mx-auto mb-4">
+                    <img src={getAvatarUrl(e.name)} alt={e.name} className="w-20 h-20 rounded-2xl object-cover shadow-md border-2 border-amber-200" />
                   </div>
                   <CardHeader className="pb-2 pt-0">
                     <CardTitle className="text-lg text-[#1a1a1a]">{e.name}</CardTitle>

@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { authApi, practitionersApi, tokenStore, type PractitionerProfile } from '@/lib/api';
+import { authApi, practitionersApi, walletApi, tokenStore, type PractitionerProfile } from '@/lib/api';
+import { getAvatarUrl } from '@/lib/utils';
 
 interface UserData {
   id: string;
@@ -20,17 +21,12 @@ interface UserData {
   isEmailVerified: boolean;
 }
 
-const GRADIENTS = [
-  'from-yellow-400 to-orange-500', 'from-emerald-400 to-teal-500',
-  'from-pink-400 to-rose-500', 'from-blue-400 to-indigo-500',
-  'from-purple-400 to-violet-500', 'from-cyan-400 to-blue-500',
-];
-
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [experts, setExperts] = useState<Practitioner[]>([]);
+  const [balance, setBalance] = useState(0);
+  const [experts, setExperts] = useState<PractitionerProfile[]>([]);
   const [onlineCount, setOnlineCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'all' | 'astrology' | 'tarot' | 'vastu' | 'numerology'>('all');
 
@@ -42,6 +38,13 @@ export default function DashboardPage() {
       setUser((res.data as { user: UserData }).user);
     }).catch(() => { tokenStore.clear(); router.replace('/login'); })
       .finally(() => setLoading(false));
+
+    // Fetch wallet balance
+    walletApi.getBalance(token).then((res) => {
+      if (res.success && res.data) {
+        setBalance(res.data.balance);
+      }
+    });
 
     practitionersApi.list({ limit: 6 }).then((res) => {
       if (res.success && res.data) {
@@ -97,7 +100,7 @@ export default function DashboardPage() {
             </Button>
             <div className="hidden sm:flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5">
               <Wallet className="h-4 w-4 text-[#f59e0b]" />
-              <span className="text-sm font-semibold text-[#d97706]">₹0.00</span>
+              <span className="text-sm font-semibold text-[#d97706]">₹{balance.toFixed(2)}</span>
             </div>
             <Link href="/dashboard/profile" className="w-9 h-9 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-sm font-bold hover:opacity-90 transition-opacity" title="My Profile">
               {user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
@@ -132,7 +135,7 @@ export default function DashboardPage() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Wallet Balance', value: '₹0', icon: Wallet, color: 'text-[#f59e0b]', bg: 'bg-yellow-50' },
+            { label: 'Wallet Balance', value: `₹${balance.toFixed(0)}`, icon: Wallet, color: 'text-[#f59e0b]', bg: 'bg-yellow-50' },
             { label: 'Sessions Done', value: '0', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { label: 'Minutes Used', value: '0 min', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
             { label: 'Experts Online', value: String(onlineCount || '—'), icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50' },
@@ -201,19 +204,13 @@ export default function DashboardPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {experts.map((expert) => {
-                const gradient = GRADIENTS[expert.name.charCodeAt(0) % GRADIENTS.length];
-                const initials = expert.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
                 return (
                   <Link key={expert.id} href={`/practitioners/${expert.id}`}>
                     <Card className="bg-white border border-yellow-100 hover:border-yellow-300 hover:shadow-md transition-all cursor-pointer">
                       <CardContent className="p-5">
                         <div className="flex items-start gap-4">
                           <div className="relative shrink-0">
-                            {expert.photoUrl ? (
-                              <img src={expert.photoUrl} alt={expert.name} className="w-14 h-14 rounded-full object-cover shadow" />
-                            ) : (
-                              <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-lg font-bold shadow`}>{initials}</div>
-                            )}
+                            <img src={getAvatarUrl(expert.name, expert.photoUrl)} alt={expert.name} className="w-14 h-14 rounded-2xl object-cover shadow border border-amber-200" />
                             {expert.isOnline && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />}
                           </div>
                           <div className="flex-1 min-w-0">

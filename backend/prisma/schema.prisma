@@ -125,7 +125,12 @@ model Session {
   practitionerId String
   practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
   type           String   // "CHAT" | "AUDIO" | "VIDEO"
-  status         String   // "INITIATED" | "ACTIVE" | "COMPLETED" | "CANCELLED"
+  status         String   // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
+  channelName    String?
+  agoraUid       Int?
+  perMinuteRate  Float    @default(0)
+  walletDeduction Float   @default(0)
+  duration       Int      @default(0)
   startTime      DateTime?
   endTime        DateTime?
   totalCost      Float    @default(0)

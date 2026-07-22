@@ -31,7 +31,7 @@ export default function LoginPage() {
       const res = await authApi.login({ email, password });
 
       // Unverified account — show resend option
-      if (!res.success && (res as any).code === 'UNVERIFIED_ACCOUNT') {
+      if (!res.success && res.code === 'UNVERIFIED_ACCOUNT') {
         setError(res.message || 'Please verify your account before logging in.');
         setLoading(false);
         return;

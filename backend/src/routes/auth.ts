@@ -18,7 +18,8 @@ import {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
 } from '../lib/email';
-import { sendOtpSms, verifyOtpSms, isTwilioConfigured } from '../lib/sms';
+import { isOtpConfigured } from '../lib/sms';
+import { sendTwilioOTP, verifyTwilioOTP } from '../services/twilio.service';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
@@ -67,8 +68,17 @@ router.post(
         phone?: string; verifyMethod?: 'email' | 'sms';
       };
 
-    // SMS chosen but Twilio not configured → fall back to email silently
-    const useEmail = verifyMethod === 'email' || !isTwilioConfigured();
+    // SMS + +91 → MSG91 not ready yet, tell the user to use email instead
+    if (verifyMethod === 'sms' && phone?.startsWith('+91')) {
+      res.status(503).json({
+        success: false,
+        message: 'SMS OTP for Indian numbers (+91) is coming soon. Please use Email verification for now.',
+      });
+      return;
+    }
+
+    // SMS chosen but provider not configured for this number → fall back to email silently
+    const useEmail = verifyMethod === 'email' || (phone ? !isOtpConfigured(phone) : true);
 
     try {
       const existing = await prisma.user.findUnique({ where: { email } });
@@ -104,17 +114,20 @@ router.post(
         },
       });
 
-      // Send welcome email (non-blocking)
-      sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
+      // Send welcome email (non-blocking — never crash registration)
+      void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
 
       if (useEmail) {
-        // Send email verification (non-blocking)
-        sendVerificationEmail(email, rawEmailToken).catch((e) =>
+        // Send email verification (non-blocking — never crash registration)
+        void sendVerificationEmail(email, rawEmailToken).catch((e) =>
           console.error('Verification email failed:', e)
         );
       } else if (phone) {
-        // Twilio Verify handles OTP generation and delivery
-        sendOtpSms(phone).catch((e) => console.error('OTP SMS failed:', e));
+        if (phone.startsWith('+91')) {
+          console.warn('MSG91 configuration pending — skipping OTP for Indian number during registration.');
+        } else {
+          void sendTwilioOTP(phone).catch((e) => console.error('OTP SMS failed:', e));
+        }
       }
 
       const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
@@ -572,14 +585,6 @@ router.post(
   async (req: Request, res: Response) => {
     const { phone } = req.body as { phone: string };
 
-    if (!isTwilioConfigured()) {
-      res.status(503).json({
-        success: false,
-        message: 'SMS service is not configured. Please verify via email.',
-      });
-      return;
-    }
-
     try {
       const user = await prisma.user.findUnique({ where: { phone } });
       if (!user) {
@@ -593,8 +598,11 @@ router.post(
         return;
       }
 
-      // Twilio Verify handles OTP — just call sendOtpSms
-      await sendOtpSms(phone);
+      if (phone.startsWith('+91')) {
+        throw new Error('MSG91 configuration pending.');
+      }
+
+      await sendTwilioOTP(phone);
 
       res.json({ success: true, message: 'OTP sent successfully.' });
     } catch (err) {
@@ -629,11 +637,14 @@ router.post(
         return;
       }
 
-      // Use Twilio Verify to check the OTP code
-      const approved = await verifyOtpSms(phone, otp);
+      if (phone.startsWith('+91')) {
+        throw new Error('MSG91 configuration pending.');
+      }
 
-      if (!approved) {
-        res.status(400).json({ success: false, message: 'Invalid or expired OTP. Please try again.' });
+      const result = await verifyTwilioOTP(phone, otp);
+
+      if (result.status !== 'approved') {
+        res.status(400).json({ success: false, message: 'Invalid OTP' });
         return;
       }
 
@@ -643,7 +654,7 @@ router.post(
         data: { isPhoneVerified: true },
       });
 
-      res.json({ success: true, message: 'Phone verified successfully. You can now log in.' });
+      res.json({ success: true, message: 'OTP verified' });
     } catch (err) {
       console.error('Verify OTP error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -661,8 +672,8 @@ router.post(
   async (req: Request, res: Response) => {
     const { phone } = req.body as { phone: string };
 
-    if (!isTwilioConfigured()) {
-      res.status(503).json({ success: false, message: 'SMS service is not configured.' });
+    if (!isOtpConfigured(phone)) {
+      res.status(503).json({ success: false, message: 'SMS service is not configured for this number.' });
       return;
     }
 
@@ -670,8 +681,10 @@ router.post(
       const user = await prisma.user.findUnique({ where: { phone } });
 
       if (user && !user.isPhoneVerified) {
-        // Twilio Verify handles resend with built-in cooldown
-        await sendOtpSms(phone);
+        if (phone.startsWith('+91')) {
+          throw new Error('MSG91 configuration pending.');
+        }
+        await sendTwilioOTP(phone);
       }
 
       res.json({ success: true, message: 'If this number is registered, a new OTP has been sent.' });

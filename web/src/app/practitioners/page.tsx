@@ -8,6 +8,7 @@ import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield } from
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getAvatarUrl } from '@/lib/utils';
 
 interface Practitioner {
   id: string;
@@ -36,11 +37,6 @@ interface Filters {
 
 const SPECIALTIES = ['Vedic Astrology', 'Tarot', 'Reiki', 'Vastu', 'Numerology', 'Palmistry', 'Energy Healing'];
 const LANGUAGES = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Bengali', 'Marathi'];
-const GRADIENTS = [
-  'from-yellow-400 to-orange-500', 'from-emerald-400 to-teal-500',
-  'from-pink-400 to-rose-500', 'from-blue-400 to-indigo-500',
-  'from-purple-400 to-violet-500', 'from-cyan-400 to-blue-500',
-];
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const SELECT_CLS = 'w-full text-sm rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40';
@@ -196,19 +192,13 @@ export default function PractitionersPage() {
 
 function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
   const router = useRouter();
-  const initials = p.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-  const gradient = GRADIENTS[p.name.charCodeAt(0) % GRADIENTS.length];
 
   return (
     <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-yellow-100 hover:border-yellow-300 hover:shadow-md transition-all cursor-pointer">
       <CardContent className="p-5">
         <div className="flex items-start gap-4">
           <div className="relative shrink-0">
-            {p.photoUrl ? (
-              <img src={p.photoUrl} alt={p.name} className="w-14 h-14 rounded-full object-cover shadow" />
-            ) : (
-              <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-lg font-bold shadow`}>{initials}</div>
-            )}
+            <img src={getAvatarUrl(p.name, p.photoUrl)} alt={p.name} className="w-14 h-14 rounded-2xl object-cover shadow border border-amber-200" />
             {p.isOnline && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />}
           </div>
           <div className="flex-1 min-w-0">

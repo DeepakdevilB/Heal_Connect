@@ -6,6 +6,8 @@ interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
+  code?: string;
+  isSufficient?: boolean;
   errors?: { field: string; message: string }[];
 }
 
@@ -52,12 +54,82 @@ export interface PractitionerProfile {
   reviewCount?: number;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+export interface ConsultationSession {
+  id: string;
+  userId: string;
+  practitionerId: string;
+  type: string;
+  status: 'INITIATED' | 'PENDING_ACCEPTANCE' | 'ACCEPTED' | 'WALLET_VERIFIED' | 'JOINING_CHANNEL' | 'ACTIVE' | 'ENDING' | 'ENDED' | 'BILLING_GENERATED' | 'RATING_PENDING' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'DISCONNECTED';
+  channelName: string | null;
+  agoraUid: number | null;
+  perMinuteRate: number;
+  walletDeduction: number;
+  duration: number;
+  startTime: string | null;
+  endTime: string | null;
+  totalCost: number;
+  user: { id: string; name: string | null; photoUrl: string | null; email?: string | null; phone?: string | null };
+  practitioner: { id: string; name: string; photoUrl: string | null; perMinuteRate: number; specialties?: string[] };
+  review?: { id: string; rating: number; comment: string | null } | null;
+}
+
+export interface BillingSummaryData {
+  consultationId: string;
+  durationSeconds: number;
+  durationFormatted: string;
+  perMinuteRate: number;
+  totalAmount: number;
+  walletDeduction: number;
+  remainingWalletBalance: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface AgoraData {
+  token: string;
+  appId: string;
+  channelName: string;
+  uid: number;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<ApiResponse<T>> {
+  const mergedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: mergedHeaders,
   });
-  const data = await res.json() as ApiResponse<T>;
+
+  const data = (await res.json()) as ApiResponse<T>;
+
+  // Handle auto-token refresh on 401 or token expired error
+  if (!res.ok && (res.status === 401 || data.message === 'Invalid or expired token') && !isRetry) {
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('hc_refresh') : null;
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        const refreshData = (await refreshRes.json()) as ApiResponse<{ accessToken: string; refreshToken: string }>;
+        if (refreshData.success && refreshData.data) {
+          localStorage.setItem('hc_access', refreshData.data.accessToken);
+          localStorage.setItem('hc_refresh', refreshData.data.refreshToken);
+
+          mergedHeaders['Authorization'] = `Bearer ${refreshData.data.accessToken}`;
+          return request<T>(path, { ...options, headers: mergedHeaders }, true);
+        }
+      } catch {
+        localStorage.removeItem('hc_access');
+        localStorage.removeItem('hc_refresh');
+      }
+    }
+  }
+
   return data;
 }
 
@@ -189,17 +261,91 @@ export const practitionersApi = {
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 };
 
+export const consultationsApi = {
+  start: (token: string, practitionerId: string, type: string = 'AUDIO') =>
+    request<{ session: ConsultationSession }>('/api/consultations/start', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ practitionerId, type }),
+    }),
+
+  accept: (token: string, consultationId: string) =>
+    request<{ session: ConsultationSession }>('/api/consultations/accept', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ consultationId }),
+    }),
+
+  reject: (token: string, consultationId: string) =>
+    request<{ session: ConsultationSession }>('/api/consultations/reject', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ consultationId }),
+    }),
+
+  checkWallet: (token: string, consultationId: string) =>
+    request<{ session: ConsultationSession; currentBalance?: number }>('/api/consultations/check-wallet', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ consultationId }),
+    }),
+
+  join: (token: string, consultationId: string) =>
+    request<{ session: ConsultationSession; agora: AgoraData }>('/api/consultations/join', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ consultationId }),
+    }),
+
+  end: (token: string, consultationId: string) =>
+    request<{ session: ConsultationSession; billingSummary: BillingSummaryData }>('/api/consultations/end', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ consultationId }),
+    }),
+
+  get: (token: string, id: string) =>
+    request<{ session: ConsultationSession }>(`/api/consultations/${id}`, {
+      headers: authHeader(token),
+    }),
+
+  rating: (token: string, body: { consultationId: string; rating: number; comment?: string }) =>
+    request<{ session: ConsultationSession; review: unknown }>('/api/consultations/rating', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+};
+
+export const walletApi = {
+  getBalance: (token: string) =>
+    request<{ balance: number; currency: string; transactions: unknown[] }>('/api/wallet/balance', {
+      headers: authHeader(token),
+    }),
+
+  recharge: (token: string, amount: number) =>
+    request<{ balance: number; currency: string }>('/api/wallet/recharge', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
+};
+
 // ─── Token helpers (localStorage) ────────────────────────────────────────────
 
 export const tokenStore = {
   setTokens(access: string, refresh: string) {
-    localStorage.setItem('hc_access', access);
-    localStorage.setItem('hc_refresh', refresh);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hc_access', access);
+      localStorage.setItem('hc_refresh', refresh);
+    }
   },
-  getAccess: () => localStorage.getItem('hc_access'),
-  getRefresh: () => localStorage.getItem('hc_refresh'),
+  getAccess: () => (typeof window !== 'undefined' ? localStorage.getItem('hc_access') : null),
+  getRefresh: () => (typeof window !== 'undefined' ? localStorage.getItem('hc_refresh') : null),
   clear() {
-    localStorage.removeItem('hc_access');
-    localStorage.removeItem('hc_refresh');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('hc_access');
+      localStorage.removeItem('hc_refresh');
+    }
   },
 };

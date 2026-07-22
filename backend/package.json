@@ -25,6 +25,7 @@
     "@types/pg": "^8.20.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
+    "agora-token": "^2.0.5",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -38,6 +39,7 @@
     "multer": "^2.2.0",
     "pg": "^8.22.0",
     "rate-limit-redis": "^5.0.0",
+    "socket.io": "^4.8.3",
     "twilio": "^5.7.0",
     "uuid": "^14.0.1",
     "ws": "^8.21.0"
