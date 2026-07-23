@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
+import { getIO } from '../lib/socket';
 
 const BILLING_INTERVAL_MS = 10000; // Check every 10 seconds
 const BILLING_CYCLE_MS = 60000; // Bill every 60 seconds
@@ -126,7 +127,8 @@ async function processSessionBilling(session: any) {
         memoryState.set(stateKey, JSON.stringify(state));
       }
       
-      // TODO: Emit WebSocket event to client warning about low balance
+      // Emit low balance warning to session room
+      try { getIO()?.to(`room:${session.id}`).emit('low_balance', { sessionId: session.id }); } catch {}
     } else {
       const timeInGrace = now - state.gracePeriodStartedAt;
       if (timeInGrace >= GRACE_PERIOD_MS) {
@@ -150,5 +152,6 @@ async function terminateSession(sessionId: string) {
       endTime: new Date(),
     },
   });
-  // TODO: Emit WebSocket event to disconnect clients
+  // Emit session terminated event to disconnect clients
+  try { getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'insufficient_balance' }); } catch {}
 }

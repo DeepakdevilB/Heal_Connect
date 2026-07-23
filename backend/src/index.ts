@@ -11,6 +11,9 @@ import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 import consultationsRouter from './routes/consultations';
 import walletRouter from './routes/wallet';
+import sessionsRouter from './routes/sessions';
+import chatRouter from './routes/chat';
+import agoraRouter from './routes/agora';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -164,6 +167,9 @@ app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 app.use('/api/consultations', consultationsRouter);
 app.use('/api/wallet', walletRouter);
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/chat', chatRouter);
+app.use('/api/agora', agoraRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 

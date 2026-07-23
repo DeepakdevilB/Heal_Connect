@@ -316,6 +316,45 @@ export const consultationsApi = {
     }),
 };
 
+export const sessionsApi = {
+  create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
+    request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ practitionerId, type }),
+    }),
+
+  get: (token: string, sessionId: string) =>
+    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
+      `/api/sessions/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+};
+
+export const agoraApi = {
+  getToken: (token: string, sessionId: string) =>
+    request<{ token: string; channelName: string; uid: number; appId: string; expireTs: number }>(
+      '/api/agora/token',
+      { method: 'POST', headers: authHeader(token), body: JSON.stringify({ sessionId }) }
+    ),
+
+  getChannel: (token: string, sessionId: string) =>
+    request<{ appId: string; channelName: string; sessionStatus: string; sessionType: string }>(
+      `/api/agora/channel/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+
+  submitFeedback: (token: string, body: {
+    sessionId: string; audioQuality: number; overallRating: number;
+    issues?: string[]; comment?: string;
+  }) =>
+    request('/api/agora/feedback', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+};
+
 export const walletApi = {
   getBalance: (token: string) =>
     request<{ wallet: { id: string; balance: number; currency: string; transactions: { id: string; type: string; status: string; amount: number; createdAt: string }[] } }>('/api/wallet', {
