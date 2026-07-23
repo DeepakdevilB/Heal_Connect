@@ -6,6 +6,8 @@ interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
+  code?: string;
+  isSufficient?: boolean;
   errors?: { field: string; message: string }[];
 }
 
