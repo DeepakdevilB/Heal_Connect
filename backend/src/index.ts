@@ -4,19 +4,26 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { createServer } from 'http';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
+import consultationsRouter from './routes/consultations';
 import walletRouter from './routes/wallet';
 import { startBillingEngine } from './workers/billingEngine';
+import { initSocketServer } from './lib/socket';
 
 const app = express();
+const server = createServer(app);
 
 // Trust the Azure App Service reverse proxy to parse X-Forwarded-For correctly
 // This strips the port number from the IP address, fixing express-rate-limit
 app.set('trust proxy', 1);
 const port = process.env.PORT || 8080;
+
+// ─── Initialize Socket.IO ─────────────────────────────────────────────────────
+initSocketServer(server);
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
 
@@ -155,6 +162,7 @@ app.use(generalLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
+app.use('/api/consultations', consultationsRouter);
 app.use('/api/wallet', walletRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
@@ -172,7 +180,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`✦ HealConnect API running on port ${port}`);
   
   // Start the background workers

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { Sparkles } from 'lucide-react';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -20,17 +21,28 @@ export default function Navbar() {
         className={`mx-auto max-w-6xl transition-all duration-500 flex items-center justify-between px-6 h-14 ${
           scrolled
             ? 'bg-[#0f0f0f] rounded-full shadow-2xl border border-white/10'
-            : 'bg-transparent rounded-none'
+            : 'bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-yellow-100'
         }`}
       >
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
+          <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full shadow-sm" />
           <span className="text-lg font-extrabold text-[#f59e0b]">HealConnect</span>
         </Link>
 
         {/* Nav links */}
-        <nav className="hidden md:flex gap-7">
+        <nav className="hidden md:flex gap-6 items-center">
+          <Link
+            href="/practitioners"
+            className={`text-sm font-extrabold transition-colors flex items-center gap-1.5 px-3 py-1 rounded-full ${
+              scrolled
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                : 'bg-amber-100/80 text-[#d97706] border border-amber-300/60 hover:bg-amber-200/80'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+            <span>Find Astrologers</span>
+          </Link>
           {['#features', '#pricing', '#experts'].map((href, i) => (
             <Link
               key={href}
@@ -46,6 +58,11 @@ export default function Navbar() {
 
         {/* Buttons */}
         <div className="flex items-center gap-2">
+          <Link href="/practitioners" className="md:hidden">
+            <Button size="sm" variant="outline" className="border-amber-300 text-[#d97706] bg-amber-50 text-xs px-2.5 rounded-full font-bold">
+              Astrologers
+            </Button>
+          </Link>
           <Link href="/login">
             <Button
               variant="ghost"
