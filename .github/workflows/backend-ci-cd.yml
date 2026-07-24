@@ -11,6 +11,7 @@ on:
 
 env:
   NODE_VERSION: '20.x'
+  DATABASE_URL: 'postgresql://dummy:dummy@localhost:5432/dummy'
 
 jobs:
   build:
@@ -46,6 +47,7 @@ jobs:
             backend/package.json
             backend/package-lock.json
             backend/prisma
+            backend/prisma.config.ts
 
   deploy:
     needs: build
@@ -63,6 +65,10 @@ jobs:
       - name: Install Production Dependencies
         working-directory: ./backend
         run: npm ci --omit=dev
+
+      - name: Generate Prisma Client for Production
+        working-directory: ./backend
+        run: npx prisma@7.8.0 generate
 
       # Deploy to Azure App Service using Publish Profile
       # Since Managed Identity & App Settings are configured in Azure Portal,
