@@ -478,7 +478,7 @@ npm run dev
 
 > 💬 *Got questions or want to collaborate on HealConnect?*
 
-**👤 Abhishek Giri** — Developer & Project Lead
+**👤 Abhishek Giri** — Developer
 
 <a href="https://linkedin.com/in/abhishekgiri04">
   <img src="https://img.shields.io/badge/Connect%20on-LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"/>
@@ -512,6 +512,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 <img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"/>
 <img src="https://img.shields.io/badge/Calls-Agora_RTC-099DFD?style=for-the-badge"/>
 
-**© 2025 Abhishek Giri | HealConnect**
+**© 2026 Abhishek Giri | HealConnect**
 
 </div>
