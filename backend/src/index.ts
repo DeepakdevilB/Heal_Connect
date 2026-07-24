@@ -179,9 +179,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-initSocketServer(app).then((httpServer) => {
-  httpServer.listen(port, () => {
-    console.log(`✦ HealConnect API running on port ${port}`);
-    startBillingEngine();
-  });
+import { createServer } from 'http';
+const httpServer = createServer(app);
+initSocketServer(httpServer);
+httpServer.listen(port, () => {
+  console.log(`✦ HealConnect API running on port ${port}`);
+  startBillingEngine();
 });

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/navbar';
 import HeroAnimation from '@/components/hero-animation';
 import { Button } from '@/components/ui/button';
@@ -73,6 +74,7 @@ const HOROSCOPE_DATA: Record<number, { text: string; mood: string; luckyNum: num
 
 export default function LandingPage() {
   const { t } = useLang();
+  const router = useRouter();
   const [activeZodiac, setActiveZodiac] = useState(6); // Libra default
   const [horoscopeTab, setHoroscopeTab] = useState<'today' | 'tomorrow' | 'week' | 'month'>('today');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -236,7 +238,7 @@ export default function LandingPage() {
                 { icon: Star, title: t.serviceCards[2].title, desc: t.serviceCards[2].desc, color: 'text-purple-500', bg: 'bg-purple-50', shadow: 'shadow-purple-200/30' },
                 { icon: Gift, title: t.serviceCards[3].title, desc: t.serviceCards[3].desc, color: 'text-green-500', bg: 'bg-green-50', shadow: 'shadow-green-200/30' },
               ].map((s) => (
-                <Link key={s.title} href="#" className="group">
+                <Link key={s.title} href="/signup" className="group">
                   <Card className={`bg-white border-0 ${s.shadow} shadow-lg hover:shadow-xl transition-all duration-300 group-hover:-translate-y-1 rounded-2xl overflow-hidden`}>
                     <CardContent className="p-5">
                       <div className={`w-12 h-12 rounded-2xl ${s.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
@@ -274,7 +276,7 @@ export default function LandingPage() {
               <p className="text-gray-700 text-sm max-w-xl">
                 {t.liveDesc}
               </p>
-              <Link href="/practitioners" className="ml-auto">
+              <Link href="/login" className="ml-auto">
                 <Button className="bg-amber-100 text-gray-900 hover:bg-amber-200 font-semibold text-sm rounded-full px-6 h-10 border-0 shadow-sm whitespace-nowrap">
                   {t.viewAllBtn} <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -344,12 +346,16 @@ export default function LandingPage() {
 
                     {/* Buttons */}
                     <div className="flex gap-2 mt-4">
-                      <Button className="flex-1 h-9 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white border-0 font-semibold">
-                        {t.chatBtn}
-                      </Button>
-                      <Button className="flex-1 h-9 text-xs rounded-lg bg-white text-gray-700 border border-gray-200 hover:border-amber-300 hover:text-amber-700 font-semibold">
-                        {t.callBtn}
-                      </Button>
+                      <Link href="/login" className="flex-1">
+                        <Button className="w-full h-9 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white border-0 font-semibold">
+                          {t.chatBtn}
+                        </Button>
+                      </Link>
+                      <Link href="/login" className="flex-1">
+                        <Button className="w-full h-9 text-xs rounded-lg bg-white text-gray-700 border border-gray-200 hover:border-amber-300 hover:text-amber-700 font-semibold">
+                          {t.callBtn}
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -368,7 +374,7 @@ export default function LandingPage() {
                   {t.browseSubtitle} <span className="text-amber-700">{t.browseSubtitleEm}</span>, {t.browseSubtitleFor} <span className="text-amber-700">{t.browseSubtitleYou}</span>
                 </p>
               </div>
-              <Link href="/practitioners">
+              <Link href="/signup">
                 <Button variant="link" className="text-amber-600 font-semibold text-sm">
                   {t.browseViewAll} <ArrowRight className="w-4 h-4 ml-1 inline" />
                 </Button>
@@ -378,7 +384,7 @@ export default function LandingPage() {
               {CATEGORIES.map((cat, idx) => {
                 const catData = t.categories[idx] || { name: cat.name, count: cat.count };
                 return (
-                <Link key={cat.name} href="#" className="group">
+                <Link key={cat.name} href="/signup" className="group">
                   <div className="flex items-center gap-4 p-5 rounded-xl bg-white border border-gray-100 hover:border-amber-200 hover:shadow-md transition-all group-hover:-translate-y-0.5 duration-300">
                     <div className={`w-12 h-12 rounded-xl ${cat.bg} ${cat.color} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
                       <cat.icon className="w-6 h-6" />
@@ -406,7 +412,7 @@ export default function LandingPage() {
                   <span className="text-gray-900">{t.servicesHeading}</span> <span className="text-amber-700">{t.servicesHeadingEm}</span>
                 </h2>
               </div>
-              <Link href="#">
+              <Link href="/signup">
                 <Button variant="link" className="text-amber-600 font-semibold text-sm">
                   {t.servicesViewAll} <ArrowRight className="w-4 h-4 ml-1 inline" />
                 </Button>
@@ -414,7 +420,7 @@ export default function LandingPage() {
             </div>
             <div className="grid grid-cols-5 gap-4 max-w-5xl mx-auto">
               {t.servicesList.slice(0, 10).map((svc: { name: string; desc: string }, idx: number) => (
-                <Link key={idx} href="#" className="group">
+                <Link key={idx} href="/signup" className="group">
                   <div className="flex flex-col items-center text-center p-4 rounded-xl bg-amber-50/60 border border-amber-100/50 hover:bg-amber-100 hover:border-amber-200 transition-all group-hover:-translate-y-0.5 duration-300">
                     <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                       <Zap className="w-5 h-5 text-amber-600" />
@@ -450,7 +456,11 @@ export default function LandingPage() {
                 {t.horoscopeTabs.map((tab: string, idx: number) => (
                   <button
                     key={idx}
-                    onClick={() => setHoroscopeTab(['today', 'tomorrow', 'week', 'month'][idx] as 'today' | 'tomorrow' | 'week' | 'month')}
+                    onClick={() => {
+                      const tabs = ['today', 'tomorrow', 'week', 'month'];
+                      if (idx === 0) setHoroscopeTab('today');
+                      else router.push('/signup');
+                    }}
                     className={`px-6 py-2 rounded-full text-sm font-semibold transition-all capitalize ${
                       horoscopeTab === ['today', 'tomorrow', 'week', 'month'][idx] ? 'bg-amber-100 text-amber-800 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                     }`}
@@ -554,7 +564,7 @@ export default function LandingPage() {
 
                 {/* Buttons */}
                 <div className="flex items-center gap-3 mt-8 pt-6 border-t border-gray-50">
-                  <Link href="#">
+                  <Link href="/signup">
                     <Button className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl border-0 text-sm font-semibold px-6 h-11 shadow-sm shadow-amber-500/30">
                       {t.horoscopeDetailBtn}
                     </Button>
@@ -670,9 +680,11 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Button className={`w-full rounded-full border-0 font-semibold ${plan.popular ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                    {t.pricingGetStarted}
-                  </Button>
+                  <Link href="/signup">
+                    <Button className={`w-full rounded-full border-0 font-semibold ${plan.popular ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                      {t.pricingGetStarted}
+                    </Button>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -895,7 +907,7 @@ export default function LandingPage() {
                     <ul className="space-y-1.5">
                       {col.links.map((link) => (
                         <li key={link}>
-                          <Link href="#" className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
+                          <Link href={link.toLowerCase().includes('chat') || link.toLowerCase().includes('talk') || link.toLowerCase().includes('horoscope') || link.toLowerCase().includes('kundli') || link.toLowerCase().includes('calculator') ? '/signup' : '#'} className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
                         </li>
                       ))}
                     </ul>

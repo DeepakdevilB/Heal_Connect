@@ -236,10 +236,10 @@ function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
             <p className="text-xs text-gray-400">{p.experienceYrs}yr exp</p>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-8 px-3 border-yellow-200 hover:border-yellow-400 hover:text-[#d97706]">
+            <Button size="sm" variant="outline" className="h-8 px-3 border-yellow-200 hover:border-yellow-400 hover:text-[#d97706]" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
               <MessageCircle className="h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 disabled:opacity-40">
+            <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
               <Phone className="h-3.5 w-3.5 mr-1" /> Call
             </Button>
           </div>

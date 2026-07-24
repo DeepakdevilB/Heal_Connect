@@ -4,17 +4,19 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight, ShieldCheck, Star, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ShieldCheck, Star, Eye, EyeOff, Loader2, User, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi, tokenStore } from '@/lib/api';
 
+type Role = 'user' | 'expert';
 type Mode = 'login' | 'forgot';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [role, setRole] = useState<Role>('user');
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -125,6 +127,22 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="space-y-5">
+            {/* Role Toggle */}
+            {mode === 'login' && (
+              <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
+                <button type="button" onClick={() => { setRole('user'); setError(''); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  <User className="w-4 h-4" /> User
+                </button>
+                <button type="button" onClick={() => { setRole('expert'); setError(''); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  <Sparkles className="w-4 h-4" /> Expert
+                </button>
+              </div>
+            )}
+
             {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
@@ -151,7 +169,7 @@ export default function LoginPage() {
                   </div>
                 </div>
                 <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Log in <ArrowRight className="ml-2 h-4 w-4" /></>}
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Log in as Expert' : 'Log in'} <ArrowRight className="ml-2 h-4 w-4" /></>}
                 </Button>
               </form>
             )}

@@ -27,23 +27,23 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: 'Consult',
     items: [
-      { label: 'Consultations', href: '/practitioners', Icon: Sparkles },
-      { label: 'Horoscope', href: '#', Icon: Star },
+      { label: 'Consultations', href: '/login', Icon: Sparkles },
+      { label: 'Horoscope', href: '/signup', Icon: Star },
     ],
   },
   {
     title: 'Free Tools',
     items: [
-      { label: 'Free Services', href: '#', Icon: Wand2 },
-      { label: 'Calculators', href: '#', Icon: Calculator },
-      { label: 'Panchang', href: '#', Icon: CalendarDays },
+      { label: 'Free Services', href: '/signup', Icon: Wand2 },
+      { label: 'Calculators', href: '/signup', Icon: Calculator },
+      { label: 'Panchang', href: '/signup', Icon: CalendarDays },
     ],
   },
   {
     title: 'More',
     items: [
-      { label: 'Shop', href: '#', Icon: ShoppingBag },
-      { label: 'Blog', href: '#', Icon: BookOpen },
+      { label: 'Shop', href: '/signup', Icon: ShoppingBag },
+      { label: 'Blog', href: '/signup', Icon: BookOpen },
     ],
   },
 ];

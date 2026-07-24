@@ -15,8 +15,10 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 const makeStore = (prefix: string) =>
   new RedisStore({
     prefix,
-    // Use SET/GET instead of EVALSHA — works on Redis Cluster
-    sendCommand: (...args: string[]) => (redis as any).call(...args),
+    sendCommand: async (...args: string[]) => {
+      const [command, ...rest] = args;
+      return (redis as any).sendCommand([command, ...rest]);
+    },
   });
 
 // General API rate limiter — 100 requests per 15 min
