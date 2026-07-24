@@ -243,3 +243,7 @@ npm start         # Run compiled dist/index.js
 - [Tech Stack Review & Risks](../docs/tech_stack_review.md)
 - [Project Plan](../docs/HealConnect_Project_Plan.xlsx)
 - [Tech Stack Document](../docs/HealConnect_Tech_Stack.docx)
+
+## License
+
+This project is licensed under the [MIT License](../LICENSE).

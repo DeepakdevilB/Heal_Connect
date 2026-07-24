@@ -173,3 +173,7 @@ npm run lint     # ESLint check
 
 - [Tech Stack Review & Risks](../docs/tech_stack_review.md)
 - [Project Plan](../docs/HealConnect_Project_Plan.xlsx)
+
+## License
+
+This project is licensed under the [MIT License](../LICENSE).

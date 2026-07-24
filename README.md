@@ -4,6 +4,15 @@
   <img src="docs/logo.png" alt="HealConnect Logo" width="180" />
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/Next.js-14-black" />
+  <img src="https://img.shields.io/badge/Express-5-green" />
+  <img src="https://img.shields.io/badge/TypeScript-strict-blue" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15-336791" />
+  <img src="https://img.shields.io/badge/Redis-Azure-red" />
+</p>
+
 > A professional wellness platform connecting users with verified energy healers, Vastu experts, numerologists, and tarot readers — instantly.
 
 ---
@@ -251,13 +260,14 @@ Heal_Connect/
 │   ├── src/
 │   └── README.md     # Frontend docs
 ├── docs/             # Project documentation & assets
-│   ├── logo.png                    # Project logo
-│   ├── HealConnect.json            # Lottie animation (hero section)
-│   ├── tech_stack_review.md        # Tech stack analysis & risks
+│   ├── logo.png
+│   ├── HealConnect.json
+│   ├── tech_stack_review.md
 │   ├── HealConnect_Project_Plan.xlsx
 │   ├── HealConnect_Tech_Stack.docx
 │   └── AstroTalk_Analysis.pptx
-└── README.md         # This file
+├── LICENSE
+└── README.md
 ```
 
 ---
@@ -296,5 +306,12 @@ npm run dev
 - Redis-backed rate limiting per IP (general + auth + email tiers)
 - User profiles with photo upload to Azure Blob Storage
 - Practitioner directory with search, filter, ratings, and availability
+- Multi-language support (i18n)
 - Light / Dark mode with smooth transitions
 - Mobile-responsive UI built with TailwindCSS + shadcn/ui
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
