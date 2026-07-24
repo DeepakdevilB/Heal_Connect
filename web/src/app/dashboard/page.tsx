@@ -174,10 +174,10 @@ export default function DashboardPage() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Wallet Balance', value: '₹0', icon: Wallet, color: 'text-[#f59e0b]', bg: 'bg-yellow-50' },
+            { label: 'Wallet Balance', value: walletBalance !== null ? `₹${walletBalance.toFixed(2)}` : '...', icon: Wallet, color: 'text-[#f59e0b]', bg: 'bg-yellow-50' },
             { label: 'Sessions Done', value: '0', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { label: 'Minutes Used', value: '0 min', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
-            { label: 'Experts Online', value: String(onlineCount || '—'), icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50' },
+            { label: 'Experts Online', value: onlineCount > 0 ? String(onlineCount) : '—', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50' },
           ].map((stat) => (
             <Card key={stat.label} className="bg-white border border-yellow-100 shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
