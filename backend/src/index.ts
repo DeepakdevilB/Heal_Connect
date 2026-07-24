@@ -158,6 +158,31 @@ app.get('/api/run-seed', async (_req, res) => {
   }
 });
 
+app.get('/api/admin/exec', async (req, res) => {
+  try {
+    const { exec } = require('child_process');
+    exec('npx prisma migrate deploy', (error: any, stdout: any, stderr: any) => {
+      if (error) {
+        res.status(500).json({ error: error.message, stderr });
+        return;
+      }
+      res.json({ success: true, stdout });
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/admin/online', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    await prisma.practitioner.updateMany({ data: { isOnline: true } });
+    res.json({ success: true, message: 'All practitioners set to online' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 // Apply general rate limiter to all routes
 app.use(generalLimiter);
 
