@@ -54,43 +54,8 @@ export interface PractitionerProfile {
   reviewCount?: number;
 }
 
-export interface ConsultationSession {
-  id: string;
-  userId: string;
-  practitionerId: string;
-  type: string;
-  status: 'INITIATED' | 'PENDING_ACCEPTANCE' | 'ACCEPTED' | 'WALLET_VERIFIED' | 'JOINING_CHANNEL' | 'ACTIVE' | 'ENDING' | 'ENDED' | 'BILLING_GENERATED' | 'RATING_PENDING' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'DISCONNECTED';
-  channelName: string | null;
-  agoraUid: number | null;
-  perMinuteRate: number;
-  walletDeduction: number;
-  duration: number;
-  startTime: string | null;
-  endTime: string | null;
-  totalCost: number;
-  user: { id: string; name: string | null; photoUrl: string | null; email?: string | null; phone?: string | null };
-  practitioner: { id: string; name: string; photoUrl: string | null; perMinuteRate: number; specialties?: string[] };
-  review?: { id: string; rating: number; comment: string | null } | null;
-}
 
-export interface BillingSummaryData {
-  consultationId: string;
-  durationSeconds: number;
-  durationFormatted: string;
-  perMinuteRate: number;
-  totalAmount: number;
-  walletDeduction: number;
-  remainingWalletBalance: number;
-  startTime: string;
-  endTime: string;
-}
 
-export interface AgoraData {
-  token: string;
-  appId: string;
-  channelName: string;
-  uid: number;
-}
 async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<ApiResponse<T>> {
   const mergedHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -260,61 +225,6 @@ export const practitionersApi = {
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 };
 
-export const consultationsApi = {
-  start: (token: string, practitionerId: string, type: string = 'AUDIO') =>
-    request<{ session: ConsultationSession }>('/api/consultations/start', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ practitionerId, type }),
-    }),
-
-  accept: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession }>('/api/consultations/accept', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
-
-  reject: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession }>('/api/consultations/reject', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
-
-  checkWallet: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; currentBalance?: number }>('/api/consultations/check-wallet', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
-
-  join: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; agora: AgoraData }>('/api/consultations/join', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
-
-  end: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; billingSummary: BillingSummaryData }>('/api/consultations/end', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
-
-  get: (token: string, id: string) =>
-    request<{ session: ConsultationSession }>(`/api/consultations/${id}`, {
-      headers: authHeader(token),
-    }),
-
-  rating: (token: string, body: { consultationId: string; rating: number; comment?: string }) =>
-    request<{ session: ConsultationSession; review: unknown }>('/api/consultations/rating', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify(body),
-    }),
-};
 
 export const sessionsApi = {
   create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>

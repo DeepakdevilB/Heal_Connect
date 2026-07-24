@@ -8,7 +8,7 @@ import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, Check
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { practitionersApi, consultationsApi, tokenStore } from '@/lib/api';
+import { practitionersApi, sessionsApi, tokenStore } from '@/lib/api';
 import { getAvatarUrl } from '@/lib/utils';
 
 interface Review {
@@ -67,9 +67,9 @@ export default function PractitionerDetailPage() {
     setCalling(true);
 
     try {
-      const res = await consultationsApi.start(token, p.id, 'AUDIO');
+      const res = await sessionsApi.create(token, p.id, 'AUDIO');
       if (res.success && res.data?.session) {
-        router.push(`/consultation/${res.data.session.id}`);
+        router.push(`/session/${res.data.session.id}`);
       } else if (res.message === 'Invalid or expired token' || res.message === 'No token provided') {
         tokenStore.clear();
         router.push(`/login?returnUrl=/practitioners/${p.id}`);
