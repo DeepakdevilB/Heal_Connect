@@ -1,10 +1,6 @@
 # HealConnect — Web Frontend
 
-<p align="center">
-  <img src="../docs/logo.png" alt="HealConnect Logo" width="140" />
-</p>
-
-Production-grade Next.js frontend for the HealConnect wellness platform. Connects users with verified energy healers, Vastu experts, numerologists, and tarot readers.
+Production-grade Next.js 14 frontend for the HealConnect wellness platform.
 
 ---
 
@@ -15,12 +11,13 @@ Production-grade Next.js frontend for the HealConnect wellness platform. Connect
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript |
 | Styling | TailwindCSS + shadcn/ui |
-| Theme | next-themes (Light / Dark mode) |
+| Theme | next-themes (Light / Dark) |
 | Animation | lottie-react |
 | Icons | lucide-react |
-| Fonts | Geist (Variable) |
-| Auth | JWT stored in localStorage |
-| API Client | Native `fetch` (typed wrapper in `lib/api.ts`) |
+| Real-time | Socket.IO client |
+| Calls | Agora RTC SDK |
+| Payments | Razorpay |
+| i18n | Custom lang-context (EN/HI) |
 
 ---
 
@@ -30,37 +27,44 @@ Production-grade Next.js frontend for the HealConnect wellness platform. Connect
 web/
 ├── public/
 │   ├── logo.png
-│   └── HealConnect.json            # Lottie animation (hero section)
+│   ├── HealConnect.json          # Lottie animation
+│   └── avatars/                  # Practitioner avatars
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                    # Landing page
-│   │   ├── layout.tsx                  # Root layout (ThemeProvider, fonts)
-│   │   ├── globals.css                 # Global styles + CSS variables
-│   │   ├── login/page.tsx              # Login screen
-│   │   ├── signup/page.tsx             # Registration screen
-│   │   ├── verify-email/page.tsx       # Email verification handler
+│   │   ├── page.tsx              # Landing page
+│   │   ├── layout.tsx
+│   │   ├── globals.css
+│   │   ├── login/
+│   │   ├── signup/
 │   │   ├── dashboard/
-│   │   │   ├── page.tsx                # User dashboard
-│   │   │   └── profile/page.tsx        # Edit profile
+│   │   │   ├── page.tsx
+│   │   │   ├── profile/
+│   │   │   └── wallet/
 │   │   ├── practitioners/
-│   │   │   ├── page.tsx                # Browse practitioners
-│   │   │   └── [id]/page.tsx           # Practitioner detail
-│   │   └── auth/google/callback/       # Google OAuth callback
+│   │   │   ├── page.tsx
+│   │   │   └── [id]/
+│   │   ├── session/[sessionId]/  # Live audio/chat session
+│   │   ├── verify-email/
+│   │   ├── verify-otp/
+│   │   ├── reset-password/
+│   │   └── auth/google/callback/
 │   ├── components/
-│   │   ├── ui/                         # shadcn/ui primitives
-│   │   │   ├── button.tsx
-│   │   │   ├── card.tsx
-│   │   │   ├── input.tsx
-│   │   │   ├── label.tsx
-│   │   │   └── badge.tsx
-│   │   ├── navbar.tsx                  # Top navigation bar
-│   │   ├── hero-animation.tsx          # Lottie animation component (hero section)
-│   │   ├── theme-toggle.tsx            # Dark/light mode toggle
-│   │   └── theme-provider.tsx          # next-themes wrapper
+│   │   ├── ui/                   # shadcn/ui primitives
+│   │   ├── chat/                 # AudioCallScreen, ChatWindow, etc.
+│   │   ├── wallet/               # RechargeModal
+│   │   ├── navbar.tsx
+│   │   ├── hero-animation.tsx
+│   │   └── theme-toggle.tsx
+│   ├── hooks/
+│   │   ├── useAgoraCall.ts       # Agora RTC hook
+│   │   └── useSessionChat.ts     # Socket.IO chat hook
 │   └── lib/
-│       ├── api.ts                      # Typed API client (authApi, usersApi, practitionersApi)
-│       └── utils.ts                    # cn() utility (clsx + tailwind-merge)
-├── .env                                # Environment variables
+│       ├── api.ts                # Typed fetch client
+│       ├── i18n.ts               # EN/HI translations
+│       ├── lang-context.tsx      # Language provider
+│       ├── socket.ts             # Socket.IO client
+│       ├── razorpay.ts           # Razorpay helpers
+│       └── utils.ts              # cn() utility
 ├── next.config.mjs
 ├── tailwind.config.ts
 └── tsconfig.json
@@ -70,10 +74,8 @@ web/
 
 ## Environment Variables
 
-Create a `.env` file in `/web`:
-
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8082
+NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 ```
 
@@ -83,10 +85,8 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 
 ```bash
 npm install
-npm run dev
+npm run dev    # → http://localhost:3000
 ```
-
-App runs at `http://localhost:3000`.
 
 ---
 
@@ -94,86 +94,33 @@ App runs at `http://localhost:3000`.
 
 | Route | Description |
 |---|---|
-| `/` | Landing page with hero, features, testimonials |
-| `/login` | Email + Google + Apple sign-in |
-| `/signup` | Registration with email or OAuth |
-| `/verify-email` | Handles email verification token from link |
-| `/dashboard` | Authenticated user home |
-| `/dashboard/profile` | Edit profile (name, dob, birthPlace, gender, interests, photo) |
-| `/practitioners` | Browse & filter verified practitioners |
-| `/practitioners/[id]` | Practitioner detail with reviews |
-| `/auth/google/callback` | Google OAuth redirect handler |
-
----
-
-## API Client — `lib/api.ts`
-
-Typed wrapper around `fetch`. All calls go to `NEXT_PUBLIC_API_URL`.
-
-```ts
-// Auth
-authApi.register({ name, email, password })
-authApi.login({ email, password })
-authApi.googleSignIn(idToken)
-authApi.refresh(refreshToken)
-authApi.me(accessToken)
-
-// Users
-usersApi.getProfile(token)
-usersApi.updateProfile(token, { name, dob, birthPlace, gender, wellnessInterests })
-usersApi.uploadPhoto(token, file)
-usersApi.deletePhoto(token)
-usersApi.deleteAccount(token)
-
-// Practitioners
-practitionersApi.list({ search, specialty, language, minRating, maxRate, onlineOnly, page, limit })
-practitionersApi.get(id)
-practitionersApi.create(token, body)
-practitionersApi.update(token, id, body)
-practitionersApi.uploadPhoto(token, id, file)
-practitionersApi.setAvailability(token, id, isOnline)
-```
-
----
-
-## Token Management — `tokenStore`
-
-Tokens are stored in `localStorage` under keys `hc_access` and `hc_refresh`.
-
-```ts
-tokenStore.setTokens(accessToken, refreshToken)
-tokenStore.getAccess()
-tokenStore.getRefresh()
-tokenStore.clear()
-```
-
----
-
-## Theming
-
-- Light and Dark mode via `next-themes`
-- CSS variables defined in `globals.css` for both themes
-- Toggle available in navbar via `ThemeToggle` component
-- Default: system preference
+| `/` | Landing page |
+| `/login` | Login (User / Expert toggle) |
+| `/signup` | Signup (User / Expert toggle) |
+| `/dashboard` | User dashboard |
+| `/dashboard/profile` | Edit profile |
+| `/dashboard/wallet` | Wallet + recharge |
+| `/practitioners` | Browse practitioners |
+| `/practitioners/[id]` | Practitioner detail |
+| `/session/[sessionId]` | Live audio/chat session |
+| `/verify-email` | Email verification |
+| `/verify-otp` | SMS OTP verification |
+| `/reset-password` | Password reset |
+| `/auth/google/callback` | Google OAuth callback |
 
 ---
 
 ## Scripts
 
 ```bash
-npm run dev      # Next.js dev server (http://localhost:3000)
+npm run dev      # Next.js dev server
 npm run build    # Production build
 npm start        # Start production server
-npm run lint     # ESLint check
+npm run lint     # ESLint
 ```
 
 ---
 
-## Docs
-
-- [Tech Stack Review & Risks](../docs/tech_stack_review.md)
-- [Project Plan](../docs/HealConnect_Project_Plan.xlsx)
-
 ## License
 
-This project is licensed under the [MIT License](../LICENSE).
+[MIT License](../LICENSE) — © 2026 Abhishek Giri

@@ -38,3 +38,9 @@ yarn-error.log*
 
 # Extracted docs output
 docs/extracted_texts.txt
+
+# Uploaded resumes
+backend/uploads/
+
+# Prisma generated
+backend/generated/
