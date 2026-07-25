@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSocket, disconnectSocket } from '@/lib/socket';
-import { tokenStore, walletApi } from '@/lib/api';
+import { tokenStore, walletApi, sessionsApi } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -143,8 +143,10 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
   const endSession = useCallback(() => {
     stopTimers();
     setSessionStatus('ended');
+    const token = tokenStore.getAccess();
+    if (token) sessionsApi.end(token, sessionId).catch(console.error);
     disconnectSocket();
-  }, []);
+  }, [sessionId]);
 
   return { messages, sessionStatus, otherTyping, elapsedSeconds, walletBalance, sendMessage, emitTypingStart, emitTypingStop, markRead, endSession };
 }

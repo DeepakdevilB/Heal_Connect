@@ -147,11 +147,7 @@ async function processSessionBilling(session: any) {
 async function terminateSession(sessionId: string) {
   await prisma.session.update({
     where: { id: sessionId },
-    data: {
-      status: 'COMPLETED',
-      endTime: new Date(),
-    },
+    data: { status: 'COMPLETED', endTime: new Date() },
   });
-  // Emit session terminated event to disconnect clients
   try { getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'insufficient_balance' }); } catch {}
 }

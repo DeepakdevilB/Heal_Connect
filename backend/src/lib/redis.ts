@@ -1,47 +1,46 @@
-import Redis from 'ioredis';
+import Redis, { Cluster } from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-// Initialize the Redis client with cluster-mode support (handles Azure Cache MOVED errors)
-export const redis = new Redis(REDIS_URL, {
-  maxRetriesPerRequest: 3,
-  enableAutoPipelining: false,
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 3000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    // Reconnect on MOVED/ASK so cluster redirects are handled
-    return err.message.includes('MOVED') || err.message.includes('ASK');
-  },
-});
+function createClient(): Redis | Cluster {
+  // Azure Redis Cluster URLs come as rediss://host:port
+  // Detect cluster mode via env flag or URL pattern
+  if (process.env.REDIS_CLUSTER === 'true') {
+    const url = new URL(REDIS_URL);
+    return new Cluster(
+      [{ host: url.hostname, port: Number(url.port) || 6380 }],
+      {
+        dnsLookup: (address, callback) => callback(null, address),
+        redisOptions: {
+          tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
+          password: url.password || undefined,
+          maxRetriesPerRequest: 3,
+        },
+        enableAutoPipelining: false,
+      }
+    );
+  }
 
-redis.on('error', (err) => {
-  console.error('Redis Client Error:', err);
-});
-
-redis.on('connect', () => {
-  console.log('Successfully connected to Redis');
-});
-
-/**
- * Blacklists a JWT token by storing it in Redis until it expires.
- * @param token The JWT token to blacklist
- * @param expiresInMs Time in milliseconds until the token expires naturally
- */
-export async function blacklistToken(token: string, expiresInMs: number): Promise<void> {
-  const key = `bl_${token}`;
-  // Store the token with an expiration (PX = milliseconds)
-  await redis.set(key, 'true', 'PX', expiresInMs);
+  return new Redis(REDIS_URL, {
+    maxRetriesPerRequest: 3,
+    enableAutoPipelining: false,
+    tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
+    retryStrategy(times) {
+      return Math.min(times * 50, 3000);
+    },
+  });
 }
 
-/**
- * Checks if a JWT token is currently in the Redis blacklist.
- * @param token The JWT token to check
- * @returns boolean True if blacklisted, false otherwise
- */
+export const redis = createClient();
+
+redis.on('error', (err: Error) => console.error('Redis error:', err.message));
+redis.on('connect', () => console.log('Successfully connected to Redis'));
+
+export async function blacklistToken(token: string, expiresInMs: number): Promise<void> {
+  await redis.set(`bl_${token}`, 'true', 'PX', expiresInMs);
+}
+
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
-  const key = `bl_${token}`;
-  const result = await redis.get(key);
+  const result = await redis.get(`bl_${token}`);
   return result === 'true';
 }

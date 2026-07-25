@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { practitionersApi } from '@/lib/api';
+import { getPractitionerAvatar } from '@/lib/utils';
 
 interface Review {
   id: string;
@@ -34,11 +35,6 @@ interface PractitionerDetail {
   reviewCount: number;
   reviews: Review[];
 }
-
-const GRADIENTS = [
-  'from-yellow-400 to-orange-500', 'from-emerald-400 to-teal-500',
-  'from-pink-400 to-rose-500', 'from-blue-400 to-indigo-500',
-];
 
 export default function PractitionerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -69,8 +65,7 @@ export default function PractitionerDetailPage() {
     );
   }
 
-  const gradient = GRADIENTS[p.name.charCodeAt(0) % GRADIENTS.length];
-  const initials = p.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.id);
 
   return (
     <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
@@ -90,11 +85,7 @@ export default function PractitionerDetailPage() {
           <CardContent className="p-6">
             <div className="flex items-start gap-5">
               <div className="relative shrink-0">
-                {p.photoUrl ? (
-                  <img src={p.photoUrl} alt={p.name} className="w-24 h-24 rounded-2xl object-cover shadow" />
-                ) : (
-                  <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-3xl font-bold shadow`}>{initials}</div>
-                )}
+                <img src={avatarSrc} alt={p.name} className="w-24 h-24 rounded-2xl object-cover shadow" />
                 {p.isOnline && (
                   <span className="absolute -bottom-1 -right-1 flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full shadow">
                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> Online

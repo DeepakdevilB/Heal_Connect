@@ -101,6 +101,18 @@ export const authApi = {
   resendOtp: (phone: string) =>
     request('/api/auth/resend-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
 
+  practitionerLogin: (email: string, password: string) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+      '/api/auth/practitioner/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+
+  practitionerRegister: (name: string, email: string, password: string) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+      '/api/auth/practitioner/register',
+      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+    ),
+
   refresh: (refreshToken: string) =>
     request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {
       method: 'POST',
@@ -202,6 +214,27 @@ export const sessionsApi = {
   get: (token: string, sessionId: string) =>
     request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
       `/api/sessions/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+
+  end: (token: string, sessionId: string) =>
+    request(`/api/sessions/${sessionId}/end`, { method: 'POST', headers: authHeader(token) }),
+
+  practitionerActive: (token: string) =>
+    request<{ sessions: { id: string; type: string; status: string; createdAt: string; user: { id: string; name: string | null; photoUrl: string | null } }[] }>(
+      '/api/sessions/practitioner/active',
+      { headers: authHeader(token) }
+    ),
+
+  practitionerHistory: (token: string) =>
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number }>(
+      '/api/sessions/practitioner/history',
+      { headers: authHeader(token) }
+    ),
+
+  userHistory: (token: string) =>
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number }>(
+      '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
 };

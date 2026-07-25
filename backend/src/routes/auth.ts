@@ -80,6 +80,9 @@ router.post(
         console.error('Email send failed:', emailErr);
       }
 
+      // Auto-create wallet for new user
+      await prisma.wallet.create({ data: { userId: user.id, balance: 0, currency: 'INR' } });
+
       const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
 
       res.status(201).json({
@@ -247,6 +250,8 @@ router.post(
             provider: 'google',
           },
         });
+        // Auto-create wallet
+        await prisma.wallet.create({ data: { userId: user.id, balance: 0, currency: 'INR' } });
       } else if (!user.googleId) {
         // Existing email account — link Google ID to it
         user = await prisma.user.update({
@@ -507,5 +512,101 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
+// ─── Practitioner Register ─────────────────────────────────────────────────────
+
+router.post(
+  '/practitioner/register',
+  authLimiter,
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { name, email, password } = req.body as { name: string; email: string; password: string };
+    try {
+      const existing = await prisma.practitioner.findUnique({ where: { email } });
+      if (existing) { res.status(409).json({ success: false, message: 'Email already registered' }); return; }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const practitioner = await prisma.practitioner.create({
+        data: { name, email, passwordHash, isVerified: false },
+      });
+
+      const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      res.status(201).json({
+        success: true,
+        message: 'Expert account created.',
+        data: {
+          practitioner: { id: practitioner.id, name: practitioner.name, email: practitioner.email, isVerified: practitioner.isVerified },
+          accessToken,
+          refreshToken,
+          role: 'practitioner',
+        },
+      });
+    } catch (err) {
+      console.error('Practitioner register error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
+
+// ─── Practitioner Login ───────────────────────────────────────────────────────
+
+router.post(
+  '/practitioner/login',
+  authLimiter,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('password').notEmpty().withMessage('Password required'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { email, password } = req.body as { email: string; password: string };
+
+    try {
+      const practitioner = await prisma.practitioner.findUnique({ where: { email } });
+      if (!practitioner || !practitioner.passwordHash) {
+        res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      const valid = await bcrypt.compare(password, practitioner.passwordHash);
+      if (!valid) {
+        res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      // Embed practitionerId in JWT so socket middleware can identify expert
+      const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          practitioner: {
+            id: practitioner.id,
+            name: practitioner.name,
+            email: practitioner.email,
+            isVerified: practitioner.isVerified,
+          },
+          accessToken,
+          refreshToken,
+          role: 'practitioner',
+        },
+      });
+    } catch (err) {
+      console.error('Practitioner login error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
 
 export default router;

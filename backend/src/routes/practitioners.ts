@@ -279,6 +279,9 @@ router.patch('/:id/availability', requireAuth, async (req: AuthRequest, res: Res
   if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
   try {
     await prisma.practitioner.update({ where: { id }, data: { isOnline } });
+    // Broadcast status change to all connected clients
+    const { getIO } = await import('../lib/socket');
+    getIO()?.emit('practitioner_status', { practitionerId: id, isOnline });
     res.json({ success: true, data: { isOnline } });
   } catch (err: unknown) {
     const e = err as { code?: string };

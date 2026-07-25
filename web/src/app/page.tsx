@@ -136,7 +136,7 @@ export default function LandingPage() {
                   </span>
                   {t.heroKundliText}
                 </p>
-                <p className="text-sm text-gray-700 font-medium flex items-center gap-2 mb-8">
+                <p className="text-lg text-gray-800 font-medium flex items-center gap-2 mb-8">
                   <span className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                     <Check className="w-3.5 h-3.5 text-green-600" />
                   </span>

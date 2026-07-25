@@ -3,7 +3,8 @@ import { io, Socket } from 'socket.io-client';
 // WebSocket connects directly to backend — Next.js rewrites only handle HTTP
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_WS_URL ||
-  'https://healconnect-backend-dqcsaqf4a6baffaz.centralindia-01.azurewebsites.net';
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8080';
 
 let socket: Socket | null = null;
 

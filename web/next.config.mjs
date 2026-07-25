@@ -4,7 +4,8 @@ const nextConfig = {
   // Proxy /api/* → backend (browser calls /api/... → Next.js forwards to backend, no CORS issues)
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
-      'https://healconnect-backend-dqcsaqf4a6baffaz.centralindia-01.azurewebsites.net';
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://localhost:8080';
     return [
       {
         source: '/api/:path*',

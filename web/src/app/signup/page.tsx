@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authApi, practitionersApi, tokenStore } from '@/lib/api';
+import { authApi, tokenStore } from '@/lib/api';
 
 type Role = 'user' | 'expert';
 
@@ -31,17 +31,26 @@ export default function SignupPage() {
     const pwdOk = /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
     if (!pwdOk) { setError('Password must be min. 8 chars, 1 uppercase, 1 number.'); setLoading(false); return; }
     try {
-      const res = await authApi.register({ name, email, password });
-      if (!res.success || !res.data) {
-        setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
-        return;
-      }
-      tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       if (role === 'expert') {
-        await practitionersApi.create(res.data.accessToken, { name });
+        const res = await authApi.practitionerRegister(name, email, password);
+        if (!res.success || !res.data) {
+          setError(res.message || 'Registration failed');
+          return;
+        }
+        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+        localStorage.setItem('hc_role', 'practitioner');
+        localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
+        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
         setSuccess('Expert account created!');
-        setTimeout(() => router.push('/practitioners/dashboard'), 1500);
+        setTimeout(() => router.push('/expert/dashboard'), 1500);
       } else {
+        const res = await authApi.register({ name, email, password });
+        if (!res.success || !res.data) {
+          setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
+          return;
+        }
+        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+        localStorage.removeItem('hc_role');
         setSuccess('Account created!');
         setTimeout(() => router.push('/dashboard'), 1500);
       }

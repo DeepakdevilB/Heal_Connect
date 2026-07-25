@@ -10,6 +10,7 @@ const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 export interface JwtPayload {
   userId: string;
   email?: string;
+  practitionerId?: string;
 }
 
 export function signAccessToken(payload: JwtPayload): string {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -14,9 +15,14 @@ import { authApi, tokenStore } from '@/lib/api';
 type Role = 'user' | 'expert';
 type Mode = 'login' | 'forgot';
 
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [role, setRole] = useState<Role>('user');
+
+  useEffect(() => {
+    if (searchParams.get('role') === 'expert') setRole('expert');
+  }, [searchParams]);
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,10 +36,23 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.login({ email, password });
-      if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
-      tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-      router.push('/dashboard');
+      if (role === 'expert') {
+        const res = await authApi.practitionerLogin(email, password);
+        if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
+        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+        localStorage.setItem('hc_role', 'practitioner');
+        localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
+        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
+        router.push('/expert/dashboard');
+      } else {
+        const res = await authApi.login({ email, password });
+        if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
+        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+        localStorage.removeItem('hc_role');
+        localStorage.removeItem('hc_practitioner_id');
+        localStorage.removeItem('hc_practitioner_name');
+        router.push('/dashboard');
+      }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
   }
@@ -226,5 +245,13 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginInner />
+    </Suspense>
   );
 }
