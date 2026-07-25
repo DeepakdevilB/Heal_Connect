@@ -1,6 +1,6 @@
 # HealConnect — Web Frontend
 
-Production-grade Next.js 14 frontend for the HealConnect wellness platform.
+Production-grade Next.js 15 frontend for the HealConnect wellness platform.
 
 ---
 
@@ -8,15 +8,15 @@ Production-grade Next.js 14 frontend for the HealConnect wellness platform.
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript (strict) |
 | Styling | TailwindCSS + shadcn/ui |
 | Theme | next-themes (Light / Dark) |
 | Animation | lottie-react |
 | Icons | lucide-react |
 | Real-time | Socket.IO client |
 | Calls | Agora RTC SDK |
-| Payments | Razorpay |
+| Payments | Razorpay + Stripe |
 | i18n | Custom lang-context (EN/HI) |
 
 ---
@@ -34,8 +34,8 @@ web/
 │   │   ├── page.tsx              # Landing page
 │   │   ├── layout.tsx
 │   │   ├── globals.css
-│   │   ├── login/
-│   │   ├── signup/
+│   │   ├── login/                # Unified login (User + Expert toggle)
+│   │   ├── signup/               # Unified signup (User + Expert toggle)
 │   │   ├── dashboard/
 │   │   │   ├── page.tsx
 │   │   │   ├── profile/
@@ -43,6 +43,10 @@ web/
 │   │   ├── practitioners/
 │   │   │   ├── page.tsx
 │   │   │   └── [id]/
+│   │   ├── expert/
+│   │   │   ├── dashboard/        # Expert dashboard (sessions + earnings)
+│   │   │   ├── profile/          # Expert profile editor
+│   │   │   └── login/            # Redirects to /login?role=expert
 │   │   ├── session/[sessionId]/  # Live audio/chat session
 │   │   ├── verify-email/
 │   │   ├── verify-otp/
@@ -59,10 +63,10 @@ web/
 │   │   ├── useAgoraCall.ts       # Agora RTC hook
 │   │   └── useSessionChat.ts     # Socket.IO chat hook
 │   └── lib/
-│       ├── api.ts                # Typed fetch client
+│       ├── api.ts                # Typed fetch client + session history
 │       ├── i18n.ts               # EN/HI translations
 │       ├── lang-context.tsx      # Language provider
-│       ├── socket.ts             # Socket.IO client
+│       ├── socket.ts             # Socket.IO client (auto localhost/prod)
 │       ├── razorpay.ts           # Razorpay helpers
 │       └── utils.ts              # cn() utility
 ├── next.config.mjs
@@ -102,11 +106,25 @@ npm run dev    # → http://localhost:3000
 | `/dashboard/wallet` | Wallet + recharge |
 | `/practitioners` | Browse practitioners |
 | `/practitioners/[id]` | Practitioner detail |
+| `/expert/dashboard` | Expert dashboard (sessions + earnings) |
+| `/expert/profile` | Expert profile editor |
 | `/session/[sessionId]` | Live audio/chat session |
 | `/verify-email` | Email verification |
 | `/verify-otp` | SMS OTP verification |
 | `/reset-password` | Password reset |
 | `/auth/google/callback` | Google OAuth callback |
+
+---
+
+## User vs Expert Roles
+
+| Feature | User | Expert |
+|---|---|---|
+| Login | `/login` (User tab) | `/login` (Expert tab) |
+| Dashboard | `/dashboard` | `/expert/dashboard` |
+| Profile | `/dashboard/profile` | `/expert/profile` |
+| Wallet | Yes (auto-created on register) | No |
+| Session history | Via `/api/sessions/user/history` | Via `/api/sessions/practitioner/history` |
 
 ---
 
@@ -118,6 +136,13 @@ npm run build    # Production build
 npm start        # Start production server
 npm run lint     # ESLint
 ```
+
+---
+
+## Notes
+
+- Socket.IO connects directly to backend (`NEXT_PUBLIC_API_URL`), not via Next.js proxy
+- Local testing: use incognito for user + normal browser for expert (same localStorage port)
 
 ---
 

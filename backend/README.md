@@ -12,14 +12,15 @@ Production-grade REST API + Socket.IO server for the HealConnect wellness platfo
 | Framework | Express 5 |
 | Language | TypeScript (strict) |
 | ORM | Prisma 7 + `@prisma/adapter-pg` |
-| Database | PostgreSQL 15 (Azure) |
+| Database | PostgreSQL 15 (Neon) |
 | Cache | Redis (Azure Cache) |
 | Real-time | Socket.IO 4 |
 | Auth | JWT + bcrypt + Google OAuth + Twilio OTP |
 | Storage | Azure Blob Storage |
 | Email | SendGrid |
-| Calls | Agora RTC |
-| Payments | Razorpay |
+| Calls | Agora RTC (audio) |
+| Payments | Razorpay + Stripe |
+| Billing | Custom per-minute billing engine |
 
 ---
 
@@ -29,7 +30,7 @@ Production-grade REST API + Socket.IO server for the HealConnect wellness platfo
 backend/
 ├── prisma/
 │   ├── schema.prisma
-│   └── migrations/
+│   └── prisma.config.ts
 ├── src/
 │   ├── index.ts                  # Entry point (Port 8080)
 │   ├── lib/
@@ -45,13 +46,13 @@ backend/
 │   │   ├── rateLimiter.ts        # Redis-backed rate limiting
 │   │   └── validate.ts
 │   ├── routes/
-│   │   ├── auth.ts               # /api/auth/*
+│   │   ├── auth.ts               # /api/auth/* (user + practitioner)
 │   │   ├── users.ts              # /api/users/*
 │   │   ├── practitioners.ts      # /api/practitioners/*
-│   │   ├── sessions.ts           # /api/sessions/*
+│   │   ├── sessions.ts           # /api/sessions/* + history endpoints
 │   │   ├── chat.ts               # /api/chat/*
 │   │   ├── agora.ts              # /api/agora/*
-│   │   └── wallet.ts             # /api/wallet/*
+│   │   └── wallet.ts             # /api/wallet/* (Razorpay + Stripe)
 │   ├── services/
 │   │   └── twilio.service.ts
 │   └── workers/
@@ -86,6 +87,8 @@ AGORA_APP_CERTIFICATE=xxxx
 RAZORPAY_KEY_ID=rzp_xxxx
 RAZORPAY_KEY_SECRET=xxxx
 RAZORPAY_WEBHOOK_SECRET=xxxx
+STRIPE_SECRET_KEY=sk_xxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxx
 ```
 
 ---
@@ -105,58 +108,85 @@ npm run dev        # → http://localhost:8080
 ## API Reference
 
 ### Auth — `/api/auth`
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/register` | Register with email + password |
-| POST | `/login` | Login |
-| POST | `/refresh` | Rotate refresh token |
-| POST | `/logout` | Revoke tokens |
-| POST | `/google` | Google OAuth |
-| GET | `/me` | Current user |
-| GET | `/verify-email` | Email verification |
-| POST | `/forgot-password` | Password reset email |
-| POST | `/reset-password` | Reset password |
-| POST | `/send-otp` | Send SMS OTP |
-| POST | `/verify-otp` | Verify SMS OTP |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/register` | ❌ | Register user (auto-creates wallet) |
+| POST | `/login` | ❌ | Login, returns access + refresh tokens |
+| POST | `/refresh` | ❌ | Rotate refresh token |
+| POST | `/logout` | ✅ | Revoke tokens, blacklist access token |
+| POST | `/google` | ❌ | Google OAuth sign-in |
+| GET | `/me` | ✅ | Current authenticated user |
+| GET | `/verify-email` | ❌ | Verify email via token |
+| POST | `/forgot-password` | ❌ | Send password reset email |
+| POST | `/reset-password` | ❌ | Reset password via token |
+| POST | `/send-otp` | ❌ | Send SMS OTP via Twilio |
+| POST | `/verify-otp` | ❌ | Verify SMS OTP |
+| POST | `/practitioner/register` | ❌ | Register expert account |
+| POST | `/practitioner/login` | ❌ | Expert login |
 
 ### Users — `/api/users`
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/me` | Get profile |
+| GET | `/me` | Get full user profile |
 | PATCH | `/me` | Update profile |
-| POST | `/me/photo` | Upload photo |
+| POST | `/me/photo` | Upload photo to Azure Blob |
 | DELETE | `/me/photo` | Delete photo |
 | DELETE | `/me` | Delete account |
 
 ### Practitioners — `/api/practitioners`
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | List (filterable) |
-| GET | `/:id` | Get profile + reviews |
-| POST | `/` | Create profile |
-| PATCH | `/:id` | Update profile |
-| PATCH | `/:id/availability` | Toggle online/offline |
-| DELETE | `/:id` | Delete |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/` | ❌ | List with filters (search, specialty, language, rate) |
+| GET | `/:id` | ❌ | Get profile + reviews |
+| POST | `/` | ✅ | Create profile |
+| PATCH | `/:id` | ✅ | Update profile |
+| POST | `/:id/photo` | ✅ | Upload photo |
+| PATCH | `/:id/availability` | ✅ | Toggle online/offline |
+| DELETE | `/:id` | ✅ | Delete |
 
 ### Sessions — `/api/sessions`
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/` | Create session |
-| GET | `/:id` | Get session |
-| POST | `/:id/end` | End session |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/` | ✅ | Create session (CHAT/AUDIO/VIDEO) |
+| GET | `/:id` | ✅ | Get session details |
+| POST | `/:id/end` | ✅ | End session |
+| GET | `/practitioner/active` | ✅ | Expert's active sessions |
+| GET | `/practitioner/history` | ✅ | Expert's session history + total earnings |
+| GET | `/user/history` | ✅ | User's session history + total spent + minutes |
 
 ### Wallet — `/api/wallet`
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/` | Balance + transactions |
 | POST | `/recharge` | Recharge via Razorpay |
+| POST | `/recharge/stripe` | Recharge via Stripe |
+| POST | `/webhook` | Razorpay webhook |
+| POST | `/stripe-webhook` | Stripe webhook |
 
 ### Agora — `/api/agora`
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/token` | Get RTC token |
-| GET | `/channel/:sessionId` | Channel info |
-| POST | `/feedback` | Submit feedback |
+| POST | `/token` | Get Agora RTC token |
+| GET | `/channel/:sessionId` | Get channel info |
+| POST | `/feedback` | Submit call feedback |
+
+---
+
+## Real-time Events (Socket.IO)
+
+| Event | Direction | Description |
+|---|---|---|
+| `join_room` | Client → Server | Join a session room |
+| `joined_room` | Server → Client | Confirmed join |
+| `send_message` | Client → Server | Send chat message |
+| `new_message` | Server → Client | Broadcast message |
+| `message_history` | Server → Client | Past messages on join |
+| `typing_start/stop` | Client → Server | Typing indicator |
+| `typing_update` | Server → Client | Typing broadcast |
+| `new_session_request` | Server → Expert | New session created |
+| `session_terminated` | Server → Client | Session ended |
+| `low_balance` | Server → Client | Wallet balance warning |
+| `practitioner_status` | Server → All | Expert online/offline |
 
 ---
 
@@ -164,7 +194,7 @@ npm run dev        # → http://localhost:8080
 
 | Limiter | Routes | Limit |
 |---|---|---|
-| `generalLimiter` | All | 100 req / 15 min |
+| `generalLimiter` | All routes | 100 req / 15 min |
 | `authLimiter` | `/register`, `/login`, `/google` | 10 req / 15 min (prod) |
 | `emailLimiter` | `/forgot-password` | 5 req / hr (prod) |
 
@@ -177,6 +207,14 @@ npm run dev      # ts-node dev server
 npm run build    # Compile TypeScript
 npm start        # Run dist/index.js
 ```
+
+---
+
+## Notes
+
+- Redis Cluster (Azure) — `EVALSHA` not supported, use `sendCommand` wrapper
+- Practitioners cannot book sessions (enforced at API level)
+- Wallet auto-created on user register (email + Google OAuth)
 
 ---
 

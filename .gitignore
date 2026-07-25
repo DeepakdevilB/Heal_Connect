@@ -44,3 +44,13 @@ backend/uploads/
 
 # Prisma generated
 backend/generated/
+
+# Patch files
+*.patch
+
+# Local migration SQL dumps
+migration.sql
+
+# Test / debug scripts
+backend/poll.ts
+backend/test-*.ts

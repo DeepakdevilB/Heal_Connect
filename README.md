@@ -5,7 +5,7 @@
 <h1>🌿 HealConnect — Wellness Platform</h1>
 
 <p align="center">
-<img src="https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js&logoColor=white"/>
+<img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white"/>
 <img src="https://img.shields.io/badge/Express-5-000000?style=for-the-badge&logo=express&logoColor=white"/>
 <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white"/>
 <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"/>
@@ -29,7 +29,7 @@ HealConnect/
 ├── backend/                          # Node.js + Express 5 + Prisma API
 │   ├── prisma/
 │   │   ├── schema.prisma
-│   │   └── migrations/
+│   │   └── prisma.config.ts
 │   ├── src/
 │   │   ├── index.ts                  # Entry point (Port 8080)
 │   │   ├── lib/
@@ -45,13 +45,13 @@ HealConnect/
 │   │   │   ├── rateLimiter.ts
 │   │   │   └── validate.ts
 │   │   ├── routes/
-│   │   │   ├── auth.ts
+│   │   │   ├── auth.ts               # User + Practitioner auth
 │   │   │   ├── users.ts
 │   │   │   ├── practitioners.ts
-│   │   │   ├── sessions.ts
+│   │   │   ├── sessions.ts           # + /practitioner/history, /user/history
 │   │   │   ├── chat.ts
 │   │   │   ├── agora.ts
-│   │   │   └── wallet.ts
+│   │   │   └── wallet.ts             # Razorpay + Stripe
 │   │   ├── services/
 │   │   │   └── twilio.service.ts
 │   │   └── workers/
@@ -59,7 +59,7 @@ HealConnect/
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
-├── web/                              # Next.js 14 App Router Frontend
+├── web/                              # Next.js 15 App Router Frontend
 │   ├── public/
 │   │   ├── logo.png
 │   │   ├── HealConnect.json          # Lottie animation
@@ -69,8 +69,8 @@ HealConnect/
 │   │   │   ├── page.tsx              # Landing page
 │   │   │   ├── layout.tsx
 │   │   │   ├── globals.css
-│   │   │   ├── login/
-│   │   │   ├── signup/
+│   │   │   ├── login/                # Unified login (User + Expert toggle)
+│   │   │   ├── signup/               # Unified signup (User + Expert toggle)
 │   │   │   ├── dashboard/
 │   │   │   │   ├── page.tsx
 │   │   │   │   ├── profile/
@@ -78,14 +78,18 @@ HealConnect/
 │   │   │   ├── practitioners/
 │   │   │   │   ├── page.tsx
 │   │   │   │   └── [id]/
-│   │   │   ├── session/[sessionId]/
+│   │   │   ├── expert/
+│   │   │   │   ├── dashboard/        # Expert dashboard (sessions + earnings)
+│   │   │   │   ├── profile/          # Expert profile editor
+│   │   │   │   └── login/            # Redirects to /login?role=expert
+│   │   │   ├── session/[sessionId]/  # Real-time chat + audio call
 │   │   │   ├── verify-email/
 │   │   │   ├── verify-otp/
 │   │   │   ├── reset-password/
 │   │   │   └── auth/google/callback/
 │   │   ├── components/
 │   │   │   ├── ui/                   # shadcn/ui primitives
-│   │   │   ├── chat/                 # Audio call + chat components
+│   │   │   ├── chat/                 # ChatWindow, AudioCallScreen, etc.
 │   │   │   ├── wallet/               # RechargeModal
 │   │   │   ├── navbar.tsx
 │   │   │   ├── hero-animation.tsx
@@ -94,10 +98,10 @@ HealConnect/
 │   │   │   ├── useAgoraCall.ts
 │   │   │   └── useSessionChat.ts
 │   │   └── lib/
-│   │       ├── api.ts
+│   │       ├── api.ts                # All API calls incl. session history
 │   │       ├── i18n.ts
 │   │       ├── lang-context.tsx
-│   │       ├── socket.ts
+│   │       ├── socket.ts             # Socket.IO client (auto localhost/prod)
 │   │       ├── razorpay.ts
 │   │       └── utils.ts
 │   ├── next.config.mjs
@@ -117,7 +121,7 @@ HealConnect/
 ```mermaid
 graph TB
     subgraph Client["Client (Browser)"]
-        WEB["Next.js 14 · App Router\nTailwindCSS + shadcn/ui"]
+        WEB["Next.js 15 · App Router\nTailwindCSS + shadcn/ui"]
     end
 
     subgraph Backend["/backend — API Server"]
@@ -134,7 +138,7 @@ graph TB
     end
 
     subgraph Services["External Services"]
-        PG[("PostgreSQL · Azure")]
+        PG[("PostgreSQL · Neon")]
         REDIS[("Redis · Azure Cache")]
         AZURE["Azure Blob Storage"]
         SENDGRID["SendGrid · Email"]
@@ -142,6 +146,7 @@ graph TB
         GOOGLE["Google OAuth 2.0"]
         AGORASVC["Agora RTC · Audio"]
         RAZORPAY["Razorpay · Payments"]
+        STRIPE["Stripe · Payments"]
     end
 
     WEB -->|"HTTP REST + Socket.IO"| EXPRESS
@@ -152,7 +157,7 @@ graph TB
     AUTH --> PG & REDIS & SENDGRID & TWILIO & GOOGLE
     USERS --> PG & AZURE
     PRACTITIONERS --> PG & AZURE & AGORASVC
-    WALLET --> PG & RAZORPAY
+    WALLET --> PG & RAZORPAY & STRIPE
     SOCKET --> REDIS
 ```
 
@@ -171,6 +176,7 @@ erDiagram
     Practitioner ||--o{ Review : "receives"
     Session ||--o| Review : "has"
     Session ||--o{ ChatMessage : "has"
+    Session ||--o| CallFeedback : "has"
 
     User {
         uuid id PK
@@ -186,12 +192,12 @@ erDiagram
         string[] wellnessInterests
         string photoUrl
         bool isEmailVerified
-        bool isPhoneVerified
     }
 
     Practitioner {
         uuid id PK
         string email UK
+        string passwordHash
         string name
         string bio
         string[] specialties
@@ -228,14 +234,28 @@ erDiagram
         float amount
         string type
         string status
+        string referenceId
     }
 
     ChatMessage {
         uuid id PK
         uuid sessionId FK
-        string role
+        string senderId
+        string senderType
         string content
+        bool isRead
+        datetime readAt
         datetime createdAt
+    }
+
+    CallFeedback {
+        uuid id PK
+        uuid sessionId FK
+        string userId
+        int audioQuality
+        int overallRating
+        string[] issues
+        string comment
     }
 ```
 
@@ -246,17 +266,19 @@ erDiagram
 ### Auth — `/api/auth`
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/register` | ❌ | Register with email + password |
+| POST | `/register` | ❌ | Register user (auto-creates wallet) |
 | POST | `/login` | ❌ | Login, returns access + refresh tokens |
 | POST | `/refresh` | ❌ | Rotate refresh token |
 | POST | `/logout` | ✅ | Revoke tokens, blacklist access token |
-| POST | `/google` | ❌ | Google OAuth sign-in |
+| POST | `/google` | ❌ | Google OAuth sign-in (auto-creates wallet) |
 | GET | `/me` | ✅ | Get current authenticated user |
 | GET | `/verify-email` | ❌ | Verify email via token |
 | POST | `/forgot-password` | ❌ | Send password reset email |
 | POST | `/reset-password` | ❌ | Reset password via token |
 | POST | `/send-otp` | ❌ | Send SMS OTP via Twilio |
 | POST | `/verify-otp` | ❌ | Verify SMS OTP |
+| POST | `/practitioner/register` | ❌ | Register expert account |
+| POST | `/practitioner/login` | ❌ | Expert login |
 
 ### Users — `/api/users`
 | Method | Endpoint | Description |
@@ -270,25 +292,32 @@ erDiagram
 ### Practitioners — `/api/practitioners`
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| GET | `/` | ❌ | List with filters |
+| GET | `/` | ❌ | List with filters (search, specialty, language, rate) |
 | GET | `/:id` | ❌ | Get profile + reviews |
 | POST | `/` | ✅ | Create profile |
 | PATCH | `/:id` | ✅ | Update profile |
+| POST | `/:id/photo` | ✅ | Upload photo |
 | PATCH | `/:id/availability` | ✅ | Toggle online/offline |
 | DELETE | `/:id` | ✅ | Delete |
 
 ### Sessions — `/api/sessions`
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/` | Create session (CHAT/AUDIO) |
-| GET | `/:id` | Get session details |
-| POST | `/:id/end` | End session |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/` | ✅ | Create session (CHAT/AUDIO/VIDEO) |
+| GET | `/:id` | ✅ | Get session details |
+| POST | `/:id/end` | ✅ | End session |
+| GET | `/practitioner/active` | ✅ | Expert's active sessions |
+| GET | `/practitioner/history` | ✅ | Expert's session history + total earnings |
+| GET | `/user/history` | ✅ | User's session history + total spent + minutes |
 
 ### Wallet — `/api/wallet`
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/` | Get balance + transactions |
 | POST | `/recharge` | Recharge via Razorpay |
+| POST | `/recharge/stripe` | Recharge via Stripe |
+| POST | `/webhook` | Razorpay webhook |
+| POST | `/stripe-webhook` | Stripe webhook |
 
 ### Agora — `/api/agora`
 | Method | Endpoint | Description |
@@ -302,8 +331,13 @@ erDiagram
 ## 🔐 Authentication Flow
 
 ```
-POST /api/auth/login
-  → returns { accessToken (15min), refreshToken (7d) }
+# User
+POST /api/auth/register  → auto-creates Wallet
+POST /api/auth/login     → returns { accessToken (15min), refreshToken (7d) }
+
+# Expert
+POST /api/auth/practitioner/register
+POST /api/auth/practitioner/login    → JWT includes practitionerId claim
 
 Every request → Authorization: Bearer <accessToken>
 
@@ -315,6 +349,37 @@ POST /api/auth/logout
   → refresh token revoked in DB
   → access token blacklisted in Redis
 ```
+
+---
+
+## 👤 User vs Expert Roles
+
+| Feature | User | Expert |
+|---|---|---|
+| Login page | `/login` (User tab) | `/login` (Expert tab) |
+| Dashboard | `/dashboard` | `/expert/dashboard` |
+| Profile | `/dashboard/profile` | `/expert/profile` |
+| Session history | `/api/sessions/user/history` | `/api/sessions/practitioner/history` |
+| Wallet | Yes (auto-created on register) | No |
+| Billing | Debited per minute | Credited per session |
+
+---
+
+## ⚡ Real-time Events (Socket.IO)
+
+| Event | Direction | Description |
+|---|---|---|
+| `join_room` | Client → Server | Join a session room |
+| `joined_room` | Server → Client | Confirmed join |
+| `send_message` | Client → Server | Send chat message |
+| `new_message` | Server → Client | Broadcast message |
+| `message_history` | Server → Client | Past messages on join |
+| `typing_start/stop` | Client → Server | Typing indicator |
+| `typing_update` | Server → Client | Typing broadcast |
+| `new_session_request` | Server → Expert | New session created |
+| `session_terminated` | Server → Client | Session ended |
+| `low_balance` | Server → Client | Wallet balance warning |
+| `practitioner_status` | Server → All | Expert online/offline |
 
 ---
 
@@ -345,8 +410,8 @@ npm run dev            # → http://localhost:8080
 cd web
 npm install
 # create web/.env
-# NEXT_PUBLIC_API_URL=http://localhost:8080
-# NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
 npm run dev            # → http://localhost:3000
 ```
 
@@ -356,32 +421,32 @@ npm run dev            # → http://localhost:3000
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 15 (App Router) |
 | Language | TypeScript (strict) |
 | Styling | TailwindCSS + shadcn/ui |
 | Animation | lottie-react |
 | i18n | Custom lang-context (EN/HI) |
 | Backend | Express 5 + Node.js 20+ |
 | ORM | Prisma 7 + `@prisma/adapter-pg` |
-| Database | PostgreSQL 15 (Azure) |
+| Database | PostgreSQL 15 (Neon) |
 | Cache | Redis (Azure Cache) |
 | Real-time | Socket.IO 4 |
-| Auth | JWT + bcrypt + Google OAuth + Twilio OTP |
+| Auth | JWT + bcrypt + Google OAuth |
 | Storage | Azure Blob Storage |
 | Email | SendGrid |
 | Calls | Agora RTC (audio) |
-| Payments | Razorpay |
+| Payments | Razorpay + Stripe |
 | Billing | Custom per-minute billing engine |
 
 ---
 
 ## ⚠️ Known Issues & Notes
 
-- `backend/.gitignore` — `uploads/resumes/` folder not ignored (add if needed)
+- Socket.IO connects directly to backend (`NEXT_PUBLIC_API_URL`), not via Next.js proxy
 - Redis Cluster (Azure) — `EVALSHA` not supported, use `sendCommand` wrapper
-- `web/src/lib/socket.ts` — Socket.IO client config, ensure `NEXT_PUBLIC_API_URL` is set
-- `backend/src/lib/sms.ts` + `twilio.service.ts` — requires `TWILIO_*` env vars
-- Razorpay webhook — requires `RAZORPAY_WEBHOOK_SECRET` in `.env`
+- Practitioners cannot book sessions (enforced at API level)
+- Wallet auto-created on user register (email + Google OAuth)
+- Local testing: use incognito for user + normal browser for expert (same localStorage port)
 
 ---
 
