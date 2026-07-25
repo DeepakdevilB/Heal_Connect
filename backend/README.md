@@ -151,19 +151,19 @@ npm run dev                 # → http://localhost:8080
 
 | Method | Endpoint | Auth Required | Description |
 |--------|----------|:---:|-------------|
-| POST | `/register` | No | Register user — auto-creates Wallet |
-| POST | `/login` | No | Login — returns `accessToken` (15min) + `refreshToken` (7d) |
-| POST | `/refresh` | No | Rotate refresh token |
+| POST | `/register` | **Yes** | Register user — auto-creates Wallet |
+| POST | `/login` | **Yes** | Login — returns `accessToken` (15min) + `refreshToken` (7d) |
+| POST | `/refresh` | **Yes** | Rotate refresh token |
 | POST | `/logout` | **Yes** | Revoke refresh token + blacklist access token in Redis |
-| POST | `/google` | No | Google OAuth sign-in — auto-creates Wallet |
+| POST | `/google` |**Yes** | Google OAuth sign-in — auto-creates Wallet |
 | GET | `/me` | **Yes** | Get current authenticated user |
-| GET | `/verify-email` | No | Verify email via token link |
-| POST | `/forgot-password` | No | Send password reset email via SendGrid |
-| POST | `/reset-password` | No | Reset password via token |
-| POST | `/send-otp` | No | Send SMS OTP via Twilio |
-| POST | `/verify-otp` | No | Verify SMS OTP |
-| POST | `/practitioner/register` | No | Register expert account with hashed password |
-| POST | `/practitioner/login` | No | Expert login — JWT includes `practitionerId` claim |
+| GET | `/verify-email` | **Yes** | Verify email via token link |
+| POST | `/forgot-password` | **Yes** | Send password reset email via SendGrid |
+| POST | `/reset-password` | **Yes** | Reset password via token |
+| POST | `/send-otp` | **Yes** | Send SMS OTP via Twilio |
+| POST | `/verify-otp` | **Yes** | Verify SMS OTP |
+| POST | `/practitioner/register` | **Yes** | Register expert account with hashed password |
+| POST | `/practitioner/login` | **Yes** | Expert login — JWT includes `practitionerId` claim |
 
 ### Users — `/api/users`
 
