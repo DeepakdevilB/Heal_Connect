@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.png" alt="HealConnect Banner" width="100%" style="margin-bottom: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);"/>
+<img src="docs/logo.png" alt="HealConnect Banner" width="20%" style="margin-bottom: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);"/>
 
 <h1>🌿 HealConnect</h1>
 
@@ -163,7 +163,7 @@ HealConnect/
 
 ---
 
-## 🏗️ System Architecture
+## 🛠️ System Architecture
 
 ```mermaid
 graph TB
@@ -302,19 +302,19 @@ erDiagram
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/register` | ❌ | Register user — auto-creates Wallet |
-| POST | `/login` | ❌ | Login — returns `accessToken` (15min) + `refreshToken` (7d) |
-| POST | `/refresh` | ❌ | Rotate refresh token |
+| POST | `/register` | ✅ | Register user — auto-creates Wallet |
+| POST | `/login` | ✅ | Login — returns `accessToken` (15min) + `refreshToken` (7d) |
+| POST | `/refresh` | ✅ | Rotate refresh token |
 | POST | `/logout` | ✅ | Revoke refresh token + blacklist access token in Redis |
-| POST | `/google` | ❌ | Google OAuth sign-in — auto-creates Wallet |
+| POST | `/google` | ✅ | Google OAuth sign-in — auto-creates Wallet |
 | GET | `/me` | ✅ | Get current authenticated user |
-| GET | `/verify-email` | ❌ | Verify email via token link |
-| POST | `/forgot-password` | ❌ | Send password reset email via SendGrid |
-| POST | `/reset-password` | ❌ | Reset password via token |
-| POST | `/send-otp` | ❌ | Send SMS OTP via Twilio |
-| POST | `/verify-otp` | ❌ | Verify SMS OTP |
-| POST | `/practitioner/register` | ❌ | Register expert account with passwordHash |
-| POST | `/practitioner/login` | ❌ | Expert login — JWT includes `practitionerId` claim |
+| GET | `/verify-email` | ✅ | Verify email via token link |
+| POST | `/forgot-password` | ✅ | Send password reset email via SendGrid |
+| POST | `/reset-password` | ✅ | Reset password via token |
+| POST | `/send-otp` | ✅ | Send SMS OTP via Twilio |
+| POST | `/verify-otp` | ✅ | Verify SMS OTP |
+| POST | `/practitioner/register` | ✅ | Register expert account with passwordHash |
+| POST | `/practitioner/login` | ✅ | Expert login — JWT includes `practitionerId` claim |
 
 ### Users — `/api/users`
 
@@ -525,15 +525,15 @@ npm run dev            # → http://localhost:3000
 
 ---
 
+<div align="center">
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-<div align="center">
-
-**🌿 Built with ❤️ by Abhishek Giri**
+**Built with ❤️ by Abhishek Giri**
 
 <a href="https://www.linkedin.com/in/abhishekgiri04/">
   <img src="https://img.shields.io/badge/Connect-LinkedIn-blue?style=for-the-badge&logo=linkedin" alt="LinkedIn"/>
