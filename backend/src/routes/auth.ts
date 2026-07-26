@@ -111,6 +111,7 @@ router.post(
           emailVerifyToken,
           emailVerifyExpiry,
           provider: 'email',
+          wallet: { create: { balance: 0 } },
         },
       });
 
@@ -214,9 +215,9 @@ router.post(
           refreshToken,
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Internal server error: ' + (err?.message || String(err)), stack: err?.stack });
     }
   }
 );
@@ -309,6 +310,7 @@ router.post(
             name: name ?? null,
             isEmailVerified: email_verified ?? false,
             provider: 'google',
+            wallet: { create: { balance: 0 } },
           },
         });
         // Welcome email for new Google users
@@ -334,9 +336,9 @@ router.post(
           refreshToken,
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Google auth error:', err);
-      res.status(400).json({ success: false, message: 'Google authentication failed' });
+      res.status(400).json({ success: false, message: `Google authentication failed: ${err?.message || 'Unknown error'}` });
     }
   }
 );
@@ -366,6 +368,7 @@ router.post(
             name: name ?? null,
             isEmailVerified: !!email,
             provider: 'apple',
+            wallet: { create: { balance: 0 } },
           },
         });
         if (email && name) sendWelcomeEmail(email, name).catch(() => {});
@@ -719,5 +722,101 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
+// ─── Practitioner Register ─────────────────────────────────────────────────────
+
+router.post(
+  '/practitioner/register',
+  authLimiter,
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { name, email, password } = req.body as { name: string; email: string; password: string };
+    try {
+      const existing = await prisma.practitioner.findUnique({ where: { email } });
+      if (existing) { res.status(409).json({ success: false, message: 'Email already registered' }); return; }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const practitioner = await prisma.practitioner.create({
+        data: { name, email, passwordHash, isVerified: false },
+      });
+
+      const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      res.status(201).json({
+        success: true,
+        message: 'Expert account created.',
+        data: {
+          practitioner: { id: practitioner.id, name: practitioner.name, email: practitioner.email, isVerified: practitioner.isVerified },
+          accessToken,
+          refreshToken,
+          role: 'practitioner',
+        },
+      });
+    } catch (err) {
+      console.error('Practitioner register error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
+
+// ─── Practitioner Login ───────────────────────────────────────────────────────
+
+router.post(
+  '/practitioner/login',
+  authLimiter,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('password').notEmpty().withMessage('Password required'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { email, password } = req.body as { email: string; password: string };
+
+    try {
+      const practitioner = await prisma.practitioner.findUnique({ where: { email } });
+      if (!practitioner || !practitioner.passwordHash) {
+        res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      const valid = await bcrypt.compare(password, practitioner.passwordHash);
+      if (!valid) {
+        res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      // Embed practitionerId in JWT so socket middleware can identify expert
+      const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          practitioner: {
+            id: practitioner.id,
+            name: practitioner.name,
+            email: practitioner.email,
+            isVerified: practitioner.isVerified,
+          },
+          accessToken,
+          refreshToken,
+          role: 'practitioner',
+        },
+      });
+    } catch (err) {
+      console.error('Practitioner login error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
 
 export default router;

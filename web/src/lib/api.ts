@@ -25,7 +25,7 @@ interface AuthData {
   verifyMethod?: 'email' | 'sms';
 }
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   email: string | null;
   name: string | null;
@@ -41,6 +41,7 @@ interface UserProfile {
 export interface PractitionerProfile {
   id: string;
   name: string;
+  email?: string | null;
   bio: string | null;
   specialties: string[];
   certifications: string[];
@@ -54,43 +55,7 @@ export interface PractitionerProfile {
   reviewCount?: number;
 }
 
-export interface ConsultationSession {
-  id: string;
-  userId: string;
-  practitionerId: string;
-  type: string;
-  status: 'INITIATED' | 'PENDING_ACCEPTANCE' | 'ACCEPTED' | 'WALLET_VERIFIED' | 'JOINING_CHANNEL' | 'ACTIVE' | 'ENDING' | 'ENDED' | 'BILLING_GENERATED' | 'RATING_PENDING' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'DISCONNECTED';
-  channelName: string | null;
-  agoraUid: number | null;
-  perMinuteRate: number;
-  walletDeduction: number;
-  duration: number;
-  startTime: string | null;
-  endTime: string | null;
-  totalCost: number;
-  user: { id: string; name: string | null; photoUrl: string | null; email?: string | null; phone?: string | null };
-  practitioner: { id: string; name: string; photoUrl: string | null; perMinuteRate: number; specialties?: string[] };
-  review?: { id: string; rating: number; comment: string | null } | null;
-}
 
-export interface BillingSummaryData {
-  consultationId: string;
-  durationSeconds: number;
-  durationFormatted: string;
-  perMinuteRate: number;
-  totalAmount: number;
-  walletDeduction: number;
-  remainingWalletBalance: number;
-  startTime: string;
-  endTime: string;
-}
-
-export interface AgoraData {
-  token: string;
-  appId: string;
-  channelName: string;
-  uid: number;
-}
 
 async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<ApiResponse<T>> {
   const mergedHeaders: Record<string, string> = {
@@ -170,6 +135,18 @@ export const authApi = {
 
   resendOtp: (phone: string) =>
     request('/api/auth/resend-otp', { method: 'POST', body: JSON.stringify({ phone }) }),
+
+  practitionerLogin: (email: string, password: string) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+      '/api/auth/practitioner/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+
+  practitionerRegister: (name: string, email: string, password: string) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+      '/api/auth/practitioner/register',
+      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+    ),
 
   refresh: (refreshToken: string) =>
     request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {
@@ -261,56 +238,61 @@ export const practitionersApi = {
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 };
 
-export const consultationsApi = {
-  start: (token: string, practitionerId: string, type: string = 'AUDIO') =>
-    request<{ session: ConsultationSession }>('/api/consultations/start', {
+
+export const sessionsApi = {
+  create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
+    request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
       method: 'POST',
       headers: authHeader(token),
       body: JSON.stringify({ practitionerId, type }),
     }),
 
-  accept: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession }>('/api/consultations/accept', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
+  get: (token: string, sessionId: string) =>
+    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
+      `/api/sessions/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
 
-  reject: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession }>('/api/consultations/reject', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
+  end: (token: string, sessionId: string) =>
+    request(`/api/sessions/${sessionId}/end`, { method: 'POST', headers: authHeader(token) }),
 
-  checkWallet: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; currentBalance?: number }>('/api/consultations/check-wallet', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
+  practitionerActive: (token: string) =>
+    request<{ sessions: { id: string; type: string; status: string; createdAt: string; user: { id: string; name: string | null; photoUrl: string | null } }[] }>(
+      '/api/sessions/practitioner/active',
+      { headers: authHeader(token) }
+    ),
 
-  join: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; agora: AgoraData }>('/api/consultations/join', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
+  practitionerHistory: (token: string) =>
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number }>(
+      '/api/sessions/practitioner/history',
+      { headers: authHeader(token) }
+    ),
 
-  end: (token: string, consultationId: string) =>
-    request<{ session: ConsultationSession; billingSummary: BillingSummaryData }>('/api/consultations/end', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ consultationId }),
-    }),
+  userHistory: (token: string) =>
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number }>(
+      '/api/sessions/user/history',
+      { headers: authHeader(token) }
+    ),
+};
 
-  get: (token: string, id: string) =>
-    request<{ session: ConsultationSession }>(`/api/consultations/${id}`, {
-      headers: authHeader(token),
-    }),
+export const agoraApi = {
+  getToken: (token: string, sessionId: string) =>
+    request<{ token: string; channelName: string; uid: number; appId: string; expireTs: number }>(
+      '/api/agora/token',
+      { method: 'POST', headers: authHeader(token), body: JSON.stringify({ sessionId }) }
+    ),
 
-  rating: (token: string, body: { consultationId: string; rating: number; comment?: string }) =>
-    request<{ session: ConsultationSession; review: unknown }>('/api/consultations/rating', {
+  getChannel: (token: string, sessionId: string) =>
+    request<{ appId: string; channelName: string; sessionStatus: string; sessionType: string }>(
+      `/api/agora/channel/${sessionId}`,
+      { headers: authHeader(token) }
+    ),
+
+  submitFeedback: (token: string, body: {
+    sessionId: string; audioQuality: number; overallRating: number;
+    issues?: string[]; comment?: string;
+  }) =>
+    request('/api/agora/feedback', {
       method: 'POST',
       headers: authHeader(token),
       body: JSON.stringify(body),
@@ -319,12 +301,19 @@ export const consultationsApi = {
 
 export const walletApi = {
   getBalance: (token: string) =>
-    request<{ balance: number; currency: string; transactions: unknown[] }>('/api/wallet/balance', {
+    request<{ wallet: { id: string; balance: number; currency: string; transactions: { id: string; type: string; status: string; amount: number; createdAt: string }[] } }>('/api/wallet', {
       headers: authHeader(token),
     }),
 
   recharge: (token: string, amount: number) =>
-    request<{ balance: number; currency: string }>('/api/wallet/recharge', {
+    request<{ orderId: string; amount: number; currency: string; transactionId: string }>('/api/wallet/recharge', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ amount }),
+    }),
+    
+  rechargeStripe: (token: string, amount: number) =>
+    request<{ url: string; sessionId: string }>('/api/wallet/recharge/stripe', {
       method: 'POST',
       headers: authHeader(token),
       body: JSON.stringify({ amount }),

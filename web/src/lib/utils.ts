@@ -86,3 +86,18 @@ export function getAvatarUrl(name?: string | null, photoUrl?: string | null): st
   const idx = Math.abs(hash) % ALL_AI_AVATARS.length;
   return ALL_AI_AVATARS[idx]!;
 }
+
+const LOCAL_AVATARS = [
+  '/avatars/astrologer_1.jpg',
+  '/avatars/astrologer_2.jpg',
+  '/avatars/astrologer_3.jpg',
+  '/avatars/astrologer_4.jpg',
+  '/avatars/astrologer_5.jpg',
+  '/avatars/astrologer_6.jpg',
+];
+
+export function getPractitionerAvatar(photoUrl: string | null | undefined, id: string): string {
+  if (photoUrl && photoUrl.startsWith('/')) return photoUrl;
+  const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return LOCAL_AVATARS[hash % LOCAL_AVATARS.length];
+}

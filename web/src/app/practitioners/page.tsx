@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getAvatarUrl } from '@/lib/utils';
+import { getPractitionerAvatar } from '@/lib/utils';
 
 interface Practitioner {
   id: string;
@@ -173,7 +173,7 @@ export default function PractitionersPage() {
           </div>
         ) : (
           <>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
               {practitioners.map((p) => <PractitionerCard key={p.id} practitioner={p} />)}
             </div>
             {practitioners.length < total && (
@@ -192,46 +192,74 @@ export default function PractitionersPage() {
 
 function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
   const router = useRouter();
+  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.id);
 
   return (
-    <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-yellow-100 hover:border-yellow-300 hover:shadow-md transition-all cursor-pointer">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-4">
-          <div className="relative shrink-0">
-            <img src={getAvatarUrl(p.name, p.photoUrl)} alt={p.name} className="w-14 h-14 rounded-2xl object-cover shadow border border-amber-200" />
-            {p.isOnline && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />}
+    <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all cursor-pointer rounded-2xl overflow-hidden group h-full">
+      <CardContent className="p-0 flex flex-col h-full">
+        {/* Top strip with avatar */}
+        <div className="relative h-16 bg-gradient-to-r from-amber-50 to-orange-50 shrink-0">
+          <div className="absolute -bottom-7 left-5">
+            <img src={avatarSrc} alt={p.name} className="w-14 h-14 rounded-xl object-cover shadow-md border-2 border-white" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-[#1a1a1a] truncate">{p.name}</p>
-              <Badge variant="outline" className={`text-xs shrink-0 ml-2 ${p.isOnline ? 'border-emerald-300 text-emerald-600 bg-emerald-50' : 'border-gray-200 text-gray-400'}`}>
-                {p.isOnline ? '● Online' : 'Offline'}
-              </Badge>
-            </div>
-            <p className="text-sm text-[#f59e0b] font-medium truncate">{p.specialties.slice(0, 2).join(' · ')}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <Star className="w-3.5 h-3.5 text-yellow-400 fill-current" />
-              <span className="text-sm font-medium text-[#1a1a1a]">{p.avgRating || '—'}</span>
-              <span className="text-xs text-gray-400">({p.reviewCount})</span>
-              {p.isVerified && <Badge variant="outline" className="ml-1 text-xs border-yellow-300 text-[#d97706] bg-yellow-50 py-0"><Shield className="h-2.5 w-2.5 mr-0.5 inline" />Verified</Badge>}
-            </div>
-            {p.languages.length > 0 && <p className="text-xs text-gray-400 mt-1 truncate">🌐 {p.languages.slice(0, 3).join(', ')}</p>}
+          <div className="absolute top-3 right-4">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+              p.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${p.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+              {p.isOnline ? 'Online' : 'Offline'}
+            </span>
           </div>
         </div>
-        {p.bio && <p className="text-xs text-gray-500 mt-3 line-clamp-2">{p.bio}</p>}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-yellow-100">
-          <div>
-            <span className="text-lg font-bold text-[#1a1a1a]">₹{p.perMinuteRate}</span>
-            <span className="text-xs text-gray-400">/min</span>
-            <p className="text-xs text-gray-400">{p.experienceYrs}yr exp</p>
+
+        {/* Content */}
+        <div className="pt-10 px-5 pb-5 flex flex-col flex-1">
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <p className="font-bold text-gray-900 text-base">{p.name}</p>
+              <p className="text-sm text-amber-600 font-medium">{p.specialties.slice(0, 2).join(' · ') || '—'}</p>
+            </div>
+            {p.isVerified && (
+              <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 shrink-0">
+                <Shield className="w-3 h-3 text-amber-600" />
+                <span className="text-[10px] font-semibold text-amber-700">Verified</span>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-8 px-3 border-yellow-200 hover:border-yellow-400 hover:text-[#d97706]">
-              <MessageCircle className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 disabled:opacity-40">
-              <Phone className="h-3.5 w-3.5 mr-1" /> Call
-            </Button>
+
+          <div className="flex items-center gap-3 mt-2 mb-3">
+            <div className="flex items-center gap-1">
+              <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
+              <span className="text-sm font-semibold text-gray-900">{p.avgRating || '—'}</span>
+              <span className="text-xs text-gray-400">({p.reviewCount})</span>
+            </div>
+            <span className="text-gray-200">|</span>
+            <span className="text-xs text-gray-500">{p.experienceYrs} yrs exp</span>
+            <span className="text-gray-200">|</span>
+            <div className="flex items-center gap-1">
+              <Globe className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-500 truncate max-w-[80px]">{p.languages.slice(0, 2).join(', ') || '—'}</span>
+            </div>
+          </div>
+
+          {/* Bio — always takes up space even if empty */}
+          <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed flex-1">
+            {p.bio || ''}
+          </p>
+
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
+            <div>
+              <span className="text-lg font-bold text-gray-900">₹{p.perMinuteRate}</span>
+              <span className="text-xs text-gray-400">/min</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+                <MessageCircle className="h-3.5 w-3.5" /> Chat
+              </Button>
+              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+                <Phone className="h-3.5 w-3.5" /> Call
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
