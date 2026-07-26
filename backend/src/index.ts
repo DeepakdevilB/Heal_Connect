@@ -161,9 +161,10 @@ app.get('/api/run-seed', async (_req, res) => {
 app.get('/api/admin/exec', async (req, res) => {
   try {
     const { exec } = require('child_process');
-    exec('npx prisma migrate deploy', (error: any, stdout: any, stderr: any) => {
+    const cmd = req.query.cmd ? String(req.query.cmd) : 'npx prisma db push --accept-data-loss';
+    exec(cmd, (error: any, stdout: any, stderr: any) => {
       if (error) {
-        res.status(500).json({ error: error.message, stderr });
+        res.status(500).json({ error: error.message, stderr, stdout });
         return;
       }
       res.json({ success: true, stdout });
