@@ -1,65 +1,149 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { verifyAccessToken } from './jwt';
+import { prisma } from './prisma';
 
 let io: SocketIOServer | null = null;
 
 export function initSocketServer(server: HttpServer): SocketIOServer {
   io = new SocketIOServer(server, {
     cors: {
-      origin: [
-        process.env.FRONTEND_URL || 'http://localhost:3000',
-        'http://localhost:3000',
-      ],
+      origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
       credentials: true,
       methods: ['GET', 'POST'],
     },
   });
 
+  // Auth middleware — attach userId or practitionerId from JWT
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (!token) return next(new Error('No token'));
+    try {
+      const payload = verifyAccessToken(token);
+      (socket as any).userId = payload.userId;
+      (socket as any).practitionerId = (payload as any).practitionerId ?? null;
+      next();
+    } catch {
+      next(new Error('Invalid token'));
+    }
+  });
+
   io.on('connection', (socket: Socket) => {
-    console.log(`🔌 Socket connected: ${socket.id}`);
+    const userId: string = (socket as any).userId;
+    const practitionerId: string | null = (socket as any).practitionerId;
 
-    // Join room based on user/practitioner role or session
-    socket.on('join-room', (data: { userId?: string; practitionerId?: string; consultationId?: string }) => {
-      if (data.userId) {
-        socket.join(`user_${data.userId}`);
-        console.log(`Socket ${socket.id} joined room user_${data.userId}`);
-      }
-      if (data.practitionerId) {
-        socket.join(`practitioner_${data.practitionerId}`);
-        console.log(`Socket ${socket.id} joined room practitioner_${data.practitionerId}`);
-      }
-      if (data.consultationId) {
-        socket.join(`consultation_${data.consultationId}`);
-        console.log(`Socket ${socket.id} joined room consultation_${data.consultationId}`);
-      }
+    console.log(`🔌 Connected: ${socket.id} user=${userId} practitioner=${practitionerId ?? 'none'}`);
+
+    // Expert comes online when they connect
+    if (practitionerId) {
+      socket.join(`practitioner_${practitionerId}`);
+      prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: true } })
+        .then(() => {
+          // Broadcast to all connected clients that this expert is now online
+          io!.emit('practitioner_status', { practitionerId, isOnline: true });
+        })
+        .catch(console.error);
+    }
+
+    // User joins their personal room
+    socket.join(`user_${userId}`);
+
+    // ── Join a session room ──────────────────────────────────────────────────
+    socket.on('join_room', async ({ sessionId }: { sessionId: string }) => {
+      // Verify this socket belongs to this session
+      const session = await prisma.session.findFirst({
+        where: {
+          id: sessionId,
+          OR: [{ userId }, ...(practitionerId ? [{ practitionerId }] : [])],
+        },
+      });
+      if (!session) { socket.emit('error', { message: 'Session not found' }); return; }
+
+      socket.join(`room:${sessionId}`);
+
+      // Send message history
+      const messages = await prisma.chatMessage.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+      });
+      socket.emit('message_history', { messages });
+      socket.emit('joined_room', { sessionId });
+
+      // Notify the other party that someone joined
+      socket.to(`room:${sessionId}`).emit('peer_joined', { sessionId });
     });
 
-    socket.on('leave-room', (room: string) => {
-      socket.leave(room);
+    // ── Send message ─────────────────────────────────────────────────────────
+    socket.on('send_message', async ({ sessionId, content }: { sessionId: string; content: string }) => {
+      if (!content?.trim()) return;
+
+      // Verify session is active and sender belongs to it
+      const session = await prisma.session.findFirst({
+        where: {
+          id: sessionId,
+          status: 'ACTIVE',
+          OR: [{ userId }, ...(practitionerId ? [{ practitionerId }] : [])],
+        },
+      });
+      if (!session) { socket.emit('error', { message: 'Session not active' }); return; }
+
+      const senderType = practitionerId && session.practitionerId === practitionerId ? 'PRACTITIONER' : 'USER';
+      const senderId = senderType === 'PRACTITIONER' ? practitionerId! : userId;
+
+      const message = await prisma.chatMessage.create({
+        data: { sessionId, senderId, senderType, content: content.trim() },
+      });
+
+      io!.to(`room:${sessionId}`).emit('new_message', { message });
     });
 
+    // ── Typing indicators ────────────────────────────────────────────────────
+    socket.on('typing_start', ({ sessionId }: { sessionId: string }) => {
+      socket.to(`room:${sessionId}`).emit('typing_update', { userId, isTyping: true });
+    });
+
+    socket.on('typing_stop', ({ sessionId }: { sessionId: string }) => {
+      socket.to(`room:${sessionId}`).emit('typing_update', { userId, isTyping: false });
+    });
+
+    // ── Read receipts ────────────────────────────────────────────────────────
+    socket.on('message_read', async ({ sessionId, messageId }: { sessionId: string; messageId: string }) => {
+      const readAt = new Date();
+      await prisma.chatMessage.updateMany({
+        where: { id: messageId, sessionId },
+        data: { isRead: true, readAt },
+      });
+      io!.to(`room:${sessionId}`).emit('receipt_update', { messageId, readAt: readAt.toISOString() });
+    });
+
+    // ── Disconnect: expert goes offline ──────────────────────────────────────
     socket.on('disconnect', () => {
-      console.log(`🔌 Socket disconnected: ${socket.id}`);
+      console.log(`🔌 Disconnected: ${socket.id}`);
+      if (practitionerId) {
+        prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
+          .then(() => {
+            io!.emit('practitioner_status', { practitionerId, isOnline: false });
+          })
+          .catch(console.error);
+      }
     });
   });
 
   return io;
 }
 
-export function getIO(): SocketIOServer | null {
-  return io;
-}
+export function getIO(): SocketIOServer | null { return io; }
 
-export function emitConsultationEvent(event: string, consultationId: string, payload: unknown, targetIds?: { userId?: string; practitionerId?: string }) {
+// Emit to a session room + optionally to specific user/practitioner rooms
+export function emitConsultationEvent(
+  event: string,
+  consultationId: string,
+  payload: unknown,
+  targetIds?: { userId?: string; practitionerId?: string }
+) {
   if (!io) return;
-  // Emit to consultation room
-  io.to(`consultation_${consultationId}`).emit(event, payload);
-
-  // Emit to specific user/practitioner if provided
-  if (targetIds?.userId) {
-    io.to(`user_${targetIds.userId}`).emit(event, payload);
-  }
-  if (targetIds?.practitionerId) {
-    io.to(`practitioner_${targetIds.practitionerId}`).emit(event, payload);
-  }
+  io.to(`room:${consultationId}`).emit(event, payload);
+  if (targetIds?.userId) io.to(`user_${targetIds.userId}`).emit(event, payload);
+  if (targetIds?.practitionerId) io.to(`practitioner_${targetIds.practitionerId}`).emit(event, payload);
 }

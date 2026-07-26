@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Camera, Loader2, Check, X } from 'lucide-react';
+import { ArrowLeft, Camera, Loader2, Check, X, User, Mail, Phone, MapPin, CalendarDays, Shield, Heart, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { usersApi, tokenStore } from '@/lib/api';
 
@@ -15,7 +15,8 @@ const WELLNESS_OPTIONS = [
   'Meditation', 'Crystal Healing', 'Palmistry', 'Energy Healing', 'Chakra Balancing',
 ];
 
-const INPUT_CLS = 'w-full text-sm rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40';
+const INPUT_CLS = 'w-full text-sm rounded-lg bg-amber-50/70 border border-amber-200 px-4 py-2.5 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all';
+const LABEL_CLS = 'text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block';
 
 interface UserProfile {
   id: string;
@@ -83,8 +84,11 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#fffbf0] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-[#f59e0b] animate-spin" />
+      <div className="min-h-screen bg-[#faf9f6] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Image src="/logo.png" alt="HealConnect" width={48} height={48} className="rounded-full animate-pulse" />
+          <p className="text-gray-500">Loading profile...</p>
+        </div>
       </div>
     );
   }
@@ -92,100 +96,203 @@ export default function ProfilePage() {
   const initials = (profile.name || 'U').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
-      <header className="sticky top-0 z-50 w-full border-b border-yellow-100 bg-white/80 backdrop-blur">
+    <div className="min-h-screen bg-[#faf9f6] text-[#1a1a1a] flex flex-col font-sans">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b border-amber-100 bg-white/80 backdrop-blur">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-[#f59e0b] transition-colors">
+          <Link href="/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-amber-500 transition-colors">
             <ArrowLeft className="h-4 w-4" />
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full" />
-            <span className="font-extrabold text-[#f59e0b]">HealConnect</span>
+            <span className="font-extrabold text-amber-500">HealConnect</span>
           </Link>
+          <div className="text-sm font-semibold text-gray-600">My Profile</div>
         </div>
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl space-y-6">
-        <h1 className="text-2xl font-extrabold text-[#1a1a1a]">My Profile</h1>
 
-        {/* Photo */}
-        <Card className="bg-white border border-yellow-100 shadow-sm">
-          <CardContent className="p-6 flex items-center gap-6">
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] flex items-center justify-center text-white text-2xl font-bold overflow-hidden shadow">
+        {/* ═══ PROFILE HEADER CARD ═══ */}
+        <Card className="bg-white border-0 shadow-lg rounded-2xl overflow-hidden">
+          <div className="h-20 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 relative">
+            <div className="absolute -bottom-12 left-6">
+              <div className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-xl border-4 border-white bg-white">
                 {profile.photoUrl ? (
-                  <img src={profile.photoUrl} alt={profile.name || 'Profile'} className="w-full h-full object-cover" />
+                  <img src={profile.photoUrl} alt={profile.name || ''} className="w-full h-full object-cover" />
                 ) : (
-                  initials
+                  <div className="w-full h-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-3xl font-bold">
+                    {initials}
+                  </div>
+                )}
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="absolute bottom-0 right-0 w-8 h-8 bg-amber-500 hover:bg-amber-600 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110"
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                </button>
+                <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
+              </div>
+            </div>
+          </div>
+          <div className="pt-16 px-6 pb-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-xl font-extrabold text-gray-900">{profile.name || 'Your Name'}</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500">{profile.email}</span>
+                  {profile.isEmailVerified && (
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold gap-1 rounded-full px-2">
+                      <Check className="w-3 h-3" /> Verified
+                    </Badge>
+                  )}
+                </div>
+                {profile.phone && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-500">{profile.phone}</span>
+                  </div>
                 )}
               </div>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="absolute bottom-0 right-0 w-7 h-7 bg-[#f59e0b] hover:bg-[#d97706] rounded-full flex items-center justify-center text-white shadow transition-colors">
-                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-              </button>
-              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
-            </div>
-            <div>
-              <p className="font-semibold text-[#1a1a1a]">{profile.name || 'Your Name'}</p>
-              <p className="text-sm text-gray-500">{profile.email}</p>
-              {profile.isEmailVerified && (
-                <Badge variant="outline" className="mt-1 text-xs border-yellow-300 text-[#d97706] bg-yellow-50">✓ Verified</Badge>
+              {!profile.isEmailVerified && (
+                <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50 gap-1">
+                  <Shield className="w-3 h-3" /> Verify Email
+                </Badge>
               )}
             </div>
-          </CardContent>
+          </div>
         </Card>
 
-        {/* Basic Info */}
-        <Card className="bg-white border border-yellow-100 shadow-sm">
-          <CardHeader className="pb-3"><CardTitle className="text-base text-[#1a1a1a]">Basic Information</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <Field label="Full Name"><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Your full name" className={INPUT_CLS} /></Field>
-            <Field label="Phone"><input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+91 9876543210" className={INPUT_CLS} /></Field>
-            <Field label="Date of Birth"><input type="date" value={form.dob} onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))} className={INPUT_CLS} /></Field>
-            <Field label="Birth Place"><input value={form.birthPlace} onChange={(e) => setForm((f) => ({ ...f, birthPlace: e.target.value }))} placeholder="City, Country" className={INPUT_CLS} /></Field>
-            <Field label="Gender">
-              <select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))} className={INPUT_CLS}>
-                <option value="">Prefer not to say</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="non-binary">Non-binary</option>
-                <option value="prefer_not_to_say">Prefer not to say</option>
-              </select>
-            </Field>
-          </CardContent>
+        {/* ═══ BASIC INFORMATION ═══ */}
+        <Card className="bg-white border border-amber-100 shadow-sm rounded-2xl overflow-hidden">
+          <div className="px-6 pt-5 pb-3 border-b border-amber-50">
+            <div className="flex items-center gap-2">
+              <User className="w-5 h-5 text-amber-500" />
+              <h2 className="text-lg font-bold text-gray-900">Basic Information</h2>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5 ml-7">Update your personal details</p>
+          </div>
+          <div className="p-6 space-y-5">
+            {/* Full Name */}
+            <div>
+              <label className={LABEL_CLS}><User className="w-3 h-3 inline mr-1 text-amber-500" /> Full Name</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Your full name"
+                className={INPUT_CLS}
+              />
+            </div>
+
+            {/* Phone + DOB Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLS}><Phone className="w-3 h-3 inline mr-1 text-amber-500" /> Phone</label>
+                <input
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="+91 9876543210"
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}><CalendarDays className="w-3 h-3 inline mr-1 text-amber-500" /> Date of Birth</label>
+                <input
+                  type="date"
+                  value={form.dob}
+                  onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+                  className={INPUT_CLS}
+                />
+              </div>
+            </div>
+
+            {/* Birth Place + Gender Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL_CLS}><MapPin className="w-3 h-3 inline mr-1 text-amber-500" /> Birth Place</label>
+                <input
+                  value={form.birthPlace}
+                  onChange={(e) => setForm((f) => ({ ...f, birthPlace: e.target.value }))}
+                  placeholder="City, Country"
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}><Sun className="w-3 h-3 inline mr-1 text-amber-500" /> Gender</label>
+                <select
+                  value={form.gender}
+                  onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+                  className={INPUT_CLS}
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="non-binary">Non-binary</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </Card>
 
-        {/* Wellness Interests */}
-        <Card className="bg-white border border-yellow-100 shadow-sm">
-          <CardHeader className="pb-3"><CardTitle className="text-base text-[#1a1a1a]">Wellness Interests</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
+        {/* ═══ WELLNESS INTERESTS ═══ */}
+        <Card className="bg-white border border-amber-100 shadow-sm rounded-2xl overflow-hidden">
+          <div className="px-6 pt-5 pb-3 border-b border-amber-50">
+            <div className="flex items-center gap-2">
+              <Heart className="w-5 h-5 text-amber-500" />
+              <h2 className="text-lg font-bold text-gray-900">Wellness Interests</h2>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5 ml-7">Select topics you care about</p>
+          </div>
+          <div className="p-6">
+            <div className="flex flex-wrap gap-2.5">
               {WELLNESS_OPTIONS.map((opt) => (
-                <button key={opt} onClick={() => toggleInterest(opt)} className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${interests.includes(opt) ? 'bg-[#f59e0b] text-white border-[#f59e0b]' : 'bg-yellow-50 text-gray-600 border-yellow-200 hover:border-yellow-400 hover:text-[#1a1a1a]'}`}>
+                <button
+                  key={opt}
+                  onClick={() => toggleInterest(opt)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                    interests.includes(opt)
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-200'
+                      : 'bg-white text-gray-600 border-amber-200 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50'
+                  }`}
+                >
                   {opt}
                 </button>
               ))}
             </div>
-          </CardContent>
+          </div>
         </Card>
 
+        {/* ═══ ERROR / SAVE ═══ */}
         {error && (
-          <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-            <X className="h-4 w-4 shrink-0" /> {error}
+          <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-5 py-3.5">
+            <X className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        <Button onClick={handleSave} disabled={saving} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 rounded-full h-11 font-bold">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : saved ? <Check className="h-4 w-4 mr-2" /> : null}
-          {saved ? 'Saved!' : saving ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </main>
-    </div>
-  );
-}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white border-0 rounded-full h-12 font-bold shadow-lg shadow-amber-200 transition-all"
+          >
+            {saving ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : saved ? (
+              <><Check className="h-5 w-5 mr-2" /> Saved!</>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+          <Link href="/dashboard">
+            <Button variant="outline" className="border-amber-200 text-gray-600 hover:text-amber-700 hover:bg-amber-50 rounded-full h-12 px-6">
+              Cancel
+            </Button>
+          </Link>
+        </div>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="text-xs text-gray-500 mb-1.5 block">{label}</label>
-      {children}
+      </main>
     </div>
   );
 }
