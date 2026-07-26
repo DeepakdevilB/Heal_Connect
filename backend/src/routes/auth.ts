@@ -707,7 +707,7 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       select: {
         id: true, email: true, name: true, phone: true,
         isEmailVerified: true, isPhoneVerified: true,
-        provider: true, createdAt: true,
+        provider: true, createdAt: true, photoUrl: true,
       },
     });
 

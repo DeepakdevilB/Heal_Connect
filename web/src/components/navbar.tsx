@@ -20,6 +20,8 @@ import {
   Gem,
   Users,
 } from 'lucide-react';
+import { tokenStore, authApi, practitionersApi } from '@/lib/api';
+import { getAvatarUrl, getPractitionerAvatar } from '@/lib/utils';
 
 type MenuItem = { label: string; href: string; Icon: ElementType };
 
@@ -62,6 +64,31 @@ export default function Navbar() {
   const langRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { lang, setLang } = useLang();
+  
+  const [userProfile, setUserProfile] = useState<{ photoUrl: string | null; role: string; id: string; name: string | null } | null>(null);
+
+  useEffect(() => {
+    const token = tokenStore.getAccess();
+    if (!token) return;
+    const role = localStorage.getItem('hc_role');
+    if (role === 'practitioner') {
+      const pid = localStorage.getItem('hc_pid');
+      if (pid) {
+        practitionersApi.get(pid).then((res) => {
+          if (res.success && res.data) {
+            setUserProfile({ photoUrl: res.data.practitioner.photoUrl, role: 'practitioner', id: pid, name: res.data.practitioner.name });
+          }
+        });
+      }
+    } else {
+      authApi.me(token).then((res) => {
+        if (res.success && res.data) {
+          const u = (res.data as any).user;
+          setUserProfile({ photoUrl: u.photoUrl, role: 'user', id: u.id, name: u.name });
+        }
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -338,12 +365,19 @@ export default function Navbar() {
             </div>
 
             {/* Profile icon */}
-            <Link href="/login">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}>
-                <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-                  <circle cx="12" cy="8" r="4" />
-                  <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                </svg>
+            <Link href={userProfile ? (userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard') : '/login'}>
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer overflow-hidden border-2 ${isDark ? 'border-white/20 hover:border-amber-400' : 'border-gray-200 hover:border-amber-400'}`}>
+                {userProfile ? (
+                  <img
+                    src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.id) : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                )}
               </div>
             </Link>
           </div>
