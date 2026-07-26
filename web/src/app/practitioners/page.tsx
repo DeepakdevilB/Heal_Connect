@@ -8,6 +8,7 @@ import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield, Globe
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import Navbar from '@/components/navbar';
 import { getPractitionerAvatar } from '@/lib/utils';
 
 interface Practitioner {
@@ -75,20 +76,9 @@ export default function PractitionersPage() {
 
   return (
     <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
-      <header className="sticky top-0 z-50 w-full border-b border-yellow-100 bg-white/80 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
-            <span className="text-xl font-extrabold text-[#f59e0b]">HealConnect</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/login"><Button variant="ghost" size="sm" className="text-gray-600 hover:text-[#f59e0b]">Log in</Button></Link>
-            <Link href="/signup"><Button size="sm" className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 rounded-full px-5 font-semibold">Sign Up Free</Button></Link>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-[#1a1a1a] mb-1">Find Your Healer</h1>
           <p className="text-gray-500">{total} verified practitioners available</p>

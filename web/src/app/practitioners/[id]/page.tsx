@@ -114,11 +114,11 @@ export default function PractitionerDetailPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-yellow-100/80 bg-white/80 backdrop-blur-md transition-all">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/practitioners" className="flex items-center gap-2 text-gray-600 hover:text-[#f59e0b] transition-colors group">
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-[#f59e0b] transition-colors group bg-transparent border-none cursor-pointer">
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full shadow-sm" />
             <span className="font-extrabold text-[#f59e0b] tracking-tight">HealConnect</span>
-          </Link>
+          </button>
         </div>
       </header>
 
