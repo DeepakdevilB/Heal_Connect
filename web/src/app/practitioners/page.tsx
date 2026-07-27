@@ -8,7 +8,9 @@ import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield, Globe
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getPractitionerAvatar } from '@/lib/utils';
+import { getAvatarUrl } from '@/lib/utils';
+import Navbar from '@/components/navbar';
+import { tokenStore } from '@/lib/api';
 
 interface Practitioner {
   id: string;
@@ -75,18 +77,7 @@ export default function PractitionersPage() {
 
   return (
     <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
-      <header className="sticky top-0 z-50 w-full border-b border-yellow-100 bg-white/80 backdrop-blur">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
-            <span className="text-xl font-extrabold text-[#f59e0b]">HealConnect</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/login"><Button variant="ghost" size="sm" className="text-gray-600 hover:text-[#f59e0b]">Log in</Button></Link>
-            <Link href="/signup"><Button size="sm" className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0 rounded-full px-5 font-semibold">Sign Up Free</Button></Link>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="mb-8">
@@ -192,7 +183,7 @@ export default function PractitionersPage() {
 
 function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
   const router = useRouter();
-  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.id);
+  const avatarSrc = getAvatarUrl(p.name, p.photoUrl);
 
   return (
     <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all cursor-pointer rounded-2xl overflow-hidden group h-full">
@@ -253,10 +244,10 @@ function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
               <span className="text-xs text-gray-400">/min</span>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); const isLoggedIn = !!tokenStore.getAccess(); router.push(isLoggedIn ? `/practitioners/${p.id}` : '/login'); }}>
                 <MessageCircle className="h-3.5 w-3.5" /> Chat
               </Button>
-              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); const isLoggedIn = !!tokenStore.getAccess(); router.push(isLoggedIn ? `/practitioners/${p.id}` : '/login'); }}>
                 <Phone className="h-3.5 w-3.5" /> Call
               </Button>
             </div>

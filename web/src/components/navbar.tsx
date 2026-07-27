@@ -19,7 +19,11 @@ import {
   Zap,
   Gem,
   Users,
+  Wallet,
+  LogOut,
+  User
 } from 'lucide-react';
+import { authApi, walletApi, tokenStore } from '@/lib/api';
 
 type MenuItem = { label: string; href: string; Icon: ElementType };
 
@@ -27,23 +31,23 @@ const MENU_SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: 'Consult',
     items: [
-      { label: 'Consultations', href: '/login', Icon: Sparkles },
-      { label: 'Horoscope', href: '/signup', Icon: Star },
+      { label: 'Consultations', href: '/practitioners', Icon: Sparkles },
+      { label: 'Horoscope', href: '/horoscope', Icon: Star },
     ],
   },
   {
-    title: 'Free Tools',
+    title: 'Free Services',
     items: [
-      { label: 'Free Services', href: '/signup', Icon: Wand2 },
-      { label: 'Calculators', href: '/signup', Icon: Calculator },
-      { label: 'Panchang', href: '/signup', Icon: CalendarDays },
+      { label: 'Numerology', href: '/signup', Icon: Wand2 },
+      { label: 'Kundli', href: '/kundli', Icon: Sparkles },
     ],
   },
   {
     title: 'More',
     items: [
       { label: 'Shop', href: '/signup', Icon: ShoppingBag },
-      { label: 'Blog', href: '/signup', Icon: BookOpen },
+      { label: 'Blog', href: '/blog', Icon: BookOpen },
+      { label: 'Reviews', href: '/reviews', Icon: Star },
     ],
   },
 ];
@@ -62,6 +66,55 @@ export default function Navbar() {
   const langRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { lang, setLang } = useLang();
+
+  // Logged-in state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [userData, setUserData] = useState<{ id: string; name: string | null; email: string | null; photoUrl?: string | null } | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    const token = tokenStore.getAccess();
+    if (token) {
+      setIsLoggedIn(true);
+      authApi.me(token).then((res) => {
+        if (res.success && res.data) {
+          setUserData((res.data as any).user);
+        }
+      }).catch(() => {
+        tokenStore.clear();
+        setIsLoggedIn(false);
+      });
+
+      walletApi.getBalance(token).then((res) => {
+        if (res.success && res.data) {
+          setWalletBalance(res.data.wallet.balance);
+        }
+      });
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    tokenStore.clear();
+    localStorage.removeItem('hc_role');
+    setIsLoggedIn(false);
+    setUserData(null);
+    setWalletBalance(null);
+    window.location.href = '/';
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -234,7 +287,7 @@ export default function Navbar() {
                   key={val}
                   onClick={() => setTheme(val)}
                   className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1 ${
-                    theme === val ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
+                    mounted && theme === val ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -337,15 +390,92 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Profile icon */}
-            <Link href="/login">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}>
-                <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-                  <circle cx="12" cy="8" r="4" />
-                  <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                </svg>
+            {/* Profile / Logged-in Area */}
+            {mounted && isLoggedIn ? (
+              <div className="flex items-center gap-3">
+                {/* Wallet Balance */}
+                <Link href="/dashboard/wallet">
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[13px] font-bold transition-all ${
+                    isDark ? 'border-white/20 bg-white/5 hover:bg-white/10 text-amber-400' : 'border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700'
+                  }`}>
+                    <Wallet className="w-3.5 h-3.5" />
+                    <span>{walletBalance !== null ? `₹${walletBalance.toFixed(2)}` : '...'}</span>
+                  </div>
+                </Link>
+
+                {/* Profile Dropdown */}
+                <div className="relative" ref={profileMenuRef}>
+                  <button
+                    onClick={() => setShowProfileMenu(prev => !prev)}
+                    className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center font-bold text-xs border transition-all ${
+                      isDark ? 'border-white/20 bg-amber-500 text-white' : 'border-amber-200 bg-gradient-to-br from-amber-500 to-orange-500 text-white'
+                    }`}
+                  >
+                    {userData?.photoUrl ? (
+                      <img src={userData.photoUrl} alt={userData.name || 'User'} className="w-full h-full object-cover" />
+                    ) : userData?.name ? (
+                      userData.name.charAt(0).toUpperCase()
+                    ) : (
+                      <User className="w-4 h-4" />
+                    )}
+                  </button>
+                  
+                  {showProfileMenu && (
+                    <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-xl border overflow-hidden z-50 ${
+                      isDark ? 'bg-[#1a1a1a] border-white/10' : 'bg-white border-gray-100'
+                    }`}>
+                      <div className={`px-4 py-2 border-b text-xs ${
+                        isDark ? 'border-white/10 bg-white/5 text-gray-400' : 'border-gray-100 bg-amber-50/50 text-gray-500'
+                      }`}>
+                        <p className="font-bold text-gray-900 truncate">{userData?.name || 'Healer'}</p>
+                        <p className="truncate">{userData?.email || ''}</p>
+                      </div>
+                      <div className="p-1">
+                        <Link
+                          href="/dashboard/profile"
+                          onClick={() => setShowProfileMenu(false)}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                            isDark ? 'text-gray-300 hover:bg-white/10' : 'text-gray-700 hover:bg-amber-50'
+                          }`}
+                        >
+                          <User className="w-3.5 h-3.5 text-amber-500" />
+                          My Profile
+                        </Link>
+                        <Link
+                          href="/dashboard/wallet"
+                          onClick={() => setShowProfileMenu(false)}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                            isDark ? 'text-gray-300 hover:bg-white/10' : 'text-gray-700 hover:bg-amber-50'
+                          }`}
+                        >
+                          <Wallet className="w-3.5 h-3.5 text-amber-500" />
+                          My Wallet
+                        </Link>
+                        <button
+                          onClick={handleSignOut}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-colors text-left text-red-600 ${
+                            isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'
+                          }`}
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </Link>
+            ) : (
+              /* Logged Out Profile Link */
+              <Link href="/login">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}>
+                  <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                    <circle cx="12" cy="8" r="4" />
+                    <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                </div>
+              </Link>
+            )}
           </div>
         </header>
       </div>

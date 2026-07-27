@@ -51,7 +51,7 @@ function LoginInner() {
         localStorage.removeItem('hc_role');
         localStorage.removeItem('hc_practitioner_id');
         localStorage.removeItem('hc_practitioner_name');
-        router.push('/dashboard');
+        router.push('/');
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }

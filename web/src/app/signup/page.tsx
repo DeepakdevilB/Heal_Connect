@@ -52,7 +52,7 @@ export default function SignupPage() {
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.removeItem('hc_role');
         setSuccess('Account created!');
-        setTimeout(() => router.push('/dashboard'), 1500);
+        setTimeout(() => router.push('/'), 1500);
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }

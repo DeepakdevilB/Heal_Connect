@@ -19,6 +19,7 @@ router.post(
   async (req: AuthRequest, res: Response) => {
     const { practitionerId, type } = req.body as { practitionerId: string; type: string };
     const userId = req.user!.userId;
+    console.log('CREATE SESSION BODY:', req.body);
 
     // Block practitioners from creating sessions as users
     if (req.user!.practitionerId) {
