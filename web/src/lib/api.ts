@@ -248,7 +248,7 @@ export const sessionsApi = {
     }),
 
   get: (token: string, sessionId: string) =>
-    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
+    request<{ session: { id: string; status: string; type: string; practitionerId: string; userId: string; practitioner: PractitionerProfile; user: { id: string; name: string | null; photoUrl: string | null } } }>(
       `/api/sessions/${sessionId}`,
       { headers: authHeader(token) }
     ),

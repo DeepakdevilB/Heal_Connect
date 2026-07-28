@@ -72,6 +72,12 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
       // Notify the other party that someone joined
       socket.to(`room:${sessionId}`).emit('peer_joined', { sessionId });
+
+      // Check if both users are in the room to start the timer
+      const room = io!.sockets.adapter.rooms.get(`room:${sessionId}`);
+      if (room && room.size >= 2) {
+        io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+      }
     });
 
     // ── Send message ─────────────────────────────────────────────────────────
@@ -121,11 +127,15 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
     socket.on('disconnect', () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       if (practitionerId) {
-        prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
-          .then(() => {
-            io!.emit('practitioner_status', { practitionerId, isOnline: false });
-          })
-          .catch(console.error);
+        // Only set offline if no other sockets are connected for this practitioner
+        const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
+        if (roomSize === 0) {
+          prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
+            .then(() => {
+              io!.emit('practitioner_status', { practitionerId, isOnline: false });
+            })
+            .catch(console.error);
+        }
       }
     });
   });

@@ -85,6 +85,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       practitioner: {
         select: { id: true, name: true, photoUrl: true, specialties: true, isOnline: true, perMinuteRate: true },
       },
+      user: {
+        select: { id: true, name: true, photoUrl: true },
+      },
     },
   });
 
@@ -114,13 +117,18 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
   });
 
   getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'ended_by_user' });
+  getIO()?.to(`practitioner_${session.practitionerId}`).emit('session_terminated', { sessionId, reason: 'ended_by_user' });
 
   res.json({ success: true, data: { session: updated } });
 });
 
 // GET /api/sessions/practitioner/active — for expert dashboard
 router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.userId;
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
   const sessions = await prisma.session.findMany({
     where: { practitionerId, status: 'ACTIVE' },
     include: { user: { select: { id: true, name: true, photoUrl: true } } },
@@ -131,7 +139,12 @@ router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Re
 
 // GET /api/sessions/practitioner/history — session history + earnings
 router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.userId;
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+  
   const sessions = await prisma.session.findMany({
     where: { practitionerId, status: 'COMPLETED' },
     include: { user: { select: { id: true, name: true, photoUrl: true } } },

@@ -16,16 +16,20 @@ export default function SessionPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionType, setSessionType] = useState<string | null>(null);
-  const [practitioner, setPractitioner] = useState<PractitionerProfile | null>(null);
+  const [peer, setPeer] = useState<any>(null); // The other person in the chat
+  const [isExpert, setIsExpert] = useState(false);
+  const [activeSession, setActiveSession] = useState<any>(null);
   const [tab, setTab] = useState<Tab>('chat');
 
   useEffect(() => {
     const token = tokenStore.getAccess();
     if (!token) { router.push('/login'); return; }
 
+    let currentJwtUserId = '';
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      setUserId(payload.userId);
+      currentJwtUserId = payload.userId;
+      setUserId(currentJwtUserId);
     } catch {
       router.push('/login');
       return;
@@ -37,19 +41,34 @@ export default function SessionPage() {
       }
     });
 
-    // Fetch session to get practitioner info
+    // Fetch session to get peer info
     sessionsApi.get(token, sessionId).then((res) => {
       if (res.success && res.data) {
-        setPractitioner(res.data.session.practitioner);
+        const session = res.data.session;
+        setActiveSession(session);
+        
+        // If our JWT userId matches the session's practitioner's userId, we are the expert.
+        // Wait, sessions API returns practitioner { id, name ... } and user { id, name ... }
+        // The practitioner ID is NOT the user ID. But wait! The JWT payload has userId and practitionerId.
+        // It's safer to just parse practitionerId from JWT, or check if currentJwtUserId === session.userId.
+        const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+        const isPractitioner = tokenPayload.practitionerId === session.practitionerId;
+        setIsExpert(isPractitioner);
+        
+        if (isPractitioner) {
+          setPeer(session.user);
+        } else {
+          setPeer(session.practitioner);
+        }
       }
     });
   }, [router, sessionId]);
 
-  if (!userId) return null;
+  if (!userId || !peer) return null;
 
   const showCallTab = sessionType === 'AUDIO' || sessionType === 'VIDEO';
-  const initials = practitioner?.name
-    ? practitioner.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  const initials = peer?.name
+    ? peer.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
     : '?';
 
   return (
@@ -61,12 +80,12 @@ export default function SessionPage() {
           <ArrowLeft className="h-5 w-5 text-gray-600" />
         </Button>
 
-        {/* Practitioner avatar */}
+        {/* Peer avatar */}
         <div className="relative shrink-0">
-          {practitioner?.photoUrl ? (
+          {peer?.photoUrl ? (
             <Image
-              src={practitioner.photoUrl}
-              alt={practitioner.name}
+              src={peer.photoUrl}
+              alt={peer.name || 'User'}
               width={38}
               height={38}
               className="rounded-full object-cover"
@@ -76,7 +95,7 @@ export default function SessionPage() {
               {initials}
             </div>
           )}
-          {practitioner?.isOnline && (
+          {peer?.isOnline !== undefined && peer.isOnline && (
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />
           )}
         </div>
@@ -84,10 +103,10 @@ export default function SessionPage() {
         {/* Name + status */}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-[#1a1a1a] truncate">
-            {practitioner?.name ?? 'Loading...'}
+            {peer?.name ?? 'Loading...'}
           </p>
           <p className="text-xs text-gray-400 truncate">
-            {practitioner?.specialties?.slice(0, 2).join(' · ') ?? sessionId.slice(0, 8) + '...'}
+            {peer?.specialties?.slice(0, 2).join(' · ') ?? sessionId.slice(0, 8) + '...'}
           </p>
         </div>
 
@@ -125,7 +144,7 @@ export default function SessionPage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {tab === 'chat' ? (
-          <ChatWindow sessionId={sessionId} currentUserId={userId} />
+          <ChatWindow sessionId={sessionId} currentUserId={isExpert ? activeSession?.practitionerId : userId} />
         ) : (
           <AudioCallScreen sessionId={sessionId} />
         )}
