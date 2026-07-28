@@ -34,15 +34,9 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
     console.log(`🔌 Connected: ${socket.id} user=${userId} practitioner=${practitionerId ?? 'none'}`);
 
-    // Expert comes online when they connect
+    // Join practitioner room (but do NOT force them online automatically)
     if (practitionerId) {
       socket.join(`practitioner_${practitionerId}`);
-      prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: true } })
-        .then(() => {
-          // Broadcast to all connected clients that this expert is now online
-          io!.emit('practitioner_status', { practitionerId, isOnline: true });
-        })
-        .catch(console.error);
     }
 
     // User joins their personal room
