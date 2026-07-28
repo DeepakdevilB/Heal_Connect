@@ -97,7 +97,7 @@ const LOCAL_AVATARS = [
 ];
 
 export function getPractitionerAvatar(photoUrl: string | null | undefined, id: string): string {
-  if (photoUrl && photoUrl.startsWith('/')) return photoUrl;
+  if (photoUrl && (photoUrl.startsWith('/') || photoUrl.startsWith('http'))) return photoUrl;
   const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return LOCAL_AVATARS[hash % LOCAL_AVATARS.length];
 }

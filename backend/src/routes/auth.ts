@@ -242,7 +242,20 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     await prisma.refreshToken.update({ where: { id: stored.id }, data: { isRevoked: true } });
-    const { accessToken, refreshToken: newRefreshToken } = await issueTokens(payload.userId, payload.email);
+    
+    // Preserve practitionerId if it exists in the original payload
+    const newPayload: import('../lib/jwt').JwtPayload = { 
+      userId: payload.userId, 
+      ...(payload.email ? { email: payload.email } : {}),
+      ...(payload.practitionerId ? { practitionerId: payload.practitionerId } : {})
+    };
+    
+    const accessToken = signAccessToken(newPayload);
+    const newRefreshToken = signRefreshToken(newPayload);
+    
+    await prisma.refreshToken.create({
+      data: { userId: payload.userId, token: newRefreshToken, expiresAt: getRefreshTokenExpiry() },
+    });
 
     res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
   } catch {
