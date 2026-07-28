@@ -25,6 +25,18 @@ function getQuery(req: Request, key: string): string | undefined {
   return String(val);
 }
 
+// POST /api/practitioners/dev/verify (Temporary)
+router.post('/dev/verify', async (req: Request, res: Response) => {
+  try {
+    const result = await prisma.practitioner.updateMany({
+      data: { isVerified: true }
+    });
+    res.json({ success: true, message: `Successfully verified ${result.count} practitioners.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/practitioners
 router.get(
   '/',
