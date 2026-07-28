@@ -54,6 +54,7 @@ router.post(
         practitionerId,
         type,
         status: 'ACTIVE',
+        createdAt: new Date(),
       },
       include: { user: { select: { id: true, name: true, photoUrl: true } } },
     });
