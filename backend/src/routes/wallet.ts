@@ -44,6 +44,45 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ─── Temp Dev Recharge (Bypass Gateway) ─────────────────────────────────────────
+
+router.post(
+  '/dev-recharge',
+  requireAuth,
+  [body('amount').isNumeric().withMessage('Amount must be a number')],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    const { amount } = req.body as { amount: number };
+    try {
+      const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.userId } });
+      if (!wallet) {
+        res.status(404).json({ success: false, message: 'Wallet not found' });
+        return;
+      }
+      
+      const updatedWallet = await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: wallet.balance + amount }
+      });
+      
+      await prisma.transaction.create({
+        data: {
+          walletId: wallet.id,
+          amount,
+          type: 'RECHARGE',
+          status: 'SUCCESS',
+          referenceId: `dev_recharge_${Date.now()}`,
+        }
+      });
+      
+      res.json({ success: true, message: 'Dev recharge successful', data: { balance: updatedWallet.balance } });
+    } catch (err) {
+      console.error('Dev recharge error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
+
 // ─── Initialize Recharge (Create Razorpay Order) ──────────────────────────────
 
 router.post(
