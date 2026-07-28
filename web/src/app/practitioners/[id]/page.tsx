@@ -43,6 +43,7 @@ export default function PractitionerDetailPage() {
   const [p, setP] = useState<PractitionerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState(false);
+  const [chatting, setChatting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -83,6 +84,37 @@ export default function PractitionerDetailPage() {
       alert('Unable to connect to consultation service. Please try again.');
     } finally {
       setCalling(false);
+    }
+  };
+
+  const handleStartChat = async () => {
+    if (!p) return;
+    const token = tokenStore.getAccess();
+
+    if (!token) {
+      router.push(`/login?returnUrl=/practitioners/${p.id}`);
+      return;
+    }
+
+    setChatting(true);
+
+    try {
+      const res = await sessionsApi.create(token, p.id, 'CHAT');
+      if (res.success && res.data?.session) {
+        router.push(`/session/${res.data.session.id}`);
+      } else if (res.message === 'Invalid or expired token' || res.message === 'No token provided') {
+        tokenStore.clear();
+        router.push(`/login?returnUrl=/practitioners/${p.id}`);
+      } else {
+        const errorDetail = res.errors?.length
+          ? res.errors.map((e) => e.message).join(' · ')
+          : res.message || 'Failed to start chat. Please try again.';
+        alert(errorDetail);
+      }
+    } catch {
+      alert('Unable to connect to consultation service. Please try again.');
+    } finally {
+      setChatting(false);
     }
   };
 
@@ -138,7 +170,7 @@ export default function PractitionerDetailPage() {
                   />
                   {p.isOnline && (
                     <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white animate-bounce">
-                      <span className="w-2 h-2 bg-white rounded-full animate-ping" /> Online
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" /> Online
                     </span>
                   )}
                 </div>
@@ -190,8 +222,18 @@ export default function PractitionerDetailPage() {
                 <span className="text-sm text-gray-400 font-medium"> / minute</span>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all">
-                  <MessageCircle className="h-4 w-4" /> Chat
+                <Button 
+                  onClick={handleStartChat}
+                  disabled={!p.isOnline || chatting}
+                  variant="outline" 
+                  className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
+                >
+                  {chatting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                  Chat
                 </Button>
                 <Button
                   onClick={handleStartCall}

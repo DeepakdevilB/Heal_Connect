@@ -39,6 +39,21 @@ export function startBillingEngine() {
         }
 
         try {
+          if (!session.startTime) {
+            // Check if the session is abandoned (older than 5 minutes)
+            const sessionAge = Date.now() - new Date(session.createdAt).getTime();
+            if (sessionAge > 5 * 60 * 1000) {
+              console.log(`Cleaning up abandoned session ${session.id}...`);
+              await prisma.session.update({
+                where: { id: session.id },
+                data: { status: 'COMPLETED', endTime: new Date() },
+              });
+              // Emit so clients can clean up
+              getIO()?.to(`room:${session.id}`).emit('session_terminated', { sessionId: session.id, reason: 'abandoned' });
+              getIO()?.to(`practitioner_${session.practitionerId}`).emit('session_terminated', { sessionId: session.id, reason: 'abandoned' });
+            }
+            continue; // Skip billing for unstarted sessions
+          }
           await processSessionBilling(session);
         } catch (sessionErr) {
           console.error(`Error billing session ${session.id}:`, sessionErr);

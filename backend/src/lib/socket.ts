@@ -76,7 +76,18 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       // Check if both users are in the room to start the timer
       const room = io!.sockets.adapter.rooms.get(`room:${sessionId}`);
       if (room && room.size >= 2) {
-        io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+        prisma.session.findUnique({ where: { id: sessionId } }).then((session) => {
+          if (session && !session.startTime) {
+            prisma.session.update({
+              where: { id: sessionId },
+              data: { startTime: new Date() },
+            }).then(() => {
+              io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+            }).catch(console.error);
+          } else {
+            io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+          }
+        }).catch(console.error);
       }
     });
 
