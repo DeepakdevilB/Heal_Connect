@@ -53,6 +53,29 @@ export default function PractitionerDetailPage() {
         if (res.success && res.data) setP(res.data.practitioner as PractitionerDetail);
       })
       .finally(() => setLoading(false));
+
+    // Listen for real-time status updates
+    const token = tokenStore.getAccess();
+    if (token) {
+      import('@/lib/socket').then(({ getSocket }) => {
+        const socket = getSocket(token);
+        socket.on('practitioner_status', ({ practitionerId, isOnline }: { practitionerId: string; isOnline: boolean }) => {
+          if (practitionerId === id) {
+            setP((prev) => prev ? { ...prev, isOnline } : prev);
+          }
+        });
+      });
+    }
+
+    return () => {
+      import('@/lib/socket').then(({ getSocket }) => {
+        const token = tokenStore.getAccess();
+        if (token) {
+           const socket = getSocket(token);
+           socket.off('practitioner_status');
+        }
+      });
+    };
   }, [id]);
 
   const handleStartCall = async () => {
