@@ -144,34 +144,4 @@ router.delete('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     if (user?.photoUrl) await deleteProfilePhoto(user.photoUrl);
     await prisma.user.delete({ where: { id: req.user!.userId } });
     res.json({ success: true, message: 'Account deleted' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
 
-// POST /api/users/dev/cleanup (Temporary)
-router.post('/dev/cleanup', async (req: AuthRequest, res: Response) => {
-  try {
-    const { keepEmail, newBalance } = req.body;
-    if (!keepEmail) return res.status(400).json({ success: false, message: 'keepEmail is required' });
-
-    const usersToDelete = await prisma.user.findMany({ where: { email: { not: keepEmail } } });
-    await prisma.user.deleteMany({ where: { email: { not: keepEmail } } });
-
-    const keepUser = await prisma.user.findUnique({ where: { email: keepEmail } });
-    if (keepUser && newBalance !== undefined) {
-      await prisma.wallet.upsert({
-        where: { userId: keepUser.id },
-        update: { balance: newBalance },
-        create: { userId: keepUser.id, balance: newBalance, currency: 'INR' }
-      });
-    }
-
-    res.json({ success: true, message: `Deleted ${usersToDelete.length} users. Kept ${keepEmail} and set balance to ${newBalance}.` });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-export default router;
