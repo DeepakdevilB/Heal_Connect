@@ -145,30 +145,50 @@ router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: R
     return;
   }
   
-  const sessions = await prisma.session.findMany({
-    where: { practitionerId, status: 'COMPLETED' },
-    include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    orderBy: { endTime: 'desc' },
-    take: 20,
-  });
-  const totalEarnings = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+  const [sessions, aggregations] = await Promise.all([
+    prisma.session.findMany({
+      where: { practitionerId, status: 'COMPLETED' },
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { practitionerId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    })
+  ]);
+  
+  const totalEarnings = aggregations._sum.totalCost || 0;
   res.json({ success: true, data: { sessions, totalEarnings } });
 });
 
 // GET /api/sessions/user/history — user session history
 router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
-  const sessions = await prisma.session.findMany({
-    where: { userId, status: 'COMPLETED' },
-    include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
-    orderBy: { endTime: 'desc' },
-    take: 20,
-  });
-  const totalSpent = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
-  const totalMinutes = sessions.reduce((sum, s) => {
+  
+  const [sessions, aggregations, allUserSessions] = await Promise.all([
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { userId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    }),
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      select: { startTime: true, endTime: true }
+    })
+  ]);
+
+  const totalSpent = aggregations._sum.totalCost || 0;
+  const totalMinutes = allUserSessions.reduce((sum, s) => {
     if (!s.startTime || !s.endTime) return sum;
     return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
   }, 0);
+
   res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
 });
 
