@@ -4,8 +4,13 @@ import { Request } from 'express';
 const extractIp = (req: Request): string => {
   const xff = req.headers['x-forwarded-for'];
   if (xff) {
-    const ips = Array.isArray(xff) ? xff[0] : xff.toString();
-    return ips.split(',')[0].trim();
+    const ips = Array.isArray(xff) ? (xff[0] || '') : xff.toString();
+    if (ips) {
+      const parts = ips.split(',');
+      if (parts && parts[0]) {
+        return parts[0].trim();
+      }
+    }
   }
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
