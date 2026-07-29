@@ -49,8 +49,12 @@ export function startBillingEngine() {
                 data: { status: 'COMPLETED', endTime: new Date() },
               });
               // Emit so clients can clean up
-              getIO()?.to(`room:${session.id}`).emit('session_terminated', { sessionId: session.id, reason: 'abandoned' });
-              getIO()?.to(`practitioner_${session.practitionerId}`).emit('session_terminated', { sessionId: session.id, reason: 'abandoned' });
+              import('../lib/socket').then(({ emitConsultationEvent }) => {
+                emitConsultationEvent('session_terminated', session.id, { sessionId: session.id, reason: 'abandoned' }, {
+                  userId: session.userId,
+                  practitionerId: session.practitionerId
+                });
+              });
             }
             continue; // Skip billing for unstarted sessions
           }
@@ -168,5 +172,15 @@ async function terminateSession(sessionId: string) {
     },
   });
   // Emit session terminated event to disconnect clients
-  try { getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'insufficient_balance' }); } catch {}
+  try {
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (session) {
+      import('../lib/socket').then(({ emitConsultationEvent }) => {
+        emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'insufficient_balance' }, {
+          userId: session.userId,
+          practitionerId: session.practitionerId
+        });
+      });
+    }
+  } catch {}
 }

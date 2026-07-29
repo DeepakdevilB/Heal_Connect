@@ -116,8 +116,12 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
     data: { status: 'COMPLETED', endTime: new Date() },
   });
 
-  getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'ended_by_user' });
-  getIO()?.to(`practitioner_${session.practitionerId}`).emit('session_terminated', { sessionId, reason: 'ended_by_user' });
+  import('../lib/socket').then(({ emitConsultationEvent }) => {
+    emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'ended_by_user' }, {
+      userId: session.userId,
+      practitionerId: session.practitionerId
+    });
+  });
 
   res.json({ success: true, data: { session: updated } });
 });
