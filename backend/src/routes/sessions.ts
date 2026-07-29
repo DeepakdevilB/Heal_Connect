@@ -173,7 +173,7 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
 });
 
 // DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: Request, res: Response) => {
+router.post('/dev-clear', async (req: any, res: Response) => {
   try {
     const result = await prisma.session.updateMany({
       where: { status: 'ACTIVE' },

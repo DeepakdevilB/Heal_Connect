@@ -10,3 +10,11 @@ fetch('/api/wallet/dev-recharge', {
 })
 .then(res => res.json())
 .then(data => console.log("Success! Wallet balance updated to:", data.data.balance));
+
+
+// for clearing sessions shown as active
+fetch('/api/sessions/dev-clear', {
+  method: 'POST'
+})
+.then(res => res.json())
+.then(data => console.log(data.message));
