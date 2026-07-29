@@ -145,11 +145,17 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
     getSocket(token).emit('message_read', { sessionId, messageId });
   }, [sessionId]);
 
-  const endSession = useCallback(() => {
+  const endSession = useCallback(async () => {
     stopTimers();
     setSessionStatus('ended');
+    const token = tokenStore.getAccess();
+    if (token) {
+      import('@/lib/api').then(({ sessionsApi }) => {
+        sessionsApi.end(token, sessionId).catch(console.error);
+      });
+    }
     disconnectSocket();
-  }, []);
+  }, [sessionId]);
 
   return { messages, sessionStatus, otherTyping, elapsedSeconds, walletBalance, sendMessage, emitTypingStart, emitTypingStop, markRead, endSession };
 }

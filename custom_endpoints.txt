@@ -6,7 +6,7 @@ fetch('/api/wallet/dev-recharge', {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer ' + localStorage.getItem('hc_access')
   },
-  body: JSON.stringify({ amount: 10000 })
+  body: JSON.stringify({ amount: 9000 })
 })
 .then(res => res.json())
 .then(data => console.log("Success! Wallet balance updated to:", data.data.balance));
