@@ -53,6 +53,29 @@ export default function PractitionerDetailPage() {
         if (res.success && res.data) setP(res.data.practitioner as PractitionerDetail);
       })
       .finally(() => setLoading(false));
+
+    // Listen for real-time status updates
+    const token = tokenStore.getAccess();
+    if (token) {
+      import('@/lib/socket').then(({ getSocket }) => {
+        const socket = getSocket(token);
+        socket.on('practitioner_status', ({ practitionerId, isOnline }: { practitionerId: string; isOnline: boolean }) => {
+          if (practitionerId === id) {
+            setP((prev) => prev ? { ...prev, isOnline } : prev);
+          }
+        });
+      });
+    }
+
+    return () => {
+      import('@/lib/socket').then(({ getSocket }) => {
+        const token = tokenStore.getAccess();
+        if (token) {
+           const socket = getSocket(token);
+           socket.off('practitioner_status');
+        }
+      });
+    };
   }, [id]);
 
   const handleStartCall = async () => {
@@ -146,11 +169,11 @@ export default function PractitionerDetailPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-yellow-100/80 bg-white/80 backdrop-blur-md transition-all">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/practitioners" className="flex items-center gap-2 text-gray-600 hover:text-[#f59e0b] transition-colors group">
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-[#f59e0b] transition-colors group bg-transparent border-none cursor-pointer">
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full shadow-sm" />
             <span className="font-extrabold text-[#f59e0b] tracking-tight">HealConnect</span>
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -170,7 +193,7 @@ export default function PractitionerDetailPage() {
                   />
                   {p.isOnline && (
                     <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white animate-bounce">
-                      <span className="w-2 h-2 bg-white rounded-full animate-ping" /> Online
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" /> Online
                     </span>
                   )}
                 </div>
@@ -224,11 +247,16 @@ export default function PractitionerDetailPage() {
               <div className="flex gap-3">
                 <Button 
                   onClick={handleStartChat}
-                  disabled={chatting}
+                  disabled={!p.isOnline || chatting}
                   variant="outline" 
-                  className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all"
+                  className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
                 >
-                  <MessageCircle className="h-4 w-4" /> {chatting ? 'Connecting...' : 'Chat'}
+                  {chatting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                  Chat
                 </Button>
                 <Button
                   onClick={handleStartCall}

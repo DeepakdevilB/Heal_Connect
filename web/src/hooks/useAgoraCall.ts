@@ -45,6 +45,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
     }
   }, []);
 
+
   const join = useCallback(async (sessionId: string) => {
     setError(null);
     setCallState('joining');
@@ -104,6 +105,24 @@ export function useAgoraCall(): UseAgoraCallReturn {
     setRemoteUsers([]);
     setIsMuted(false);
   }, [cleanup]);
+
+  // Listen for backend termination
+  useEffect(() => {
+    const token = tokenStore.getAccess();
+    if (!token) return;
+    
+    let socket: any = null;
+    const handleTerminated = () => leave();
+    
+    import('@/lib/socket').then(({ getSocket }) => {
+      socket = getSocket(token);
+      socket.on('session_terminated', handleTerminated);
+    });
+
+    return () => {
+      if (socket) socket.off('session_terminated', handleTerminated);
+    };
+  }, [leave]);
 
   const toggleMute = useCallback(() => {
     if (!localTrackRef.current) return;

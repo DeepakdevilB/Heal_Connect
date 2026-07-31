@@ -78,7 +78,13 @@ export default function AudioCallScreen({ sessionId }: Props) {
             <Button
               size="lg"
               className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90"
-              onClick={leave}
+              onClick={async () => {
+                await leave();
+                import('@/lib/api').then(({ sessionsApi, tokenStore }) => {
+                  const token = tokenStore.getAccess();
+                  if (token) sessionsApi.end(token, sessionId).catch(console.error);
+                });
+              }}
             >
               <PhoneOff className="h-6 w-6" />
             </Button>

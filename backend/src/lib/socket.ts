@@ -34,15 +34,9 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
     console.log(`🔌 Connected: ${socket.id} user=${userId} practitioner=${practitionerId ?? 'none'}`);
 
-    // Expert comes online when they connect
+    // Join practitioner room (but do NOT force them online automatically)
     if (practitionerId) {
       socket.join(`practitioner_${practitionerId}`);
-      prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: true } })
-        .then(() => {
-          // Broadcast to all connected clients that this expert is now online
-          io!.emit('practitioner_status', { practitionerId, isOnline: true });
-        })
-        .catch(console.error);
     }
 
     // User joins their personal room
@@ -72,6 +66,23 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
       // Notify the other party that someone joined
       socket.to(`room:${sessionId}`).emit('peer_joined', { sessionId });
+
+      // Check if both users are in the room to start the timer
+      const room = io!.sockets.adapter.rooms.get(`room:${sessionId}`);
+      if (room && room.size >= 2) {
+        prisma.session.findUnique({ where: { id: sessionId } }).then((session) => {
+          if (session && !session.startTime) {
+            prisma.session.update({
+              where: { id: sessionId },
+              data: { startTime: new Date() },
+            }).then(() => {
+              io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+            }).catch(console.error);
+          } else {
+            io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+          }
+        }).catch(console.error);
+      }
     });
 
     // ── Send message ─────────────────────────────────────────────────────────
@@ -121,11 +132,15 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
     socket.on('disconnect', () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
       if (practitionerId) {
-        prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
-          .then(() => {
-            io!.emit('practitioner_status', { practitionerId, isOnline: false });
-          })
-          .catch(console.error);
+        // Only set offline if no other sockets are connected for this practitioner
+        const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
+        if (roomSize === 0) {
+          prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
+            .then(() => {
+              io!.emit('practitioner_status', { practitionerId, isOnline: false });
+            })
+            .catch(console.error);
+        }
       }
     });
   });

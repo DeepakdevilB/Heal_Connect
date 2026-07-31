@@ -39,6 +39,25 @@ export function startBillingEngine() {
         }
 
         try {
+          if (!session.startTime) {
+            // Check if the session is abandoned (older than 5 minutes)
+            const sessionAge = Date.now() - new Date(session.createdAt).getTime();
+            if (sessionAge > 5 * 60 * 1000) {
+              console.log(`Cleaning up abandoned session ${session.id}...`);
+              await prisma.session.update({
+                where: { id: session.id },
+                data: { status: 'COMPLETED', endTime: new Date() },
+              });
+              // Emit so clients can clean up
+              import('../lib/socket').then(({ emitConsultationEvent }) => {
+                emitConsultationEvent('session_terminated', session.id, { sessionId: session.id, reason: 'abandoned' }, {
+                  userId: session.userId,
+                  practitionerId: session.practitionerId
+                });
+              });
+            }
+            continue; // Skip billing for unstarted sessions
+          }
           await processSessionBilling(session);
         } catch (sessionErr) {
           console.error(`Error billing session ${session.id}:`, sessionErr);
@@ -153,5 +172,15 @@ async function terminateSession(sessionId: string) {
     },
   });
   // Emit session terminated event to disconnect clients
-  try { getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'insufficient_balance' }); } catch {}
+  try {
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (session) {
+      import('../lib/socket').then(({ emitConsultationEvent }) => {
+        emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'insufficient_balance' }, {
+          userId: session.userId,
+          practitionerId: session.practitionerId
+        });
+      });
+    }
+  } catch {}
 }

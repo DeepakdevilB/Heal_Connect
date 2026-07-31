@@ -8,9 +8,8 @@ import { Search, Star, MessageCircle, Phone, SlidersHorizontal, X, Shield, Globe
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getAvatarUrl } from '@/lib/utils';
 import Navbar from '@/components/navbar';
-import { tokenStore } from '@/lib/api';
+import { getPractitionerAvatar } from '@/lib/utils';
 
 interface Practitioner {
   id: string;
@@ -79,7 +78,7 @@ export default function PractitionersPage() {
     <div className="min-h-screen bg-[#fffbf0] text-[#1a1a1a] flex flex-col font-sans">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-[#1a1a1a] mb-1">Find Your Healer</h1>
           <p className="text-gray-500">{total} verified practitioners available</p>
@@ -183,7 +182,7 @@ export default function PractitionersPage() {
 
 function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
   const router = useRouter();
-  const avatarSrc = getAvatarUrl(p.name, p.photoUrl);
+  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.id);
 
   return (
     <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all cursor-pointer rounded-2xl overflow-hidden group h-full">
@@ -244,10 +243,10 @@ function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
               <span className="text-xs text-gray-400">/min</span>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); const isLoggedIn = !!tokenStore.getAccess(); router.push(isLoggedIn ? `/practitioners/${p.id}` : '/login'); }}>
+              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
                 <MessageCircle className="h-3.5 w-3.5" /> Chat
               </Button>
-              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); const isLoggedIn = !!tokenStore.getAccess(); router.push(isLoggedIn ? `/practitioners/${p.id}` : '/login'); }}>
+              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
                 <Phone className="h-3.5 w-3.5" /> Call
               </Button>
             </div>

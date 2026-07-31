@@ -83,11 +83,16 @@ export default function ExpertDashboardPage() {
     socket.on('new_session_request', (data: ActiveSession) => {
       setSessions((prev) => prev.find((s) => s.id === data.id) ? prev : [data, ...prev]);
     });
+    
+    socket.on('session_terminated', ({ sessionId }: { sessionId: string }) => {
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    });
 
     const poll = setInterval(fetchSessions, 15000);
     return () => {
       clearInterval(poll);
       socket.off('new_session_request');
+      socket.off('session_terminated');
     };
   }, [router, fetchSessions]);
 

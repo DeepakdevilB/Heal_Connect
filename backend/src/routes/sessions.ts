@@ -55,7 +55,7 @@ router.post(
         practitionerId,
         type,
         status: 'ACTIVE',
-        startTime: new Date(),
+        createdAt: new Date(),
       },
       include: { user: { select: { id: true, name: true, photoUrl: true } } },
     });
@@ -86,6 +86,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       practitioner: {
         select: { id: true, name: true, photoUrl: true, specialties: true, isOnline: true, perMinuteRate: true },
       },
+      user: {
+        select: { id: true, name: true, photoUrl: true },
+      },
     },
   });
 
@@ -114,14 +117,23 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
     data: { status: 'COMPLETED', endTime: new Date() },
   });
 
-  getIO()?.to(`room:${sessionId}`).emit('session_terminated', { sessionId, reason: 'ended_by_user' });
+  import('../lib/socket').then(({ emitConsultationEvent }) => {
+    emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'ended_by_user' }, {
+      userId: session.userId,
+      practitionerId: session.practitionerId
+    });
+  });
 
   res.json({ success: true, data: { session: updated } });
 });
 
 // GET /api/sessions/practitioner/active — for expert dashboard
 router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.userId;
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
   const sessions = await prisma.session.findMany({
     where: { practitionerId, status: 'ACTIVE' },
     include: { user: { select: { id: true, name: true, photoUrl: true } } },
@@ -132,32 +144,71 @@ router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Re
 
 // GET /api/sessions/practitioner/history — session history + earnings
 router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.userId;
-  const sessions = await prisma.session.findMany({
-    where: { practitionerId, status: 'COMPLETED' },
-    include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    orderBy: { endTime: 'desc' },
-    take: 20,
-  });
-  const totalEarnings = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+  
+  const [sessions, aggregations] = await Promise.all([
+    prisma.session.findMany({
+      where: { practitionerId, status: 'COMPLETED' },
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { practitionerId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    })
+  ]);
+  
+  const totalEarnings = aggregations._sum.totalCost || 0;
   res.json({ success: true, data: { sessions, totalEarnings } });
 });
 
 // GET /api/sessions/user/history — user session history
 router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
-  const sessions = await prisma.session.findMany({
-    where: { userId, status: 'COMPLETED' },
-    include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
-    orderBy: { endTime: 'desc' },
-    take: 20,
-  });
-  const totalSpent = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
-  const totalMinutes = sessions.reduce((sum, s) => {
+  
+  const [sessions, aggregations, allUserSessions] = await Promise.all([
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { userId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    }),
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      select: { startTime: true, endTime: true }
+    })
+  ]);
+
+  const totalSpent = aggregations._sum.totalCost || 0;
+  const totalMinutes = allUserSessions.reduce((sum, s) => {
     if (!s.startTime || !s.endTime) return sum;
     return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
   }, 0);
+
   res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
+});
+
+// DEV TEMP: Clear stuck active sessions
+router.post('/dev-clear', async (req: any, res: Response) => {
+  try {
+    const result = await prisma.session.updateMany({
+      where: { status: 'ACTIVE' },
+      data: { status: 'COMPLETED', endTime: new Date() }
+    });
+    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
 });
 
 export default router;

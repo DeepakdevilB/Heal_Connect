@@ -57,6 +57,10 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
     socket.emit('join_room', { sessionId });
 
     socket.on('joined_room', () => {
+      setSessionStatus('connecting'); // Wait for peer before becoming active
+    });
+
+    socket.on('session_started', () => {
       setSessionStatus('active');
       // Stop any existing timers before starting new ones (Strict Mode safety)
       if (timerRef.current) clearInterval(timerRef.current);
@@ -99,6 +103,7 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
 
     return () => {
       socket.off('joined_room');
+      socket.off('session_started');
       socket.off('message_history');
       socket.off('new_message');
       socket.off('typing_update');
@@ -140,11 +145,17 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
     getSocket(token).emit('message_read', { sessionId, messageId });
   }, [sessionId]);
 
-  const endSession = useCallback(() => {
+  const endSession = useCallback(async () => {
     stopTimers();
     setSessionStatus('ended');
+    const token = tokenStore.getAccess();
+    if (token) {
+      import('@/lib/api').then(({ sessionsApi }) => {
+        sessionsApi.end(token, sessionId).catch(console.error);
+      });
+    }
     disconnectSocket();
-  }, []);
+  }, [sessionId]);
 
   return { messages, sessionStatus, otherTyping, elapsedSeconds, walletBalance, sendMessage, emitTypingStart, emitTypingStop, markRead, endSession };
 }

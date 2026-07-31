@@ -2,7 +2,17 @@ import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
 
 const extractIp = (req: Request): string => {
-  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) {
+    const ips = Array.isArray(xff) ? (xff[0] || '') : xff.toString();
+    if (ips) {
+      const parts = ips.split(',');
+      if (parts && parts[0]) {
+        return parts[0].trim();
+      }
+    }
+  }
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
   if (match && match[1]) return match[1];
   return ip;
