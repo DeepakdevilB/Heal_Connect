@@ -88,6 +88,9 @@ model Practitioner {
   photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
+  // Denormalized rating stats — updated atomically on each review submission
+  avgRating      Float    @default(0)
+  reviewCount    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -114,7 +117,7 @@ model Transaction {
   amount      Float
   type        String   // "RECHARGE" | "DEBIT" | "REFUND"
   status      String   // "SUCCESS" | "PENDING" | "FAILED"
-  referenceId String?
+  referenceId String?  @unique  // idempotency: unique when set (partial index in migration)
   createdAt   DateTime @default(now())
 }
 
@@ -140,6 +143,7 @@ model Session {
   review         Review?
   messages       ChatMessage[]
   callFeedback   CallFeedback?
+  transcript     CallTranscript?
 }
 
 model Review {
@@ -182,4 +186,43 @@ model CallFeedback {
   createdAt    DateTime @default(now())
 
   @@index([userId])
+}
+
+// ─── Task 2: Call Transcript ──────────────────────────────────────────────────
+
+model CallTranscript {
+  id             String   @id @default(uuid())
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  transcriptText String
+  userId         String
+  practitionerId String
+  submittedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  flaggedContent FlaggedContent[]
+
+  @@index([sessionId])
+}
+
+// ─── Tasks 3 & 4: Flagged Content (moderation queue) ─────────────────────────
+
+model FlaggedContent {
+  id             String          @id @default(uuid())
+  source         String          // "CHAT" | "CALL_TRANSCRIPT"
+  contentSnippet String
+  reason         String          // "PHONE_NUMBER" | "HARASSMENT" | "SELF_HARM" | "OFF_PLATFORM_CONTACT"
+  status         String          @default("PENDING")  // "PENDING" | "RESOLVED" | "DISMISSED"
+  userId         String?
+  practitionerId String?
+  sessionId      String?
+  chatMessageId  String?
+  transcriptId   String?
+  transcript     CallTranscript? @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([status])
+  @@index([source])
+  @@index([sessionId])
 }

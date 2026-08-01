@@ -13,6 +13,7 @@ import walletRouter from './routes/wallet';
 import sessionsRouter from './routes/sessions';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
+import reviewsRouter from './routes/reviews';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -194,6 +195,7 @@ app.use('/api/wallet', walletRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
+app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 

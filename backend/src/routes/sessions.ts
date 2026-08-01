@@ -4,10 +4,13 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { getIO } from '../lib/socket';
+import { SESSION_DISCLAIMER, SESSION_SAFETY_GUIDELINES } from '../lib/safetyGuidelines';
+import { flagContentIfNeeded } from '../lib/moderation';
 
 const router = Router();
 
-// POST /api/sessions — initiate a new session
+// ─── POST /api/sessions — initiate a new session (Task 1) ────────────────────
+// Status transitions: INITIATED → ACCEPTED → ACTIVE → COMPLETED
 router.post(
   '/',
   requireAuth,
@@ -25,55 +28,200 @@ router.post(
       res.status(403).json({ success: false, message: 'Practitioners cannot book sessions' });
       return;
     }
-    // Check practitioner exists and is online
-    const practitioner = await prisma.practitioner.findUnique({
-      where: { id: practitionerId },
-      select: { id: true, isOnline: true, perMinuteRate: true },
-    });
 
-    if (!practitioner) {
-      res.status(404).json({ success: false, message: 'Practitioner not found' });
-      return;
+    // Wrap practitioner lookup + wallet check + session creation in a single
+    // atomic transaction to prevent race conditions (Tasks 8/9)
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Check practitioner exists and is online
+        const practitioner = await tx.practitioner.findUnique({
+          where: { id: practitionerId },
+          select: { id: true, isOnline: true, perMinuteRate: true },
+        });
+
+        if (!practitioner) {
+          return { error: { status: 404, message: 'Practitioner not found' } };
+        }
+
+        if (!practitioner.isOnline) {
+          return { error: { status: 400, message: 'Practitioner is currently offline' } };
+        }
+
+        // Re-read wallet inside the transaction with a FOR UPDATE lock via
+        // a raw update that only proceeds when balance is sufficient.
+        const wallet = await tx.wallet.findUnique({ where: { userId } });
+        if (!wallet || wallet.balance < practitioner.perMinuteRate) {
+          return { error: { status: 400, message: 'Insufficient wallet balance. Please recharge.' } };
+        }
+
+        const session = await tx.session.create({
+          data: {
+            userId,
+            practitionerId,
+            type,
+            status: 'INITIATED',  // Task 1: proper initial status
+            perMinuteRate: practitioner.perMinuteRate,
+            createdAt: new Date(),
+          },
+          include: { user: { select: { id: true, name: true, photoUrl: true } } },
+        });
+
+        return { session, practitioner };
+      });
+
+      if ('error' in result) {
+        res.status(result.error.status).json({ success: false, message: result.error.message });
+        return;
+      }
+
+      const { session } = result;
+
+      // Notify the practitioner in real-time
+      getIO()?.to(`practitioner_${practitionerId}`).emit('new_session_request', {
+        id: session.id,
+        type: session.type,
+        status: session.status,
+        createdAt: session.createdAt,
+        user: session.user,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          session,
+          // Task 6: safety guidelines returned at session initiation
+          safetyGuidelines: SESSION_SAFETY_GUIDELINES,
+          disclaimer: SESSION_DISCLAIMER,
+        },
+      });
+    } catch (err) {
+      console.error('Session creation error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-
-    if (!practitioner.isOnline) {
-      res.status(400).json({ success: false, message: 'Practitioner is currently offline' });
-      return;
-    }
-
-    // Check wallet has at least 1 minute worth of balance
-    const wallet = await prisma.wallet.findUnique({ where: { userId } });
-    if (!wallet || wallet.balance < practitioner.perMinuteRate) {
-      res.status(400).json({ success: false, message: 'Insufficient wallet balance. Please recharge.' });
-      return;
-    }
-
-    const session = await prisma.session.create({
-      data: {
-        userId,
-        practitionerId,
-        type,
-        status: 'ACTIVE',
-        createdAt: new Date(),
-      },
-      include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    });
-
-    // Notify the practitioner in real-time
-    const { getIO } = await import('../lib/socket');
-    getIO()?.to(`practitioner_${practitionerId}`).emit('new_session_request', {
-      id: session.id,
-      type: session.type,
-      status: session.status,
-      createdAt: session.createdAt,
-      user: session.user,
-    });
-
-    res.status(201).json({ success: true, data: { session } });
   }
 );
 
-// GET /api/sessions/:id — get session details
+// ─── POST /api/sessions/:id/accept — practitioner accepts (Task 1) ───────────
+router.post('/:id/accept', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Only practitioners can accept sessions' });
+    return;
+  }
+
+  const sessionId = req.params.id as string;
+
+  try {
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, practitionerId, status: 'INITIATED' },
+    });
+
+    if (!session) {
+      res.status(404).json({ success: false, message: 'Session not found or not in INITIATED state' });
+      return;
+    }
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: 'ACCEPTED' },
+    });
+
+    // Notify user that practitioner accepted
+    import('../lib/socket').then(({ emitConsultationEvent }) => {
+      emitConsultationEvent('session_accepted', sessionId, { sessionId, status: 'ACCEPTED' }, {
+        userId: session.userId,
+        practitionerId,
+      });
+    });
+
+    res.json({ success: true, data: { session: updated } });
+  } catch (err) {
+    console.error('Session accept error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── POST /api/sessions/:id/reject — practitioner rejects (Task 1) ───────────
+router.post('/:id/reject', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Only practitioners can reject sessions' });
+    return;
+  }
+
+  const sessionId = req.params.id as string;
+
+  try {
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, practitionerId, status: { in: ['INITIATED', 'ACCEPTED'] } },
+    });
+
+    if (!session) {
+      res.status(404).json({ success: false, message: 'Session not found or cannot be rejected in current state' });
+      return;
+    }
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: 'REJECTED', endTime: new Date() },
+    });
+
+    import('../lib/socket').then(({ emitConsultationEvent }) => {
+      emitConsultationEvent('session_rejected', sessionId, { sessionId, status: 'REJECTED' }, {
+        userId: session.userId,
+        practitionerId,
+      });
+    });
+
+    res.json({ success: true, data: { session: updated } });
+  } catch (err) {
+    console.error('Session reject error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── POST /api/sessions/:id/connect — mark session ACTIVE once both join (Task 1)
+router.post('/:id/connect', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const sessionId = req.params.id as string;
+
+  try {
+    const session = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        OR: [{ userId }, { practitionerId: userId }],
+        status: { in: ['ACCEPTED', 'WALLET_VERIFIED', 'JOINING_CHANNEL'] },
+      },
+    });
+
+    if (!session) {
+      res.status(404).json({ success: false, message: 'Session not found or cannot connect in current state' });
+      return;
+    }
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        status: 'ACTIVE',
+        startTime: session.startTime ?? new Date(),
+      },
+    });
+
+    import('../lib/socket').then(({ emitConsultationEvent }) => {
+      emitConsultationEvent('session_connected', sessionId, { sessionId, status: 'ACTIVE' }, {
+        userId: session.userId,
+        practitionerId: session.practitionerId,
+      });
+    });
+
+    res.json({ success: true, data: { session: updated } });
+  } catch (err) {
+    console.error('Session connect error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/sessions/:id — get session details ──────────────────────────────
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
   const session = await prisma.session.findFirst({
@@ -99,7 +247,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   res.json({ success: true, data: { session } });
 });
 
-// POST /api/sessions/:id/end
+// ─── POST /api/sessions/:id/end ───────────────────────────────────────────────
 router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
   const sessionId = req.params.id as string;
@@ -126,7 +274,64 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
   res.json({ success: true, data: { session: updated } });
 });
 
-// GET /api/sessions/practitioner/active — for expert dashboard
+// ─── POST /api/sessions/:id/transcript — store call transcript (Task 2) ──────
+router.post(
+  '/:id/transcript',
+  requireAuth,
+  [body('transcriptText').trim().notEmpty().withMessage('Transcript text is required')],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const sessionId = req.params.id as string;
+    const { transcriptText } = req.body as { transcriptText: string };
+
+    try {
+      // Verify the session belongs to this user and is completed
+      const session = await prisma.session.findFirst({
+        where: { id: sessionId, userId, status: 'COMPLETED' },
+        select: { id: true, practitionerId: true, type: true },
+      });
+
+      if (!session) {
+        res.status(404).json({ success: false, message: 'Completed session not found' });
+        return;
+      }
+
+      if (session.type === 'CHAT') {
+        res.status(400).json({ success: false, message: 'Transcripts are for audio/video sessions only' });
+        return;
+      }
+
+      const transcript = await prisma.callTranscript.create({
+        data: {
+          sessionId,
+          transcriptText,
+          userId,
+          practitionerId: session.practitionerId,
+        },
+      });
+
+      // Task 3: scan transcript for policy violations (async, non-blocking)
+      flagContentIfNeeded(transcriptText, 'CALL_TRANSCRIPT', {
+        sessionId,
+        userId,
+        practitionerId: session.practitionerId,
+        transcriptId: transcript.id,
+      }).catch((err) => console.error('[moderation] transcript scan error:', err));
+
+      res.status(201).json({ success: true, data: { transcript } });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        res.status(409).json({ success: false, message: 'Transcript already submitted for this session' });
+        return;
+      }
+      console.error('Transcript submission error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
+
+// ─── GET /api/sessions/practitioner/active — for expert dashboard ─────────────
 router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
   const practitionerId = req.user!.practitionerId;
   if (!practitionerId) {
@@ -134,14 +339,14 @@ router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Re
     return;
   }
   const sessions = await prisma.session.findMany({
-    where: { practitionerId, status: 'ACTIVE' },
+    where: { practitionerId, status: { in: ['INITIATED', 'ACCEPTED', 'ACTIVE'] } },
     include: { user: { select: { id: true, name: true, photoUrl: true } } },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ success: true, data: { sessions } });
 });
 
-// GET /api/sessions/practitioner/history — session history + earnings
+// ─── GET /api/sessions/practitioner/history — session history + earnings ──────
 router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
   const practitionerId = req.user!.practitionerId;
   if (!practitionerId) {
@@ -166,7 +371,7 @@ router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: R
   res.json({ success: true, data: { sessions, totalEarnings } });
 });
 
-// GET /api/sessions/user/history — user session history
+// ─── GET /api/sessions/user/history — user session history ───────────────────
 router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
   

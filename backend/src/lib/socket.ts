@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyAccessToken } from './jwt';
 import { prisma } from './prisma';
+import { flagContentIfNeeded } from './moderation';
 
 let io: SocketIOServer | null = null;
 
@@ -105,6 +106,14 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       const message = await prisma.chatMessage.create({
         data: { sessionId, senderId, senderType, content: content.trim() },
       });
+
+      // Task 7: scan message for phone numbers / policy violations (async, non-blocking)
+      flagContentIfNeeded(content.trim(), 'CHAT', {
+        sessionId,
+        userId: senderId,
+        practitionerId: senderType === 'PRACTITIONER' ? senderId : session.practitionerId,
+        chatMessageId: message.id,
+      }).catch((err) => console.error('[moderation] chat scan error:', err));
 
       io!.to(`room:${sessionId}`).emit('new_message', { message });
     });
