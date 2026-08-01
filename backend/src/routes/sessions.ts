@@ -9,6 +9,15 @@ import { flagContentIfNeeded } from '../lib/moderation';
 
 const router = Router();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE ORDER MATTERS IN EXPRESS:
+//   Named collection routes  (/practitioner/active, /user/history …)  FIRST
+//   Then sub-resource routes (:id/accept, /:id/end …)
+//   Then the generic /:id catch-all GET LAST
+//   Otherwise "practitioner" is matched as :id and the named routes become
+//   unreachable (pre-existing bug — fixed here).
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── POST /api/sessions — initiate a new session (Task 1) ────────────────────
 // Status transitions: INITIATED → ACCEPTED → ACTIVE → COMPLETED
 router.post(
@@ -47,8 +56,7 @@ router.post(
           return { error: { status: 400, message: 'Practitioner is currently offline' } };
         }
 
-        // Re-read wallet inside the transaction with a FOR UPDATE lock via
-        // a raw update that only proceeds when balance is sufficient.
+        // Re-read wallet inside the transaction to prevent race conditions
         const wallet = await tx.wallet.findUnique({ where: { userId } });
         if (!wallet || wallet.balance < practitioner.perMinuteRate) {
           return { error: { status: 400, message: 'Insufficient wallet balance. Please recharge.' } };
@@ -100,6 +108,94 @@ router.post(
     }
   }
 );
+
+// ── Named collection routes — MUST come before /:id GET to avoid routing conflict ──
+
+// ─── GET /api/sessions/practitioner/active — for expert dashboard ─────────────
+router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+  const sessions = await prisma.session.findMany({
+    where: { practitionerId, status: { in: ['INITIATED', 'ACCEPTED', 'ACTIVE'] } },
+    include: { user: { select: { id: true, name: true, photoUrl: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: { sessions } });
+});
+
+// ─── GET /api/sessions/practitioner/history — session history + earnings ──────
+router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+
+  const [sessions, aggregations] = await Promise.all([
+    prisma.session.findMany({
+      where: { practitionerId, status: 'COMPLETED' },
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { practitionerId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    })
+  ]);
+
+  const totalEarnings = aggregations._sum.totalCost || 0;
+  res.json({ success: true, data: { sessions, totalEarnings } });
+});
+
+// ─── GET /api/sessions/user/history — user session history ───────────────────
+router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+
+  const [sessions, aggregations, allUserSessions] = await Promise.all([
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { userId, status: 'COMPLETED' },
+      _sum: { totalCost: true }
+    }),
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      select: { startTime: true, endTime: true }
+    })
+  ]);
+
+  const totalSpent = aggregations._sum.totalCost || 0;
+  const totalMinutes = allUserSessions.reduce((sum, s) => {
+    if (!s.startTime || !s.endTime) return sum;
+    return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
+  }, 0);
+
+  res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
+});
+
+// DEV TEMP: Clear stuck active sessions
+router.post('/dev-clear', async (req: any, res: Response) => {
+  try {
+    const result = await prisma.session.updateMany({
+      where: { status: 'ACTIVE' },
+      data: { status: 'COMPLETED', endTime: new Date() }
+    });
+    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+});
+
+// ── Parameterised sub-resource routes (:id/action) ───────────────────────────
 
 // ─── POST /api/sessions/:id/accept — practitioner accepts (Task 1) ───────────
 router.post('/:id/accept', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -221,32 +317,6 @@ router.post('/:id/connect', requireAuth, async (req: AuthRequest, res: Response)
   }
 });
 
-// ─── GET /api/sessions/:id — get session details ──────────────────────────────
-router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-  const userId = req.user!.userId;
-  const session = await prisma.session.findFirst({
-    where: {
-      id: req.params.id as string,
-      OR: [{ userId }, { practitionerId: userId }],
-    },
-    include: {
-      practitioner: {
-        select: { id: true, name: true, photoUrl: true, specialties: true, isOnline: true, perMinuteRate: true },
-      },
-      user: {
-        select: { id: true, name: true, photoUrl: true },
-      },
-    },
-  });
-
-  if (!session) {
-    res.status(404).json({ success: false, message: 'Session not found' });
-    return;
-  }
-
-  res.json({ success: true, data: { session } });
-});
-
 // ─── POST /api/sessions/:id/end ───────────────────────────────────────────────
 router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
@@ -331,88 +401,31 @@ router.post(
   }
 );
 
-// ─── GET /api/sessions/practitioner/active — for expert dashboard ─────────────
-router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.practitionerId;
-  if (!practitionerId) {
-    res.status(403).json({ success: false, message: 'Not a practitioner' });
-    return;
-  }
-  const sessions = await prisma.session.findMany({
-    where: { practitionerId, status: { in: ['INITIATED', 'ACCEPTED', 'ACTIVE'] } },
-    include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data: { sessions } });
-});
-
-// ─── GET /api/sessions/practitioner/history — session history + earnings ──────
-router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.practitionerId;
-  if (!practitionerId) {
-    res.status(403).json({ success: false, message: 'Not a practitioner' });
-    return;
-  }
-  
-  const [sessions, aggregations] = await Promise.all([
-    prisma.session.findMany({
-      where: { practitionerId, status: 'COMPLETED' },
-      include: { user: { select: { id: true, name: true, photoUrl: true } } },
-      orderBy: { endTime: 'desc' },
-      take: 20,
-    }),
-    prisma.session.aggregate({
-      where: { practitionerId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
-    })
-  ]);
-  
-  const totalEarnings = aggregations._sum.totalCost || 0;
-  res.json({ success: true, data: { sessions, totalEarnings } });
-});
-
-// ─── GET /api/sessions/user/history — user session history ───────────────────
-router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
+// ─── GET /api/sessions/:id — get session details ──────────────────────────────
+// MUST be declared AFTER all named routes above to avoid consuming them.
+router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
-  
-  const [sessions, aggregations, allUserSessions] = await Promise.all([
-    prisma.session.findMany({
-      where: { userId, status: 'COMPLETED' },
-      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
-      orderBy: { endTime: 'desc' },
-      take: 20,
-    }),
-    prisma.session.aggregate({
-      where: { userId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
-    }),
-    prisma.session.findMany({
-      where: { userId, status: 'COMPLETED' },
-      select: { startTime: true, endTime: true }
-    })
-  ]);
+  const session = await prisma.session.findFirst({
+    where: {
+      id: req.params.id as string,
+      OR: [{ userId }, { practitionerId: userId }],
+    },
+    include: {
+      practitioner: {
+        select: { id: true, name: true, photoUrl: true, specialties: true, isOnline: true, perMinuteRate: true },
+      },
+      user: {
+        select: { id: true, name: true, photoUrl: true },
+      },
+    },
+  });
 
-  const totalSpent = aggregations._sum.totalCost || 0;
-  const totalMinutes = allUserSessions.reduce((sum, s) => {
-    if (!s.startTime || !s.endTime) return sum;
-    return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
-  }, 0);
-
-  res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
-});
-
-// DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: any, res: Response) => {
-  try {
-    const result = await prisma.session.updateMany({
-      where: { status: 'ACTIVE' },
-      data: { status: 'COMPLETED', endTime: new Date() }
-    });
-    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  if (!session) {
+    res.status(404).json({ success: false, message: 'Session not found' });
+    return;
   }
+
+  res.json({ success: true, data: { session } });
 });
 
 export default router;
