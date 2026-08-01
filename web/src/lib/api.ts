@@ -256,6 +256,29 @@ export const sessionsApi = {
   end: (token: string, sessionId: string) =>
     request(`/api/sessions/${sessionId}/end`, { method: 'POST', headers: authHeader(token) }),
 
+  accept: (token: string, sessionId: string) =>
+    request(`/api/sessions/${sessionId}/accept`, { method: 'POST', headers: authHeader(token) }),
+
+  reject: (token: string, sessionId: string) =>
+    request(`/api/sessions/${sessionId}/reject`, { method: 'POST', headers: authHeader(token) }),
+
+  connect: (token: string, sessionId: string) =>
+    request(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
+
+  submitTranscript: (token: string, sessionId: string, transcriptText: string) =>
+    request(`/api/sessions/${sessionId}/transcript`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ transcriptText }),
+    }),
+
+  submitReview: (token: string, sessionId: string, rating: number, comment?: string) =>
+    request(`/api/sessions/${sessionId}/review`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ rating, comment }),
+    }),
+
   practitionerActive: (token: string) =>
     request<{ sessions: { id: string; type: string; status: string; createdAt: string; user: { id: string; name: string | null; photoUrl: string | null } }[] }>(
       '/api/sessions/practitioner/active',
@@ -273,6 +296,27 @@ export const sessionsApi = {
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
+};
+
+export const moderationApi = {
+  getFlagged: (token: string, queryParams?: { status?: string; source?: string; page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (queryParams?.status) q.append('status', queryParams.status);
+    if (queryParams?.source) q.append('source', queryParams.source);
+    if (queryParams?.page) q.append('page', String(queryParams.page));
+    if (queryParams?.limit) q.append('limit', String(queryParams.limit));
+    return request<{ items: any[]; pagination: { total: number; page: number; limit: number; pages: number } }>(
+      `/api/moderation/flagged?${q.toString()}`,
+      { headers: authHeader(token) }
+    );
+  },
+
+  updateFlag: (token: string, flagId: string, status: 'RESOLVED' | 'DISMISSED') =>
+    request(`/api/moderation/flagged/${flagId}`, {
+      method: 'PATCH',
+      headers: authHeader(token),
+      body: JSON.stringify({ status }),
+    }),
 };
 
 export const agoraApi = {
