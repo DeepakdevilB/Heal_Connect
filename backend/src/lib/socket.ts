@@ -21,9 +21,11 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
     try {
       const payload = verifyAccessToken(token);
       (socket as any).userId = payload.userId;
-      (socket as any).practitionerId = (payload as any).practitionerId ?? null;
+      (socket as any).practitionerId = payload.practitionerId ?? null;
+      console.log(`🔐 Socket auth: userId=${payload.userId} practitionerId=${payload.practitionerId ?? 'none'}`);
       next();
-    } catch {
+    } catch (err) {
+      console.error('Socket auth error:', err);
       next(new Error('Invalid token'));
     }
   });
@@ -67,22 +69,26 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       // Notify the other party that someone joined
       socket.to(`room:${sessionId}`).emit('peer_joined', { sessionId });
 
-      // Check if both users are in the room to start the timer
+      // Start session as soon as the first party joins (don't wait for both)
+      // If both are already in room, just emit; otherwise set startTime on first join
       const room = io!.sockets.adapter.rooms.get(`room:${sessionId}`);
-      if (room && room.size >= 2) {
-        prisma.session.findUnique({ where: { id: sessionId } }).then((session) => {
-          if (session && !session.startTime) {
-            prisma.session.update({
-              where: { id: sessionId },
-              data: { startTime: new Date() },
-            }).then(() => {
-              io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
-            }).catch(console.error);
-          } else {
+      const roomSize = room ? room.size : 1;
+
+      prisma.session.findUnique({ where: { id: sessionId } }).then((sess) => {
+        if (!sess) return;
+        if (!sess.startTime) {
+          // First joiner — set startTime and fire session_started to whole room
+          prisma.session.update({
+            where: { id: sessionId },
+            data: { startTime: new Date() },
+          }).then(() => {
             io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
-          }
-        }).catch(console.error);
-      }
+          }).catch(console.error);
+        } else {
+          // Session already started (second party joining later) — just notify them
+          io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+        }
+      }).catch(console.error);
     });
 
     // ── Send message ─────────────────────────────────────────────────────────

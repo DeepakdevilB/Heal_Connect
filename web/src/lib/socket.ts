@@ -6,14 +6,26 @@ const BACKEND_URL =
   'https://healconnect-backend-dqcsaqf4a6baffaz.centralindia-01.azurewebsites.net';
 
 let socket: Socket | null = null;
+let currentToken: string | null = null;
 
 export function getSocket(token: string): Socket {
-  if (socket?.connected) return socket;
+  // Reuse if connected with same token
+  if (socket?.connected && currentToken === token) return socket;
 
+  // Disconnect stale socket before creating a new one
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+
+  currentToken = token;
   socket = io(BACKEND_URL, {
     auth: { token },
     transports: ['websocket', 'polling'],
     autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
   });
 
   return socket;
@@ -22,4 +34,5 @@ export function getSocket(token: string): Socket {
 export function disconnectSocket() {
   socket?.disconnect();
   socket = null;
+  currentToken = null;
 }

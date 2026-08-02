@@ -235,6 +235,19 @@ router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const payload = verifyRefreshToken(refreshToken);
 
+    // Practitioners don't store refresh tokens in DB — just re-sign directly
+    if (payload.practitionerId) {
+      const newPayload: import('../lib/jwt').JwtPayload = {
+        userId: payload.userId,
+        practitionerId: payload.practitionerId,
+        ...(payload.email ? { email: payload.email } : {}),
+      };
+      const accessToken = signAccessToken(newPayload);
+      const newRefreshToken = signRefreshToken(newPayload);
+      res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
+      return;
+    }
+
     const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
     if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
       res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
@@ -243,7 +256,6 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     await prisma.refreshToken.update({ where: { id: stored.id }, data: { isRevoked: true } });
     
-    // Preserve practitionerId if it exists in the original payload
     const newPayload: import('../lib/jwt').JwtPayload = { 
       userId: payload.userId, 
       ...(payload.email ? { email: payload.email } : {}),
@@ -252,7 +264,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     
     const accessToken = signAccessToken(newPayload);
     const newRefreshToken = signRefreshToken(newPayload);
-    
+
     await prisma.refreshToken.create({
       data: { userId: payload.userId, token: newRefreshToken, expiresAt: getRefreshTokenExpiry() },
     });

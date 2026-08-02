@@ -29,7 +29,7 @@ export default function GoogleCallbackPage() {
         return;
       }
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-      router.replace('/');
+      router.replace('/dashboard');
     }).catch((err) => {
       setError(`Google sign-in failed. Please try again. [${err.message || String(err)}]`);
     });

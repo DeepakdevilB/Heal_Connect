@@ -54,10 +54,27 @@ export default function ExpertDashboardPage() {
   useEffect(() => {
     const token = tokenStore.getAccess();
     const role = localStorage.getItem('hc_role');
-    const pid = localStorage.getItem('hc_practitioner_id');
+    const pid = localStorage.getItem('hc_practitioner_id') || localStorage.getItem('hc_pid');
 
     if (!token || role !== 'practitioner' || !pid) {
-      router.replace('/expert/login');
+      router.replace('/login?role=expert');
+      return;
+    }
+
+    // Verify the token actually has practitionerId embedded
+    try {
+      const jwtPayload = JSON.parse(atob(token.split('.')[1]));
+      if (!jwtPayload.practitionerId) {
+        // Token is a user token, not a practitioner token — force re-login
+        tokenStore.clear();
+        localStorage.removeItem('hc_role');
+        localStorage.removeItem('hc_practitioner_id');
+        localStorage.removeItem('hc_pid');
+        router.replace('/login?role=expert');
+        return;
+      }
+    } catch {
+      router.replace('/login?role=expert');
       return;
     }
 
@@ -82,13 +99,16 @@ export default function ExpertDashboardPage() {
     const socket = getSocket(token);
     socket.on('new_session_request', (data: ActiveSession) => {
       setSessions((prev) => prev.find((s) => s.id === data.id) ? prev : [data, ...prev]);
+      // Immediately refresh from server to ensure accuracy
+      fetchSessions();
     });
     
     socket.on('session_terminated', ({ sessionId }: { sessionId: string }) => {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     });
 
-    const poll = setInterval(fetchSessions, 15000);
+    // Poll every 10s to catch any missed socket events
+    const poll = setInterval(fetchSessions, 10000);
     return () => {
       clearInterval(poll);
       socket.off('new_session_request');

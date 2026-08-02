@@ -3,7 +3,6 @@ import { body } from 'express-validator';
 import { prisma } from '../lib/prisma';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
-import { getIO } from '../lib/socket';
 
 const router = Router();
 
@@ -26,7 +25,7 @@ router.post(
       res.status(403).json({ success: false, message: 'Practitioners cannot book sessions' });
       return;
     }
-    // Check practitioner exists and is online
+
     const practitioner = await prisma.practitioner.findUnique({
       where: { id: practitionerId },
       select: { id: true, isOnline: true, perMinuteRate: true },
@@ -42,7 +41,6 @@ router.post(
       return;
     }
 
-    // Check wallet has at least 1 minute worth of balance
     const wallet = await prisma.wallet.findUnique({ where: { userId } });
     if (!wallet || wallet.balance < practitioner.perMinuteRate) {
       res.status(400).json({ success: false, message: 'Insufficient wallet balance. Please recharge.' });
@@ -50,17 +48,11 @@ router.post(
     }
 
     const session = await prisma.session.create({
-      data: {
-        userId,
-        practitionerId,
-        type,
-        status: 'ACTIVE',
-        createdAt: new Date(),
-      },
+      data: { userId, practitionerId, type, status: 'ACTIVE', createdAt: new Date() },
       include: { user: { select: { id: true, name: true, photoUrl: true } } },
     });
 
-    // Notify the practitioner in real-time
+    // Notify practitioner in real-time
     const { getIO } = await import('../lib/socket');
     getIO()?.to(`practitioner_${practitionerId}`).emit('new_session_request', {
       id: session.id,
@@ -74,13 +66,104 @@ router.post(
   }
 );
 
+// ── IMPORTANT: All static sub-routes MUST come before /:id ──────────────────
+
+// GET /api/sessions/practitioner/active — for expert dashboard
+router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+  const sessions = await prisma.session.findMany({
+    where: { practitionerId, status: 'ACTIVE' },
+    include: { user: { select: { id: true, name: true, photoUrl: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: { sessions } });
+});
+
+// GET /api/sessions/practitioner/history
+router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+
+  const [sessions, aggregations] = await Promise.all([
+    prisma.session.findMany({
+      where: { practitionerId, status: 'COMPLETED' },
+      include: { user: { select: { id: true, name: true, photoUrl: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { practitionerId, status: 'COMPLETED' },
+      _sum: { totalCost: true },
+    }),
+  ]);
+
+  res.json({ success: true, data: { sessions, totalEarnings: aggregations._sum.totalCost || 0 } });
+});
+
+// GET /api/sessions/user/history
+router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+
+  const [sessions, aggregations, allUserSessions] = await Promise.all([
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
+      orderBy: { endTime: 'desc' },
+      take: 20,
+    }),
+    prisma.session.aggregate({
+      where: { userId, status: 'COMPLETED' },
+      _sum: { totalCost: true },
+    }),
+    prisma.session.findMany({
+      where: { userId, status: 'COMPLETED' },
+      select: { startTime: true, endTime: true },
+    }),
+  ]);
+
+  const totalMinutes = allUserSessions.reduce((sum, s) => {
+    if (!s.startTime || !s.endTime) return sum;
+    return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
+  }, 0);
+
+  res.json({ success: true, data: { sessions, totalSpent: aggregations._sum.totalCost || 0, totalMinutes } });
+});
+
+// DEV: Clear stuck active sessions
+router.post('/dev-clear', async (req: any, res: Response) => {
+  try {
+    const result = await prisma.session.updateMany({
+      where: { status: 'ACTIVE' },
+      data: { status: 'COMPLETED', endTime: new Date() },
+    });
+    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+});
+
+// ── Dynamic routes LAST ──────────────────────────────────────────────────────
+
 // GET /api/sessions/:id — get session details
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
+  const practitionerId = req.user!.practitionerId;
+
   const session = await prisma.session.findFirst({
     where: {
       id: req.params.id as string,
-      OR: [{ userId }, { practitionerId: userId }],
+      OR: [
+        { userId },
+        ...(practitionerId ? [{ practitionerId }] : []),
+      ],
     },
     include: {
       practitioner: {
@@ -103,10 +186,17 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // POST /api/sessions/:id/end
 router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
+  const practitionerId = req.user!.practitionerId;
   const sessionId = req.params.id as string;
 
   const session = await prisma.session.findFirst({
-    where: { id: sessionId, OR: [{ userId }, { practitionerId: userId }] },
+    where: {
+      id: sessionId,
+      OR: [
+        { userId },
+        ...(practitionerId ? [{ practitionerId }] : []),
+      ],
+    },
   });
 
   if (!session) { res.status(404).json({ success: false, message: 'Session not found' }); return; }
@@ -120,95 +210,11 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
   import('../lib/socket').then(({ emitConsultationEvent }) => {
     emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'ended_by_user' }, {
       userId: session.userId,
-      practitionerId: session.practitionerId
+      practitionerId: session.practitionerId,
     });
   });
 
   res.json({ success: true, data: { session: updated } });
-});
-
-// GET /api/sessions/practitioner/active — for expert dashboard
-router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.practitionerId;
-  if (!practitionerId) {
-    res.status(403).json({ success: false, message: 'Not a practitioner' });
-    return;
-  }
-  const sessions = await prisma.session.findMany({
-    where: { practitionerId, status: 'ACTIVE' },
-    include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data: { sessions } });
-});
-
-// GET /api/sessions/practitioner/history — session history + earnings
-router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  const practitionerId = req.user!.practitionerId;
-  if (!practitionerId) {
-    res.status(403).json({ success: false, message: 'Not a practitioner' });
-    return;
-  }
-  
-  const [sessions, aggregations] = await Promise.all([
-    prisma.session.findMany({
-      where: { practitionerId, status: 'COMPLETED' },
-      include: { user: { select: { id: true, name: true, photoUrl: true } } },
-      orderBy: { endTime: 'desc' },
-      take: 20,
-    }),
-    prisma.session.aggregate({
-      where: { practitionerId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
-    })
-  ]);
-  
-  const totalEarnings = aggregations._sum.totalCost || 0;
-  res.json({ success: true, data: { sessions, totalEarnings } });
-});
-
-// GET /api/sessions/user/history — user session history
-router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response) => {
-  const userId = req.user!.userId;
-  
-  const [sessions, aggregations, allUserSessions] = await Promise.all([
-    prisma.session.findMany({
-      where: { userId, status: 'COMPLETED' },
-      include: { practitioner: { select: { id: true, name: true, photoUrl: true, specialties: true } } },
-      orderBy: { endTime: 'desc' },
-      take: 20,
-    }),
-    prisma.session.aggregate({
-      where: { userId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
-    }),
-    prisma.session.findMany({
-      where: { userId, status: 'COMPLETED' },
-      select: { startTime: true, endTime: true }
-    })
-  ]);
-
-  const totalSpent = aggregations._sum.totalCost || 0;
-  const totalMinutes = allUserSessions.reduce((sum, s) => {
-    if (!s.startTime || !s.endTime) return sum;
-    return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
-  }, 0);
-
-  res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
-});
-
-// DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: any, res: Response) => {
-  try {
-    const result = await prisma.session.updateMany({
-      where: { status: 'ACTIVE' },
-      data: { status: 'COMPLETED', endTime: new Date() }
-    });
-    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
 });
 
 export default router;

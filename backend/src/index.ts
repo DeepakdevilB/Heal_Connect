@@ -13,6 +13,7 @@ import walletRouter from './routes/wallet';
 import sessionsRouter from './routes/sessions';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
+import adminRouter from './routes/admin';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -44,7 +45,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
 app.use(express.json({
@@ -194,6 +195,7 @@ app.use('/api/wallet', walletRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
+app.use('/api/admin', adminRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 
