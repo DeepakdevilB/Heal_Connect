@@ -172,7 +172,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-4 lg:p-6">
-          {children}
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
     </div>
@@ -195,15 +203,23 @@ export function StatCard({ label, value, icon: Icon, color = 'amber', change }: 
     rose: 'from-rose-400 to-pink-500',
   };
   return (
-    <motion.div whileHover={{ y: -2 }} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-md transition-all">
+    <motion.div
+      whileHover={{ y: -4, scale: 1.02 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      className="bg-white dark:bg-slate-800/90 backdrop-blur-md rounded-2xl p-5 border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-amber-200 dark:hover:border-amber-500/30 transition-all duration-300"
+    >
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[color] ?? colors.amber} flex items-center justify-center shadow-md`}>
+        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[color] ?? colors.amber} flex items-center justify-center shadow-md shadow-amber-500/10`}>
           <Icon className="w-5 h-5 text-white" />
         </div>
-        {change && <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${change.startsWith('+') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>{change}</span>}
+        {change && (
+          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border border-emerald-200/50 dark:border-emerald-500/20">
+            {change}
+          </span>
+        )}
       </div>
-      <p className="text-2xl font-black text-gray-900 dark:text-white mb-0.5">{value}</p>
-      <p className="text-xs font-semibold text-gray-500 dark:text-white/50">{label}</p>
+      <p className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">{value}</p>
+      <p className="text-xs font-bold text-gray-500 dark:text-white/60 mt-0.5">{label}</p>
     </motion.div>
   );
 }
