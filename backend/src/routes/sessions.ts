@@ -53,7 +53,6 @@ router.post(
     });
 
     // Notify practitioner in real-time
-    const { getIO } = await import('../lib/socket');
     getIO()?.to(`practitioner_${practitionerId}`).emit('new_session_request', {
       id: session.id,
       type: session.type,
@@ -62,7 +61,14 @@ router.post(
       user: session.user,
     });
 
-    res.status(201).json({ success: true, data: { session } });
+    res.status(201).json({
+      success: true,
+      data: {
+        session,
+        safetyGuidelines: SESSION_SAFETY_GUIDELINES,
+        disclaimer: SESSION_DISCLAIMER,
+      },
+    });
   }
 );
 
@@ -151,6 +157,61 @@ router.post('/dev-clear', async (req: any, res: Response) => {
 });
 
 // ── Dynamic routes LAST ──────────────────────────────────────────────────────
+
+// POST /api/sessions/:id/transcript — store call transcript
+router.post(
+  '/:id/transcript',
+  requireAuth,
+  [body('transcriptText').trim().notEmpty().withMessage('Transcript text is required')],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const sessionId = req.params.id as string;
+    const { transcriptText } = req.body as { transcriptText: string };
+
+    try {
+      const session = await prisma.session.findFirst({
+        where: { id: sessionId, userId, status: 'COMPLETED' },
+        select: { id: true, practitionerId: true, type: true },
+      });
+
+      if (!session) {
+        res.status(404).json({ success: false, message: 'Completed session not found' });
+        return;
+      }
+
+      if (session.type === 'CHAT') {
+        res.status(400).json({ success: false, message: 'Transcripts are for audio/video sessions only' });
+        return;
+      }
+
+      const transcript = await prisma.callTranscript.create({
+        data: {
+          sessionId,
+          transcriptText,
+          userId,
+          practitionerId: session.practitionerId,
+        },
+      });
+
+      flagContentIfNeeded(transcriptText, 'CALL_TRANSCRIPT', {
+        sessionId,
+        userId,
+        practitionerId: session.practitionerId,
+        transcriptId: transcript.id,
+      }).catch((err) => console.error('[moderation] transcript scan error:', err));
+
+      res.status(201).json({ success: true, data: { transcript } });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        res.status(409).json({ success: false, message: 'Transcript already submitted for this session' });
+        return;
+      }
+      console.error('Transcript submission error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
 
 // GET /api/sessions/:id — get session details
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {

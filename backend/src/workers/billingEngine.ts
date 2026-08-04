@@ -134,7 +134,26 @@ async function processSessionBilling(session: any) {
   }
 
   if (wallet.balance >= ratePerMinute) {
-    // Sufficient balance -> Atomically debit wallet and update session cost
+    // Sufficient balance — compute a cycle index to create an idempotency key.
+    // Tasks 8/9: Two engine instances that both pass the Redis lock check within
+    // the same 60-second billing window would both see timeSinceLastBill >= 60s.
+    // The cycleKey ensures only one of them can write the deduction for this cycle.
+    const cycleIndex = Math.floor((state.lastBilledAt) / BILLING_CYCLE_MS);
+    const cycleKey = `billing:cycle:${session.id}:${cycleIndex}`;
+
+    let cycleAlreadyBilled = false;
+    if (redis) {
+      // NX = only set if not exists; EX = expire after 90s (> billing interval)
+      const res = await redis.set(cycleKey, 'billed', 'EX', 90, 'NX');
+      cycleAlreadyBilled = res === null; // null means key already existed
+    }
+
+    if (cycleAlreadyBilled) {
+      console.log(`Billing cycle ${cycleIndex} already processed for session ${session.id} — skipping (idempotency)`);
+      return;
+    }
+
+    // Atomically debit wallet and update session cost
     await prisma.$transaction([
       prisma.wallet.update({
         where: { id: wallet.id },

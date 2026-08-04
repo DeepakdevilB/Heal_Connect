@@ -851,6 +851,10 @@ router.post(
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
 
+      await prisma.refreshToken.create({
+        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+      });
+
       res.json({
         success: true,
         message: 'Login successful',
@@ -866,9 +870,9 @@ router.post(
           role: 'practitioner',
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Practitioner login error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Internal server error: ' + (err?.message || String(err)), stack: err?.stack });
     }
   }
 );
