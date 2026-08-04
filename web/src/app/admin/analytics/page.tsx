@@ -1,195 +1,227 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, CalendarClock, DollarSign, MessageSquare, BarChart3 } from 'lucide-react';
+import {
+  BarChart3, TrendingUp, Users, Wallet, CalendarClock, MessageSquare,
+  Sparkles, Layers, RefreshCw
+} from 'lucide-react';
 import { AdminShell, StatCard } from '@/components/admin-shell';
-import { adminApi, type AdminAnalytics } from '@/lib/adminApi';
 
-export default function AnalyticsPage() {
-  const [data, setData] = useState<AdminAnalytics | null>(null);
+const ADMIN_KEY = 'healconnect-admin-2026';
+
+type AnalyticsData = {
+  chartData: Array<{
+    date: string;
+    users: number;
+    practitioners: number;
+    sessions: number;
+    revenue: number;
+    messages: number;
+  }>;
+  statusDistribution: Array<{ status: string; count: number }>;
+  topCategories: Array<{ category: string; count: number }>;
+};
+
+type ChatAnalyticsData = {
+  totalConversations: number;
+  messagesToday: number;
+  messagesThisWeek: number;
+  avgMessagesPerSession: number;
+  activeConversations: number;
+  conversationTimeline: Array<{ date: string; count: number }>;
+};
+
+export default function AdminAnalyticsPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [chatData, setChatData] = useState<ChatAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    adminApi.getAnalytics()
-      .then(res => {
-        if (res.success && res.data) setData(res.data);
-        else setError('Failed to load analytics');
-      })
-      .catch(() => setError('Could not reach backend'))
-      .finally(() => setLoading(false));
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const headers = { 'x-admin-key': ADMIN_KEY };
+      const [res, chatRes] = await Promise.all([
+        fetch('/api/admin/analytics/charts', { headers }).then((r) => r.json()).catch(() => null),
+        fetch('/api/admin/analytics/chat', { headers }).then((r) => r.json()).catch(() => null),
+      ]);
+
+      if (res?.success && res.data) {
+        setData(res.data);
+      }
+      if (chatRes?.success && chatRes.data) {
+        setChatData(chatRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch analytics:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const totalSessions = data
-    ? data.sessionsByType.CHAT + data.sessionsByType.AUDIO + data.sessionsByType.VIDEO
-    : 0;
+  useEffect(() => {
+    fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, 10000);
+    return () => clearInterval(interval);
+  }, [fetchAnalytics]);
 
-  const totalRevenue = data
-    ? data.revenueByDay.reduce((sum, d) => sum + d.revenue, 0)
-    : 0;
-
-  const newUsersThisWeek = data
-    ? data.userGrowth.reduce((sum, d) => sum + d.count, 0)
-    : 0;
-
-  const maxRevenue = data
-    ? Math.max(...data.revenueByDay.map(d => d.revenue), 1)
-    : 1;
+  const chartPoints = data?.chartData || [];
+  const maxUsers = Math.max(...chartPoints.map((d) => d.users), 1);
+  const maxSessions = Math.max(...chartPoints.map((d) => d.sessions), 1);
+  const maxRevenue = Math.max(...chartPoints.map((d) => d.revenue), 1);
+  const maxMessages = Math.max(...chartPoints.map((d) => d.messages), 1);
 
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Platform Analytics</h1>
-          <span className="text-xs text-gray-400 dark:text-white/40 font-semibold">Last 7 days — live data</span>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm">{error}</div>
-        )}
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Revenue (7d)" value={loading ? '…' : `₹${totalRevenue.toLocaleString()}`} icon={DollarSign} color="green" />
-          <StatCard label="New Users (7d)" value={loading ? '…' : newUsersThisWeek} icon={Users} color="blue" />
-          <StatCard label="Total Sessions (7d)" value={loading ? '…' : totalSessions} icon={CalendarClock} color="amber" />
-          <StatCard label="Chat Sessions" value={loading ? '…' : (data?.sessionsByType.CHAT ?? 0)} icon={MessageSquare} color="purple" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Revenue by Day */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-white/10 p-6 shadow-sm">
-            <h2 className="text-base font-extrabold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-amber-500" /> Revenue — Last 7 Days
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-amber-500" /> PostgreSQL Real Analytics Dashboard
             </h2>
-            {loading ? (
-              <div className="h-48 flex items-end justify-between gap-2">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className="w-full h-full bg-gray-100 dark:bg-white/5 rounded-t-lg animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              <div className="h-48 flex items-end justify-between gap-2">
-                {(data?.revenueByDay ?? []).map((d, i) => {
-                  const pct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0;
-                  return (
-                    <div key={i} className="w-full bg-gray-100 dark:bg-white/10 rounded-t-lg relative group flex flex-col justify-end" style={{ height: '100%' }}>
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${Math.max(pct, 2)}%` }}
-                        transition={{ duration: 0.8, delay: i * 0.08 }}
-                        className="w-full bg-gradient-to-t from-amber-500 to-orange-400 rounded-t-lg"
-                      />
-                      <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded whitespace-nowrap transition-opacity z-10">
-                        ₹{d.revenue.toLocaleString()}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex justify-between mt-3 text-xs text-gray-400 dark:text-white/40">
-              {(data?.revenueByDay ?? Array.from({ length: 7 }, (_, i) => ({ date: '' }))).map((d, i) => (
-                <span key={i}>{d.date ? new Date(d.date).toLocaleDateString('en-IN', { weekday: 'short' }) : '—'}</span>
-              ))}
+            <p className="text-xs text-gray-500 font-semibold mt-0.5">
+              Every chart and metric is generated dynamically from the live PostgreSQL database.
+            </p>
+          </div>
+          <button
+            onClick={fetchAnalytics}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-extrabold transition-all"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
+          </button>
+        </div>
+
+        {/* Chat Analytics Header Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatCard label="Total Chat Sessions" value={chatData?.totalConversations ?? 0} icon={MessageSquare} color="blue" />
+          <StatCard label="Messages Today" value={chatData?.messagesToday ?? 0} icon={Sparkles} color="green" />
+          <StatCard label="Messages This Week" value={chatData?.messagesThisWeek ?? 0} icon={TrendingUp} color="amber" />
+          <StatCard label="Avg Msgs / Session" value={chatData?.avgMessagesPerSession ?? 0} icon={Layers} color="purple" />
+          <StatCard label="Active Conversations" value={chatData?.activeConversations ?? 0} icon={CalendarClock} color="rose" />
+        </div>
+
+        {/* 30-Day User vs Practitioner Growth Chart */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">
+              User & Practitioner Registrations (Last 30 Days)
+            </h3>
+            <div className="flex items-center gap-4 text-xs font-bold">
+              <span className="flex items-center gap-1 text-blue-600"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Users</span>
+              <span className="flex items-center gap-1 text-purple-600"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Practitioners</span>
             </div>
           </div>
 
-          {/* Sessions by Type */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-white/10 p-6 shadow-sm">
-            <h2 className="text-base font-extrabold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-amber-500" /> Sessions by Type
-            </h2>
-            {loading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-8 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />
-                ))}
+          {chartPoints.length === 0 || chartPoints.every((d) => d.users === 0 && d.practitioners === 0) ? (
+            <div className="h-48 flex items-center justify-center border border-dashed border-gray-200 dark:border-white/10 rounded-xl">
+              <p className="text-xs text-gray-400 font-medium">No registration data available yet</p>
+            </div>
+          ) : (
+            <div className="h-48 flex items-end gap-1 pt-6 border-b border-gray-100 dark:border-white/10 pb-2 overflow-x-auto">
+              {chartPoints.map((d) => (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative min-w-[12px]">
+                  <div className="w-full flex items-end justify-center gap-0.5" style={{ height: '140px' }}>
+                    <div
+                      style={{ height: `${(d.users / maxUsers) * 130}px` }}
+                      className="w-1.5 bg-blue-500 rounded-t-sm group-hover:brightness-110 min-h-[2px]"
+                    />
+                    <div
+                      style={{ height: `${(d.practitioners / Math.max(maxUsers, 1)) * 130}px` }}
+                      className="w-1.5 bg-purple-500 rounded-t-sm group-hover:brightness-110 min-h-[2px]"
+                    />
+                  </div>
+                  <span className="text-[8px] font-bold text-gray-400 truncate">{d.date.slice(8)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Sessions & Revenue Grid */}
+        <div className="grid lg:grid-cols-2 gap-5">
+          {/* Sessions per Day */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Sessions per Day</h3>
+            {chartPoints.length === 0 || chartPoints.every((d) => d.sessions === 0) ? (
+              <div className="h-40 flex items-center justify-center border border-dashed border-gray-200 dark:border-white/10 rounded-xl">
+                <p className="text-xs text-gray-400 font-medium">No session data available yet</p>
               </div>
             ) : (
-              <div className="space-y-5">
-                {[
-                  { label: 'Chat',  value: data?.sessionsByType.CHAT  ?? 0, color: 'bg-amber-500' },
-                  { label: 'Audio', value: data?.sessionsByType.AUDIO ?? 0, color: 'bg-blue-500' },
-                  { label: 'Video', value: data?.sessionsByType.VIDEO ?? 0, color: 'bg-purple-500' },
-                ].map((item) => {
-                  const pct = totalSessions > 0 ? (item.value / totalSessions) * 100 : 0;
-                  return (
-                    <div key={item.label}>
-                      <div className="flex justify-between text-sm mb-1.5">
-                        <span className="font-semibold text-gray-700 dark:text-white/80">{item.label}</span>
-                        <span className="font-extrabold text-gray-900 dark:text-white">{item.value} ({pct.toFixed(0)}%)</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ duration: 1, delay: 0.3 }}
-                          className={`h-full ${item.color} rounded-full`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="h-40 flex items-end gap-1 pt-4 border-b border-gray-100 dark:border-white/10 pb-2 overflow-x-auto">
+                {chartPoints.slice(-14).map((d) => (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
+                    <div
+                      style={{ height: `${(d.sessions / maxSessions) * 110}px` }}
+                      className="w-full bg-gradient-to-t from-indigo-500 to-purple-400 rounded-t-sm min-h-[3px]"
+                    />
+                    <span className="text-[9px] font-bold text-gray-400">{d.date.slice(8)}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Top Practitioners */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-white/10 p-6 shadow-sm">
-            <h2 className="text-base font-extrabold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-amber-500" /> Top Practitioners by Revenue
-            </h2>
-            {loading ? (
-              <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-10 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)}</div>
-            ) : (data?.topPractitioners ?? []).length === 0 ? (
-              <p className="text-sm text-gray-400 dark:text-white/40 py-4 text-center">No session data yet.</p>
+          {/* Revenue per Day */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Revenue Trend (₹)</h3>
+            {chartPoints.length === 0 || chartPoints.every((d) => d.revenue === 0) ? (
+              <div className="h-40 flex items-center justify-center border border-dashed border-gray-200 dark:border-white/10 rounded-xl">
+                <p className="text-xs text-gray-400 font-medium">No revenue data available yet</p>
+              </div>
+            ) : (
+              <div className="h-40 flex items-end gap-1 pt-4 border-b border-gray-100 dark:border-white/10 pb-2 overflow-x-auto">
+                {chartPoints.slice(-14).map((d) => (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
+                    <div
+                      style={{ height: `${(d.revenue / maxRevenue) * 110}px` }}
+                      className="w-full bg-gradient-to-t from-emerald-500 to-green-400 rounded-t-sm min-h-[3px]"
+                    />
+                    <span className="text-[9px] font-bold text-gray-400">{d.date.slice(8)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status Breakdown & Top Booked Categories */}
+        <div className="grid lg:grid-cols-2 gap-5">
+          {/* Session Status Distribution */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 p-5 shadow-sm">
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white mb-4">Session Status Breakdown</h3>
+            {!data?.statusDistribution || data.statusDistribution.length === 0 ? (
+              <div className="py-10 text-center text-xs text-gray-400 font-medium">No session status data available yet</div>
             ) : (
               <div className="space-y-3">
-                {(data?.topPractitioners ?? []).map((p, i) => (
-                  <div key={p.id} className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-extrabold shrink-0">{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-extrabold text-gray-900 dark:text-white truncate">{p.name}</p>
-                    </div>
-                    <span className="text-sm font-extrabold text-emerald-600">₹{p.totalEarned.toLocaleString()}</span>
+                {data.statusDistribution.map((s) => (
+                  <div key={s.status} className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-gray-700 dark:text-white/80">{s.status}</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-extrabold">{s.count}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* User Growth */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-white/10 p-6 shadow-sm">
-            <h2 className="text-base font-extrabold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Users className="w-4 h-4 text-amber-500" /> New User Registrations (7d)
-            </h2>
-            {loading ? (
-              <div className="space-y-3">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-8 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)}</div>
+          {/* Chat Messages per Day */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-white/10 p-5 shadow-sm">
+            <h3 className="text-sm font-extrabold text-gray-900 dark:text-white mb-4">Daily Messages Sent</h3>
+            {chartPoints.length === 0 || chartPoints.every((d) => d.messages === 0) ? (
+              <div className="py-10 text-center text-xs text-gray-400 font-medium">No message data available yet</div>
             ) : (
-              <div className="space-y-2">
-                {(data?.userGrowth ?? []).map((d, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400 dark:text-white/40 w-16 shrink-0">
-                      {new Date(d.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}
-                    </span>
-                    <div className="flex-1 bg-gray-100 dark:bg-white/10 rounded-full h-2.5 overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: d.count > 0 ? `${Math.min((d.count / Math.max(...(data?.userGrowth ?? [{ count: 1 }]).map(x => x.count))) * 100, 100)}%` : '2%' }}
-                        transition={{ duration: 0.8, delay: i * 0.05 }}
-                        className="h-full bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full"
-                      />
-                    </div>
-                    <span className="text-xs font-extrabold text-gray-900 dark:text-white w-6 text-right">{d.count}</span>
+              <div className="h-36 flex items-end gap-1 pt-4 border-b border-gray-100 dark:border-white/10 pb-2 overflow-x-auto">
+                {chartPoints.slice(-14).map((d) => (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
+                    <div
+                      style={{ height: `${(d.messages / maxMessages) * 90}px` }}
+                      className="w-full bg-gradient-to-t from-amber-500 to-orange-400 rounded-t-sm min-h-[3px]"
+                    />
+                    <span className="text-[9px] font-bold text-gray-400">{d.date.slice(8)}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
-
         </div>
       </div>
     </AdminShell>

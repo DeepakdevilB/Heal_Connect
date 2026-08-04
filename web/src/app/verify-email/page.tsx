@@ -31,11 +31,14 @@ function VerifyEmailContent() {
 
     fetch(`${API_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}`)
       .then((r) => r.json())
-      .then((data: { success: boolean; message: string }) => {
+      .then((data: any) => {
         if (data.success) {
+          if (data.data?.accessToken && data.data?.refreshToken) {
+            tokenStore.setTokens(data.data.accessToken, data.data.refreshToken);
+          }
           setStatus('success');
           setMessage(data.message || 'Email verified successfully!');
-          setTimeout(() => router.push('/login'), 3000);
+          setTimeout(() => router.push('/dashboard'), 1500);
         } else {
           setStatus('error');
           setMessage(data.message || 'Verification failed. The link may have expired.');
@@ -71,10 +74,10 @@ function VerifyEmailContent() {
             <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
             <h1 className="text-2xl font-extrabold text-[#1a1a1a]">Email Verified!</h1>
             <p className="text-gray-500">{message}</p>
-            <p className="text-sm text-gray-400">Redirecting you to login in 3 seconds…</p>
-            <Link href="/login"
+            <p className="text-sm text-gray-400">Opening your dashboard now…</p>
+            <Link href="/dashboard"
               className="flex items-center justify-center w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full shadow-lg transition-colors">
-              Go to Login
+              Go to Dashboard
             </Link>
           </div>
         )}

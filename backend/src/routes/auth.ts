@@ -119,7 +119,7 @@ router.post(
       void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
 
       if (useEmail) {
-        // Send email verification (non-blocking — never crash registration)
+        console.log(`\n✉️  [VERIFICATION LINK FOR ${email}]: http://localhost:3000/verify-email?token=${rawEmailToken}\n`);
         void sendVerificationEmail(email, rawEmailToken).catch((e) =>
           console.error('Verification email failed:', e)
         );
@@ -188,11 +188,25 @@ router.post(
       // ── Block login until account is verified ──────────────────────────────
       const isVerified = user.isEmailVerified || user.isPhoneVerified;
       if (!isVerified) {
+        // Generate fresh verification token for unverified user attempting login
+        const rawToken = generateSecureToken();
+        const tokenHash = hashToken(rawToken);
+        const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerifyToken: tokenHash, emailVerifyExpiry },
+        });
+
+        console.log(`\n✉️  [LOGIN VERIFICATION LINK FOR ${user.email}]: http://localhost:3000/verify-email?token=${rawToken}\n`);
+        if (user.email) {
+          void sendVerificationEmail(user.email, rawToken).catch((e) => console.error('Verification email failed:', e));
+        }
+
         res.status(403).json({
           success: false,
-          message: 'Please verify your email or phone before logging in.',
+          message: `Please verify your email (${user.email}) before logging in. A new verification link has been sent to your email.`,
           code: 'UNVERIFIED_ACCOUNT',
-          data: { email: user.email, phone: user.phone },
+          data: { email: user.email, phone: user.phone, verifyUrl: `http://localhost:3000/verify-email?token=${rawToken}` },
         });
         return;
       }
@@ -455,7 +469,22 @@ router.get('/verify-email', async (req: Request, res: Response) => {
       data: { isEmailVerified: true, emailVerifyToken: null, emailVerifyExpiry: null },
     });
 
-    res.json({ success: true, message: 'Email verified successfully. You can now log in.' });
+    const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      data: {
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          isEmailVerified: true,
+        },
+      },
+    });
   } catch (err) {
     console.error('Email verification error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });

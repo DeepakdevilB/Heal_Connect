@@ -30,10 +30,13 @@ function LoginInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSuccess('');
+    setVerifyUrl(null);
     setLoading(true);
     try {
       if (role === 'expert') {
@@ -47,7 +50,13 @@ function LoginInner() {
         router.push('/expert/dashboard');
       } else {
         const res = await authApi.login({ email, password });
-        if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
+        if (!res.success || !res.data) {
+          setError(res.message || 'Login failed');
+          if (res.code === 'UNVERIFIED_ACCOUNT' && (res as any).data?.verifyUrl) {
+            setVerifyUrl((res as any).data.verifyUrl);
+          }
+          return;
+        }
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.removeItem('hc_role');
         localStorage.removeItem('hc_practitioner_id');
@@ -164,7 +173,19 @@ function LoginInner() {
               </div>
             )}
 
-            {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
+            {error && (
+              <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
+                <p className="font-semibold">{error}</p>
+                {verifyUrl && (
+                  <a
+                    href={verifyUrl}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white font-bold text-xs shadow-md transition-all"
+                  >
+                    ✦ Click Here to Verify Email Now →
+                  </a>
+                )}
+              </div>
+            )}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
             {mode === 'login' && (
