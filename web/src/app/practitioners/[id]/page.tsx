@@ -31,6 +31,7 @@ interface PractitionerDetail {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating: number;
   reviewCount: number;
   reviews: Review[];
