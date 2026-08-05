@@ -15,6 +15,7 @@ import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
 import migrateRouter from './routes/migrate';
+import adminRouter from './routes/admin';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -46,7 +47,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
 app.use(express.json({
@@ -198,6 +199,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
 app.use('/api/migrate', migrateRouter);
+app.use('/api/admin', adminRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 

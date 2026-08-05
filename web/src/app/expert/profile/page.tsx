@@ -54,8 +54,8 @@ export default function ExpertProfilePage() {
   useEffect(() => {
     const token = tokenStore.getAccess();
     const role = localStorage.getItem('hc_role');
-    const pid = localStorage.getItem('hc_practitioner_id');
-    if (!token || role !== 'practitioner' || !pid) { router.replace('/expert/login'); return; }
+    const pid = localStorage.getItem('hc_practitioner_id') || localStorage.getItem('hc_pid');
+    if (!token || role !== 'practitioner' || !pid) { router.replace('/login?role=expert'); return; }
     setPractitionerId(pid);
     practitionersApi.get(pid).then((res) => {
       if (!res.success || !res.data) { router.replace('/expert/login'); return; }
