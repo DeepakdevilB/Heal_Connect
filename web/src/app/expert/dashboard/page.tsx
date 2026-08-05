@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   MessageCircle, LogOut, Wifi, WifiOff, User, Clock,
   IndianRupee, Star, TrendingUp, Bell, ChevronRight,
-  Sparkles, HeartHandshake, Phone,
+  Sparkles, HeartHandshake, Phone, Activity
 } from 'lucide-react';
 
 interface ActiveSession {
