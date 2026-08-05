@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   MessageCircle, LogOut, Wifi, WifiOff, User, Clock,
   IndianRupee, Star, TrendingUp, Bell, ChevronRight,
-  Sparkles, HeartHandshake, Phone, Activity
+  Sparkles, HeartHandshake, Phone, Activity, Loader2
 } from 'lucide-react';
 
 interface ActiveSession {
@@ -224,19 +224,33 @@ export default function ExpertDashboardPage() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${
-                isBusy ? 'bg-orange-500 text-white' :
-                isOnline ? 'bg-emerald-500 text-white' : 'bg-white/20 text-white'
+            <div className="flex flex-col items-end gap-4">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold shadow-lg ${
+                isBusy ? 'bg-orange-500 text-white shadow-orange-500/30' :
+                isOnline ? 'bg-emerald-500 text-white shadow-emerald-500/30' : 'bg-white/20 text-white shadow-black/10'
               }`}>
-                {isBusy ? <Activity className="w-4 h-4" /> : isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+                {isBusy ? <Activity className="w-4 h-4 animate-pulse" /> : isOnline ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
                 {isBusy ? 'Busy (In Session)' : isOnline ? 'Accepting Sessions' : 'Currently Offline'}
               </div>
-              {!isOnline && (
-                <button onClick={toggleOnline} className="text-xs text-amber-100 underline underline-offset-2 hover:text-white">
-                  Go online to receive sessions →
-                </button>
-              )}
+              <Button
+                onClick={toggleOnline}
+                disabled={togglingOnline || isBusy}
+                size="lg"
+                className={`rounded-2xl font-extrabold shadow-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 ${
+                  isOnline 
+                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/20' 
+                    : 'bg-white text-orange-600 hover:bg-orange-50 border-0'
+                }`}
+              >
+                {togglingOnline ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : isOnline ? (
+                  <WifiOff className="w-5 h-5 mr-2" />
+                ) : (
+                  <Wifi className="w-5 h-5 mr-2" />
+                )}
+                {isOnline ? 'Go Offline' : 'Go Online Now'}
+              </Button>
             </div>
           </div>
         </div>
@@ -370,17 +384,6 @@ export default function ExpertDashboardPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={toggleOnline}
-                  disabled={togglingOnline || isBusy}
-                  className={`w-full mt-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    isOnline
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      : 'bg-amber-500 text-white hover:bg-amber-600'
-                  }`}
-                >
-                  {isOnline ? 'Go Offline' : 'Go Online'}
-                </button>
               </CardContent>
             </Card>
 
