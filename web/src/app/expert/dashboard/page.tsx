@@ -341,7 +341,11 @@ export default function ExpertDashboardPage() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => router.push(`/session/${session.id}`)}
+                      onClick={async () => {
+                        const token = tokenStore.getAccess();
+                        if (token) await sessionsApi.accept(token, session.id).catch(console.error);
+                        router.push(`/session/${session.id}`);
+                      }}
                       size="sm"
                       className="bg-amber-500 hover:bg-amber-600 text-white border-0 rounded-full px-5 font-semibold shrink-0"
                     >
