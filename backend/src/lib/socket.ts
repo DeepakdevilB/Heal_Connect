@@ -93,8 +93,16 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
           prisma.session.update({
             where: { id: sessionId },
             data: { startTime, status: 'ACTIVE' },
-          }).then(() => {
+          }).then(async () => {
             io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime });
+            
+            // Set practitioner to busy
+            await prisma.practitioner.update({
+              where: { id: sess.practitionerId },
+              data: { isBusy: true },
+            });
+            io!.emit('practitioner_status', { practitionerId: sess.practitionerId, isOnline: true, isBusy: true });
+            
           }).catch(console.error);
         } else {
           // Session already started (reconnection) — just notify them

@@ -303,11 +303,20 @@ router.post('/:id/connect', requireAuth, async (req: AuthRequest, res: Response)
       },
     });
 
-    import('../lib/socket').then(({ emitConsultationEvent }) => {
+    await prisma.practitioner.update({
+      where: { id: session.practitionerId },
+      data: { isBusy: true },
+    });
+
+    import('../lib/socket').then(({ emitConsultationEvent, getIO }) => {
       emitConsultationEvent('session_connected', sessionId, { sessionId, status: 'ACTIVE' }, {
         userId: session.userId,
         practitionerId: session.practitionerId,
       });
+      const io = getIO();
+      if (io) {
+        io.emit('practitioner_status', { practitionerId: session.practitionerId, isOnline: true, isBusy: true });
+      }
     });
 
     res.json({ success: true, data: { session: updated } });
@@ -334,11 +343,20 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
     data: { status: 'COMPLETED', endTime: new Date() },
   });
 
-  import('../lib/socket').then(({ emitConsultationEvent }) => {
+  await prisma.practitioner.update({
+    where: { id: session.practitionerId },
+    data: { isBusy: false },
+  });
+
+  import('../lib/socket').then(({ emitConsultationEvent, getIO }) => {
     emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'ended_by_user' }, {
       userId: session.userId,
       practitionerId: session.practitionerId
     });
+    const io = getIO();
+    if (io) {
+      io.emit('practitioner_status', { practitionerId: session.practitionerId, isOnline: true, isBusy: false });
+    }
   });
 
   res.json({ success: true, data: { session: updated } });

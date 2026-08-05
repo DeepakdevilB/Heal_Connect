@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS "FlaggedContent_status_idx" ON "FlaggedContent"("stat
 CREATE INDEX IF NOT EXISTS "FlaggedContent_source_idx" ON "FlaggedContent"("source");
 CREATE INDEX IF NOT EXISTS "FlaggedContent_sessionId_idx" ON "FlaggedContent"("sessionId");
 
-ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "avgRating" DOUBLE PRECISION NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "reviewCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "avgRating" DOUBLE PRECISION NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "reviewCount" INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "isBusy" BOOLEAN NOT NULL DEFAULT false;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "Transaction_referenceId_key" ON "Transaction"("referenceId") WHERE "referenceId" IS NOT NULL;
 

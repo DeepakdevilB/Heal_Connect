@@ -191,11 +191,15 @@ export default function PractitionerDetailPage() {
                     alt={p.name}
                     className="w-28 h-28 md:w-32 md:h-32 rounded-3xl object-cover shadow-md border-2 border-yellow-100 transition-transform duration-300 hover:scale-105"
                   />
-                  {p.isOnline && (
+                  {p.isBusy ? (
+                    <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white">
+                      <span className="w-2 h-2 bg-white rounded-full" /> Busy
+                    </span>
+                  ) : p.isOnline ? (
                     <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white animate-bounce">
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse" /> Online
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -246,8 +250,8 @@ export default function PractitionerDetailPage() {
               </div>
               <div className="flex gap-3">
                 <Button 
-                  onClick={handleStartChat}
-                  disabled={!p.isOnline || chatting}
+                  onClick={handleStartChat} 
+                  disabled={!p.isOnline || p.isBusy || chatting}
                   variant="outline" 
                   className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
                 >
@@ -260,7 +264,7 @@ export default function PractitionerDetailPage() {
                 </Button>
                 <Button
                   onClick={handleStartCall}
-                  disabled={!p.isOnline || calling}
+                  disabled={!p.isOnline || p.isBusy || calling}
                   className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold border-0 gap-2 rounded-2xl px-6 py-6 shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition-all disabled:opacity-40"
                 >
                   {calling ? (
@@ -269,7 +273,7 @@ export default function PractitionerDetailPage() {
                     </>
                   ) : (
                     <>
-                      <Phone className="h-5 w-5 animate-pulse" /> {p.isOnline ? 'Call Now' : 'Offline'}
+                      <Phone className="h-5 w-5 animate-pulse" /> {p.isBusy ? 'Busy' : p.isOnline ? 'Call Now' : 'Offline'}
                     </>
                   )}
                 </Button>

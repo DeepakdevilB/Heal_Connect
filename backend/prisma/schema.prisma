@@ -88,6 +88,7 @@ model Practitioner {
   photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
+  isBusy         Boolean  @default(false)
   // Denormalized rating stats — updated atomically on each review submission
   avgRating      Float    @default(0)
   reviewCount    Int      @default(0)

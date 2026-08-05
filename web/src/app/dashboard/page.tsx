@@ -128,14 +128,9 @@ export default function DashboardPage() {
 
     // Real-time expert online/offline updates
     const socket = getSocket(token);
-    socket.on('practitioner_status', ({ practitionerId, isOnline }: { practitionerId: string; isOnline: boolean }) => {
-      setExperts((prev) => prev.map((e) => e.id === practitionerId ? { ...e, isOnline } : e));
-      setOnlineCount((prev) => {
-        // recalculate from updated list
-        return prev; // will be recalculated below
-      });
+    socket.on('practitioner_status', ({ practitionerId, isOnline, isBusy }: { practitionerId: string; isOnline: boolean; isBusy?: boolean }) => {
       setExperts((prev) => {
-        const updated = prev.map((e) => e.id === practitionerId ? { ...e, isOnline } : e);
+        const updated = prev.map((e) => e.id === practitionerId ? { ...e, isOnline, isBusy } : e);
         setOnlineCount(updated.filter((e) => e.isOnline).length);
         return updated;
       });
@@ -359,10 +354,14 @@ export default function DashboardPage() {
                           </div>
                           <div className="absolute top-3 right-4">
                             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              expert.isBusy ? 'bg-orange-100 text-orange-700' : 
                               expert.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${expert.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                              {expert.isOnline ? 'Online' : 'Offline'}
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                expert.isBusy ? 'bg-orange-500' : 
+                                expert.isOnline ? 'bg-emerald-500' : 'bg-gray-400'
+                              }`} />
+                              {expert.isBusy ? 'Busy' : expert.isOnline ? 'Online' : 'Offline'}
                             </span>
                           </div>
                         </div>
@@ -394,10 +393,10 @@ export default function DashboardPage() {
                               <span className="text-xs text-gray-400">/min</span>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.preventDefault(); startChatSession(expert.id, e); }} disabled={startingSession === expert.id}>
+                              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.preventDefault(); startChatSession(expert.id, e); }} disabled={!expert.isOnline || expert.isBusy || startingSession === expert.id}>
                                 <MessageCircle className="h-3.5 w-3.5" /> Chat
                               </Button>
-                              <Button size="sm" disabled={!expert.isOnline || startingSession === expert.id} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.preventDefault(); startCallSession(expert.id, e); }}>
+                              <Button size="sm" disabled={!expert.isOnline || expert.isBusy || startingSession === expert.id} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.preventDefault(); startCallSession(expert.id, e); }}>
                                 <Phone className="h-3.5 w-3.5" /> Call
                               </Button>
                             </div>

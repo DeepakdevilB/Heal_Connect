@@ -27,6 +27,7 @@ export default function ExpertDashboardPage() {
   const [practitionerId, setPractitionerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PractitionerProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [sessionsDone, setSessionsDone] = useState(0);
@@ -84,6 +85,7 @@ export default function ExpertDashboardPage() {
       if (res.success && res.data) {
         setProfile(res.data.practitioner);
         setIsOnline(res.data.practitioner.isOnline);
+        setIsBusy(res.data.practitioner.isBusy ?? false);
       }
     });
 
@@ -224,10 +226,11 @@ export default function ExpertDashboardPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${
+                isBusy ? 'bg-orange-500 text-white' :
                 isOnline ? 'bg-emerald-500 text-white' : 'bg-white/20 text-white'
               }`}>
-                {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-                {isOnline ? 'Accepting Sessions' : 'Currently Offline'}
+                {isBusy ? <Activity className="w-4 h-4" /> : isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+                {isBusy ? 'Busy (In Session)' : isOnline ? 'Accepting Sessions' : 'Currently Offline'}
               </div>
               {!isOnline && (
                 <button onClick={toggleOnline} className="text-xs text-amber-100 underline underline-offset-2 hover:text-white">
@@ -358,17 +361,18 @@ export default function ExpertDashboardPage() {
                   <div className="flex items-center justify-between py-2">
                     <span className="text-gray-500">Status</span>
                     <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                      isBusy ? 'bg-orange-100 text-orange-700' :
                       isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                      {isOnline ? 'Online' : 'Offline'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-orange-500' : isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                      {isBusy ? 'Busy' : isOnline ? 'Online' : 'Offline'}
                     </span>
                   </div>
                 </div>
 
                 <button
                   onClick={toggleOnline}
-                  disabled={togglingOnline}
+                  disabled={togglingOnline || isBusy}
                   className={`w-full mt-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                     isOnline
                       ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'

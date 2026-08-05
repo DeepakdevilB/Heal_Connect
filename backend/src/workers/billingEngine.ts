@@ -244,12 +244,22 @@ async function terminateSession(sessionId: string) {
   try {
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
     if (session) {
-      import('../lib/socket').then(({ emitConsultationEvent }) => {
+      await prisma.practitioner.update({
+        where: { id: session.practitionerId },
+        data: { isBusy: false },
+      });
+      import('../lib/socket').then(({ emitConsultationEvent, getIO }) => {
         emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'insufficient_balance' }, {
           userId: session.userId,
           practitionerId: session.practitionerId
         });
+        const io = getIO();
+        if (io) {
+          io.emit('practitioner_status', { practitionerId: session.practitionerId, isOnline: true, isBusy: false });
+        }
       });
     }
-  } catch {}
+  } catch (err) {
+    console.error('Error terminating session:', err);
+  }
 }
