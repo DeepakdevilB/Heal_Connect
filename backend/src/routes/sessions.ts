@@ -185,7 +185,7 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
 router.post('/dev-clear', async (req: any, res: Response) => {
   try {
     const result = await prisma.session.updateMany({
-      where: { status: 'ACTIVE' },
+      where: { status: { in: ['ACTIVE', 'INITIATED', 'ACCEPTED'] } },
       data: { status: 'COMPLETED', endTime: new Date() }
     });
     res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });

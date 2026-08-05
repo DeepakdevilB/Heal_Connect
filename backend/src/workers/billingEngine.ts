@@ -26,6 +26,34 @@ export function startBillingEngine() {
     }
 
     try {
+      // 0. Clean up stale INITIATED/ACCEPTED sessions that were never properly started
+      const nowTs = new Date();
+      const twoMinutesAgo = new Date(nowTs.getTime() - 2 * 60 * 1000);
+      const fiveMinutesAgo = new Date(nowTs.getTime() - 5 * 60 * 1000);
+
+      const staleSessions = await prisma.session.findMany({
+        where: {
+          OR: [
+            { status: 'INITIATED', createdAt: { lt: twoMinutesAgo } },
+            { status: 'ACCEPTED', createdAt: { lt: fiveMinutesAgo } },
+          ],
+        },
+      });
+
+      for (const stale of staleSessions) {
+        console.log(`[BillingEngine] Cleaning up stale ${stale.status} session ${stale.id}`);
+        await prisma.session.update({
+          where: { id: stale.id },
+          data: { status: 'CANCELLED', endTime: nowTs },
+        });
+        import('../lib/socket').then(({ emitConsultationEvent }) => {
+          emitConsultationEvent('session_terminated', stale.id,
+            { sessionId: stale.id, reason: 'timed_out' },
+            { userId: stale.userId, practitionerId: stale.practitionerId }
+          );
+        }).catch(() => {});
+      }
+
       // 1. Fetch all ACTIVE sessions
       const activeSessions = await prisma.session.findMany({
         where: { status: 'ACTIVE' },
