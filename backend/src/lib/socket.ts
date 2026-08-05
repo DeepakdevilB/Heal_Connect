@@ -80,17 +80,24 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
       prisma.session.findUnique({ where: { id: sessionId } }).then((sess) => {
         if (!sess) return;
+        
+        // Timer only starts if the expert has accepted, and both are in the room.
+        if (sess.status === 'INITIATED') return;
+        if (sess.status === 'COMPLETED' || sess.status === 'REJECTED' || sess.status === 'CANCELLED') return;
+        
         if (!sess.startTime) {
-          // First joiner — set startTime and fire session_started to whole room
+          if (roomSize < 2) return; // Wait for both parties
+
+          // Both joined — start timer, set ACTIVE, fire session_started
           const startTime = new Date();
           prisma.session.update({
             where: { id: sessionId },
-            data: { startTime },
+            data: { startTime, status: 'ACTIVE' },
           }).then(() => {
             io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime });
           }).catch(console.error);
         } else {
-          // Session already started (second party joining later) — just notify them
+          // Session already started (reconnection) — just notify them
           io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime: sess.startTime });
         }
       }).catch(console.error);
