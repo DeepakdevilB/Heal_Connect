@@ -78,6 +78,20 @@ export default function DashboardPage() {
     }
   };
 
+  const startCallSession = async (practitionerId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const token = tokenStore.getAccess();
+    if (!token) { router.push('/login'); return; }
+    setStartingSession(practitionerId);
+    const res = await sessionsApi.create(token, practitionerId, 'AUDIO');
+    setStartingSession(null);
+    if (res.success && res.data) {
+      router.push(`/session/${res.data.session.id}`);
+    } else {
+      alert(res.message || 'Could not start call. Please recharge your wallet.');
+    }
+  };
+
   const fetchWallet = () => {
     const token = tokenStore.getAccess();
     if (token) {
@@ -383,7 +397,7 @@ export default function DashboardPage() {
                               <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.preventDefault(); startChatSession(expert.id, e); }} disabled={startingSession === expert.id}>
                                 <MessageCircle className="h-3.5 w-3.5" /> Chat
                               </Button>
-                              <Button size="sm" disabled={!expert.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => e.preventDefault()}>
+                              <Button size="sm" disabled={!expert.isOnline || startingSession === expert.id} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.preventDefault(); startCallSession(expert.id, e); }}>
                                 <Phone className="h-3.5 w-3.5" /> Call
                               </Button>
                             </div>

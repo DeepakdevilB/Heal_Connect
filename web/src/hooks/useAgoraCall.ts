@@ -6,7 +6,7 @@ import AgoraRTC, {
   type IMicrophoneAudioTrack,
   type IAgoraRTCRemoteUser,
 } from 'agora-rtc-sdk-ng';
-import { agoraApi, tokenStore } from '@/lib/api';
+import { agoraApi, tokenStore, sessionsApi } from '@/lib/api';
 
 export type CallState = 'idle' | 'joining' | 'connected' | 'ended' | 'error';
 
@@ -18,6 +18,7 @@ interface UseAgoraCallReturn {
   leave: () => Promise<void>;
   toggleMute: () => void;
   error: string | null;
+  startTime: string | null;
 }
 
 export function useAgoraCall(): UseAgoraCallReturn {
@@ -28,6 +29,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
   const [isMuted, setIsMuted] = useState(false);
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -90,6 +92,12 @@ export function useAgoraCall(): UseAgoraCallReturn {
       localTrackRef.current = micTrack;
       await client.publish(micTrack);
 
+      // Notify backend we connected (starts billing & sets startTime)
+      const connectRes = await sessionsApi.connect(accessToken, sessionId);
+      if (connectRes.success && connectRes.data?.session?.startTime) {
+        setStartTime(connectRes.data.session.startTime);
+      }
+
       setCallState('connected');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to join call';
@@ -131,5 +139,9 @@ export function useAgoraCall(): UseAgoraCallReturn {
     setIsMuted(next);
   }, [isMuted]);
 
-  return { callState, isMuted, remoteUsers, join, leave, toggleMute, error };
+  return { callState, isMuted, remoteUsers, join, leave,
+    toggleMute,
+    error,
+    startTime,
+  };
 }

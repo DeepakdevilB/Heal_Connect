@@ -11,18 +11,26 @@ interface Props {
 }
 
 export default function AudioCallScreen({ sessionId }: Props) {
-  const { callState, isMuted, remoteUsers, join, leave, toggleMute, error } = useAgoraCall();
+  const { callState, isMuted, remoteUsers, join, leave, toggleMute, error, startTime } = useAgoraCall();
   const [showFeedback, setShowFeedback] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   // Timer while connected
   useEffect(() => {
     if (callState !== 'connected') return;
-    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [callState]);
-
-  // Show feedback modal after call ends
+    
+    if (startTime) {
+      const startTs = new Date(startTime).getTime();
+      setElapsed(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+      const t = setInterval(() => {
+        setElapsed(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+      }, 1000);
+      return () => clearInterval(t);
+    } else {
+      const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+      return () => clearInterval(t);
+    }
+  }, [callState, startTime]);
   useEffect(() => {
     if (callState === 'ended') setShowFeedback(true);
   }, [callState]);
