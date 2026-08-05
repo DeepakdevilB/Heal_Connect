@@ -66,6 +66,11 @@ export default function Navbar() {
   const { lang, setLang } = useLang();
   
   const [userProfile, setUserProfile] = useState<{ photoUrl: string | null; role: string; id: string; name: string | null } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const token = tokenStore.getAccess();
@@ -256,18 +261,21 @@ export default function Navbar() {
           <div className="mx-4 mt-4 border-t border-gray-100 pt-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Theme</p>
             <div className="flex gap-2">
-              {([{ Icon: RefreshCw, val: 'system' }, { Icon: Sun, val: 'light' }, { Icon: Moon, val: 'dark' }]).map(({ Icon, val }) => (
-                <button
-                  key={val}
-                  onClick={() => setTheme(val)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1 ${
-                    theme === val ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {val === 'system' ? 'Auto' : val === 'light' ? 'Day' : 'Night'}
-                </button>
-              ))}
+              {([{ Icon: RefreshCw, val: 'system' }, { Icon: Sun, val: 'light' }, { Icon: Moon, val: 'dark' }]).map(({ Icon, val }) => {
+                const isActive = mounted && theme === val;
+                return (
+                  <button
+                    key={val}
+                    onClick={() => setTheme(val)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1 ${
+                      isActive ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {val === 'system' ? 'Auto' : val === 'light' ? 'Day' : 'Night'}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
