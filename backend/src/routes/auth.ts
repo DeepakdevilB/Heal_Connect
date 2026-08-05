@@ -235,6 +235,21 @@ router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const payload = verifyRefreshToken(refreshToken);
 
+    // Bypass DB check for practitioners (we don't store their refresh tokens in the DB yet)
+    if (payload.practitionerId) {
+      const newPayload: import('../lib/jwt').JwtPayload = { 
+        userId: payload.userId, 
+        ...(payload.email ? { email: payload.email } : {}),
+        practitionerId: payload.practitionerId
+      };
+      
+      const accessToken = signAccessToken(newPayload);
+      const newRefreshToken = signRefreshToken(newPayload);
+      
+      res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
+      return;
+    }
+
     const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
     if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
       res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
@@ -809,10 +824,6 @@ router.post(
       const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
-
-      await prisma.refreshToken.create({
-        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
-      });
 
       res.json({
         success: true,
