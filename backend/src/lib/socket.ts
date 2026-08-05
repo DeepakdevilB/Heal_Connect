@@ -82,15 +82,16 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
         if (!sess) return;
         if (!sess.startTime) {
           // First joiner — set startTime and fire session_started to whole room
+          const startTime = new Date();
           prisma.session.update({
             where: { id: sessionId },
-            data: { startTime: new Date() },
+            data: { startTime },
           }).then(() => {
-            io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+            io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime });
           }).catch(console.error);
         } else {
           // Session already started (second party joining later) — just notify them
-          io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+          io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime: sess.startTime });
         }
       }).catch(console.error);
     });

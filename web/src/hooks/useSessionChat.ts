@@ -60,13 +60,23 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
       setSessionStatus('connecting'); // Wait for peer before becoming active
     });
 
-    socket.on('session_started', () => {
+    socket.on('session_started', ({ startTime }: { sessionId: string; startTime?: string }) => {
       setSessionStatus('active');
       // Stop any existing timers before starting new ones (Strict Mode safety)
       if (timerRef.current) clearInterval(timerRef.current);
       if (walletPollRef.current) clearInterval(walletPollRef.current);
-      // Start session timer
-      timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+      
+      // Start session timer synced to backend time
+      if (startTime) {
+        const startTs = new Date(startTime).getTime();
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+        timerRef.current = setInterval(() => {
+          setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+        }, 1000);
+      } else {
+        timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+      }
+
       // Start wallet polling
       fetchWallet();
       walletPollRef.current = setInterval(fetchWallet, 15000);
