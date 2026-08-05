@@ -14,6 +14,7 @@ import sessionsRouter from './routes/sessions';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
+import migrateRouter from './routes/migrate';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -196,6 +197,7 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
+app.use('/api/migrate', migrateRouter);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 
