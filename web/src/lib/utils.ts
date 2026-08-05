@@ -56,7 +56,9 @@ export function getAvatarUrl(name?: string | null, photoUrl?: string | null): st
     lower.includes('amit') ||
     lower.includes('sharma') ||
     lower.includes('pt.') ||
-    lower.includes('pandit');
+    lower.includes('pandit') ||
+    lower.includes('abhishek') ||
+    lower.includes('giri');
 
   let hash = 0;
   for (let i = 0; i < str.length; i++) {

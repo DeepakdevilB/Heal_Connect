@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, ArrowRight, ShieldCheck, Star, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,9 +13,15 @@ import { authApi, tokenStore } from '@/lib/api';
 
 type Role = 'user' | 'expert';
 
-export default function SignupPage() {
+function SignupInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [role, setRole] = useState<Role>('user');
+
+  useEffect(() => {
+    if (searchParams.get('role') === 'expert') setRole('expert');
+  }, [searchParams]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,9 +46,10 @@ export default function SignupPage() {
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.setItem('hc_role', 'practitioner');
         localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
-        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
+        localStorage.setItem('hc_pid', res.data.practitioner.id);
+        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? name);
         setSuccess('Expert account created!');
-        setTimeout(() => router.push('/expert/dashboard'), 1500);
+        setTimeout(() => router.push('/expert/dashboard'), 1200);
       } else {
         const res = await authApi.register({ name, email, password });
         if (!res.success || !res.data) {
@@ -51,8 +58,11 @@ export default function SignupPage() {
         }
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.removeItem('hc_role');
+        localStorage.removeItem('hc_practitioner_id');
+        localStorage.removeItem('hc_pid');
+        localStorage.removeItem('hc_practitioner_name');
         setSuccess('Account created!');
-        setTimeout(() => router.push('/dashboard'), 1500);
+        setTimeout(() => router.push(`/verify-email/pending?email=${encodeURIComponent(email)}`), 1200);
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
@@ -150,7 +160,11 @@ export default function SignupPage() {
             {success && (
               <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
                 <p className="font-semibold">✓ {success}</p>
-                <p className="text-green-600 mt-0.5">Please verify your email. Redirecting...</p>
+                <p className="text-green-600 mt-0.5">
+                  {role === 'expert'
+                    ? 'Welcome! Redirecting to your expert dashboard...'
+                    : 'A verification email has been sent. Please verify before logging in.'}
+                </p>
               </div>
             )}
 
@@ -226,3 +240,12 @@ export default function SignupPage() {
     </div>
   );
 }
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#fffbf0] flex items-center justify-center p-8"><Loader2 className="w-8 h-8 text-[#f59e0b] animate-spin" /></div>}>
+      <SignupInner />
+    </Suspense>
+  );
+}
+

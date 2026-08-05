@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useLang } from '@/lib/lang-context';
+import { tokenStore } from '@/lib/api';
 import {
   MessageCircle, Phone, Star, Users,
   Globe, Languages, Shield, Gift, ChevronDown, ChevronUp,
@@ -76,6 +77,11 @@ export default function LandingPage() {
   const { t } = useLang();
   const router = useRouter();
   const [activeZodiac, setActiveZodiac] = useState(6); // Libra default
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setIsLoggedIn(!!tokenStore.getAccess());
+  }, []);
   const [horoscopeTab, setHoroscopeTab] = useState<'today' | 'tomorrow' | 'week' | 'month'>('today');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [testimonialIdx, setTestimonialIdx] = useState(0);
@@ -144,7 +150,7 @@ export default function LandingPage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                  <Link href="/signup">
+                  <Link href={isLoggedIn ? '/practitioners' : '/signup'}>
                     <Button size="lg" className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-10 h-14 text-lg rounded-full shadow-lg border-0 font-bold shadow-amber-500/25 group">
                       {t.heroCta} <ArrowRight className="w-5 h-5 ml-2 inline group-hover:translate-x-1 transition-transform" />
                     </Button>
@@ -238,7 +244,7 @@ export default function LandingPage() {
                 { icon: Star, title: t.serviceCards[2].title, desc: t.serviceCards[2].desc, color: 'text-purple-500', bg: 'bg-purple-50', shadow: 'shadow-purple-200/30' },
                 { icon: Gift, title: t.serviceCards[3].title, desc: t.serviceCards[3].desc, color: 'text-green-500', bg: 'bg-green-50', shadow: 'shadow-green-200/30' },
               ].map((s) => (
-                <Link key={s.title} href="/signup" className="group">
+                <Link key={s.title} href={isLoggedIn ? '/practitioners' : '/signup'} className="group">
                   <Card className={`bg-white border-0 ${s.shadow} shadow-lg hover:shadow-xl transition-all duration-300 group-hover:-translate-y-1 rounded-2xl overflow-hidden`}>
                     <CardContent className="p-5">
                       <div className={`w-12 h-12 rounded-2xl ${s.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
@@ -276,7 +282,7 @@ export default function LandingPage() {
               <p className="text-gray-700 text-sm max-w-xl">
                 {t.liveDesc}
               </p>
-              <Link href="/login" className="ml-auto">
+              <Link href={isLoggedIn ? '/practitioners' : '/login'} className="ml-auto">
                 <Button className="bg-amber-100 text-gray-900 hover:bg-amber-200 font-semibold text-sm rounded-full px-6 h-10 border-0 shadow-sm whitespace-nowrap">
                   {t.viewAllBtn} <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -346,12 +352,12 @@ export default function LandingPage() {
 
                     {/* Buttons */}
                     <div className="flex gap-2 mt-4">
-                      <Link href="/login" className="flex-1">
+                      <Link href={isLoggedIn ? '/practitioners' : '/login'} className="flex-1">
                         <Button className="w-full h-9 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white border-0 font-semibold">
                           {t.chatBtn}
                         </Button>
                       </Link>
-                      <Link href="/login" className="flex-1">
+                      <Link href={isLoggedIn ? '/practitioners' : '/login'} className="flex-1">
                         <Button className="w-full h-9 text-xs rounded-lg bg-white text-gray-700 border border-gray-200 hover:border-amber-300 hover:text-amber-700 font-semibold">
                           {t.callBtn}
                         </Button>
@@ -374,7 +380,7 @@ export default function LandingPage() {
                   {t.browseSubtitle} <span className="text-amber-700">{t.browseSubtitleEm}</span>, {t.browseSubtitleFor} <span className="text-amber-700">{t.browseSubtitleYou}</span>
                 </p>
               </div>
-              <Link href="/signup">
+              <Link href={isLoggedIn ? '/practitioners' : '/signup'}>
                 <Button variant="link" className="text-amber-600 font-semibold text-sm">
                   {t.browseViewAll} <ArrowRight className="w-4 h-4 ml-1 inline" />
                 </Button>
@@ -384,7 +390,7 @@ export default function LandingPage() {
               {CATEGORIES.map((cat, idx) => {
                 const catData = t.categories[idx] || { name: cat.name, count: cat.count };
                 return (
-                <Link key={cat.name} href="/signup" className="group">
+                <Link key={cat.name} href={isLoggedIn ? '/practitioners' : '/signup'} className="group">
                   <div className="flex items-center gap-4 p-5 rounded-xl bg-white border border-gray-100 hover:border-amber-200 hover:shadow-md transition-all group-hover:-translate-y-0.5 duration-300">
                     <div className={`w-12 h-12 rounded-xl ${cat.bg} ${cat.color} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
                       <cat.icon className="w-6 h-6" />
@@ -412,7 +418,7 @@ export default function LandingPage() {
                   <span className="text-gray-900">{t.servicesHeading}</span> <span className="text-amber-700">{t.servicesHeadingEm}</span>
                 </h2>
               </div>
-              <Link href="/signup">
+              <Link href={isLoggedIn ? '/practitioners' : '/signup'}>
                 <Button variant="link" className="text-amber-600 font-semibold text-sm">
                   {t.servicesViewAll} <ArrowRight className="w-4 h-4 ml-1 inline" />
                 </Button>
@@ -420,7 +426,7 @@ export default function LandingPage() {
             </div>
             <div className="grid grid-cols-5 gap-4 max-w-5xl mx-auto">
               {t.servicesList.slice(0, 10).map((svc: { name: string; desc: string }, idx: number) => (
-                <Link key={idx} href="/signup" className="group">
+                <Link key={idx} href={isLoggedIn ? '/practitioners' : '/signup'} className="group">
                   <div className="flex flex-col items-center text-center p-4 rounded-xl bg-amber-50/60 border border-amber-100/50 hover:bg-amber-100 hover:border-amber-200 transition-all group-hover:-translate-y-0.5 duration-300">
                     <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                       <Zap className="w-5 h-5 text-amber-600" />

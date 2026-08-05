@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Great_Vibes, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
 
 const inter = Inter({ subsets: ['latin'] });
+const greatVibes = Great_Vibes({ weight: '400', subsets: ['latin'], variable: '--font-cursive' });
+const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-serif' });
 
 export const metadata: Metadata = {
   title: "HealConnect - Professional Wellness",
@@ -18,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${greatVibes.variable} ${playfair.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

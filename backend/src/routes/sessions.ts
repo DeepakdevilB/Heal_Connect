@@ -126,7 +126,7 @@ router.get('/practitioner/active', requireAuth, async (req: AuthRequest, res: Re
   res.json({ success: true, data: { sessions } });
 });
 
-// ─── GET /api/sessions/practitioner/history — session history + earnings ──────
+// ─── GET /api/sessions/practitioner/history ───────────────────────────────────
 router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: Response) => {
   const practitionerId = req.user!.practitionerId;
   if (!practitionerId) {

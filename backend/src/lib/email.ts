@@ -2,9 +2,10 @@ import sgMail from '@sendgrid/mail';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@healconnect.app';
-const FROM_NAME  = process.env.SENDGRID_FROM_NAME  || 'HealConnect';
-const APP_URL    = process.env.APP_URL             || 'https://blue-plant-0d21bc900.7.azurestaticapps.net';
+const FROM_EMAIL   = process.env.SENDGRID_FROM_EMAIL || 'noreply@healconnect.app';
+const FROM_NAME    = process.env.SENDGRID_FROM_NAME  || 'HealConnect';
+const FRONTEND_URL = process.env.FRONTEND_URL        || 'http://localhost:3000';
+const APP_URL      = process.env.APP_URL             || FRONTEND_URL;
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ function btn(url: string, label: string): string {
 // ─── Welcome Email ─────────────────────────────────────────────────────────────
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
-  const dashboardUrl = `${APP_URL}/dashboard`;
+  const dashboardUrl = `${FRONTEND_URL}/dashboard`;
   const html = wrap(`
     <tr>
       <td style="padding:40px;">
@@ -91,7 +92,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 // ─── Email Verification ────────────────────────────────────────────────────────
 
 export async function sendVerificationEmail(to: string, rawToken: string): Promise<void> {
-  const verifyUrl = `${APP_URL}/verify-email?token=${rawToken}`;
+  const verifyUrl = `${FRONTEND_URL}/verify-email?token=${rawToken}`;
   const html = wrap(`
     <tr>
       <td style="padding:40px;">
@@ -117,7 +118,7 @@ export async function sendVerificationEmail(to: string, rawToken: string): Promi
 // ─── Password Reset ────────────────────────────────────────────────────────────
 
 export async function sendPasswordResetEmail(to: string, rawToken: string): Promise<void> {
-  const resetUrl = `${APP_URL}/reset-password?token=${rawToken}`;
+  const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}`;
   const html = wrap(`
     <tr>
       <td style="padding:40px;">

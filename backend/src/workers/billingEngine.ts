@@ -6,6 +6,10 @@ const BILLING_INTERVAL_MS = 10000; // Check every 10 seconds
 const BILLING_CYCLE_MS = 60000; // Bill every 60 seconds
 const GRACE_PERIOD_MS = 60000; // 60 seconds grace period before termination
 
+// Backoff state for DB connection errors
+let _consecutiveDbErrors = 0;
+const MAX_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes max backoff
+
 /**
  * Background worker to handle per-minute billing for active sessions.
  * Designed to be safely run on multiple instances using Redis locks.
@@ -14,6 +18,13 @@ export function startBillingEngine() {
   console.log('Starting Per-Minute Billing Engine...');
 
   setInterval(async () => {
+    // Exponential backoff when DB is unreachable — avoids log flooding
+    if (_consecutiveDbErrors > 0) {
+      const backoff = Math.min(1000 * Math.pow(2, _consecutiveDbErrors - 1), MAX_BACKOFF_MS);
+      const elapsed = Date.now() % BILLING_INTERVAL_MS;
+      if (elapsed < backoff % BILLING_INTERVAL_MS) return;
+    }
+
     try {
       // 1. Fetch all ACTIVE sessions
       const activeSessions = await prisma.session.findMany({
@@ -24,6 +35,7 @@ export function startBillingEngine() {
         },
       });
 
+      _consecutiveDbErrors = 0; // reset on success
       for (const session of activeSessions) {
         const lockKey = `lock:billing:${session.id}`;
         
@@ -63,8 +75,18 @@ export function startBillingEngine() {
           console.error(`Error billing session ${session.id}:`, sessionErr);
         }
       }
-    } catch (err) {
-      console.error('Billing engine cycle error:', err);
+    } catch (err: any) {
+      // P1001 = DB not reachable (Neon suspended, network issue, etc.)
+      if (err?.code === 'P1001') {
+        _consecutiveDbErrors++;
+        const waitMin = Math.round(Math.min(1000 * Math.pow(2, _consecutiveDbErrors - 1), MAX_BACKOFF_MS) / 1000);
+        if (_consecutiveDbErrors === 1) {
+          console.warn(`Billing engine: DB unreachable (Neon may be waking up). Will retry in ~${waitMin}s.`);
+        }
+      } else {
+        _consecutiveDbErrors = 0;
+        console.error('Billing engine cycle error:', err);
+      }
     }
   }, BILLING_INTERVAL_MS);
 }
