@@ -58,6 +58,29 @@ function btn(url: string, label: string): string {
   </a>`;
 }
 
+// ─── Unified Send Email Helper with Local Fallback ───────────────────────────
+
+async function sendEmail({ to, subject, html, textFallback }: { to: string; subject: string; html: string; textFallback: string }) {
+  try {
+    if (!process.env.SENDGRID_API_KEY || process.env.SENDGRID_API_KEY.includes('placeholder')) {
+      throw new Error('SendGrid API key not set or is placeholder');
+    }
+    await sgMail.send({
+      to,
+      from: { email: FROM_EMAIL, name: FROM_NAME },
+      subject,
+      html,
+    });
+  } catch (err: any) {
+    console.log('\n==================================================');
+    console.log('✉️  [LOCAL EMAIL FALLBACK]');
+    console.log(`TO: ${to}`);
+    console.log(`SUBJECT: ${subject}`);
+    console.log(`INFO: ${textFallback}`);
+    console.log('==================================================\n');
+  }
+}
+
 // ─── Welcome Email ─────────────────────────────────────────────────────────────
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
@@ -80,11 +103,11 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
       </td>
     </tr>`);
 
-  await sgMail.send({
+  await sendEmail({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
     subject: 'Welcome to HealConnect 🌟',
     html,
+    textFallback: `Welcome email for ${name}. Dashboard link: ${dashboardUrl}`,
   });
 }
 
@@ -106,11 +129,11 @@ export async function sendVerificationEmail(to: string, rawToken: string): Promi
       </td>
     </tr>`);
 
-  await sgMail.send({
+  await sendEmail({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
     subject: 'Verify your HealConnect email',
     html,
+    textFallback: `Verification Link: ${verifyUrl}`,
   });
 }
 
@@ -134,11 +157,11 @@ export async function sendPasswordResetEmail(to: string, rawToken: string): Prom
       </td>
     </tr>`);
 
-  await sgMail.send({
+  await sendEmail({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
     subject: 'Reset your HealConnect password',
     html,
+    textFallback: `Password Reset Link: ${resetUrl}`,
   });
 }
 
@@ -162,10 +185,10 @@ export async function sendPasswordChangedEmail(to: string, name: string): Promis
       </td>
     </tr>`);
 
-  await sgMail.send({
+  await sendEmail({
     to,
-    from: { email: FROM_EMAIL, name: FROM_NAME },
     subject: 'Your HealConnect password was changed',
     html,
+    textFallback: `Password changed notification for ${name}. Login Link: ${loginUrl}`,
   });
 }
