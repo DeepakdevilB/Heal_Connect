@@ -762,6 +762,10 @@ router.post(
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
 
+      await prisma.refreshToken.create({
+        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+      });
+
       res.status(201).json({
         success: true,
         message: 'Expert account created.',
@@ -809,6 +813,10 @@ router.post(
       const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
+
+      await prisma.refreshToken.create({
+        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+      });
 
       res.json({
         success: true,

@@ -181,19 +181,7 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
   res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
 });
 
-// DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: any, res: Response) => {
-  try {
-    const result = await prisma.session.updateMany({
-      where: { status: 'ACTIVE' },
-      data: { status: 'COMPLETED', endTime: new Date() }
-    });
-    res.json({ success: true, message: `Cleared ${result.count} stuck sessions.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-});
+
 
 // ── Parameterised sub-resource routes (:id/action) ───────────────────────────
 
