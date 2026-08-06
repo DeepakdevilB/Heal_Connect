@@ -336,7 +336,7 @@ router.post('/:id/end', requireAuth, async (req: AuthRequest, res: Response) => 
   });
 
   if (!session) { res.status(404).json({ success: false, message: 'Session not found' }); return; }
-  if (session.status !== 'ACTIVE') { res.status(400).json({ success: false, message: 'Session already ended' }); return; }
+  if (session.status !== 'ACTIVE' && session.status !== 'DISCONNECTED') { res.status(400).json({ success: false, message: 'Session already ended' }); return; }
 
   const updated = await prisma.session.update({
     where: { id: sessionId },

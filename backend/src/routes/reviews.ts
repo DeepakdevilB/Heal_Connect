@@ -43,12 +43,12 @@ router.post(
     try {
       // Fetch session to confirm it's completed and belongs to this user
       const session = await prisma.session.findFirst({
-        where: { id: sessionId, userId, status: 'COMPLETED' },
+        where: { id: sessionId, userId, status: { in: ['COMPLETED', 'DISCONNECTED'] } },
         select: { id: true, practitionerId: true },
       });
 
       if (!session) {
-        res.status(404).json({ success: false, message: 'Completed session not found' });
+        res.status(404).json({ success: false, message: 'No completed session found for this practitioner' });
         return;
       }
 

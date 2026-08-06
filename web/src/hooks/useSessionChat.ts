@@ -111,6 +111,12 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
       disconnectSocket();
     });
 
+    socket.on('session_disconnected', () => {
+      stopTimers();
+      setSessionStatus('ended');
+      disconnectSocket();
+    });
+
     return () => {
       socket.off('joined_room');
       socket.off('session_started');
@@ -120,6 +126,7 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
       socket.off('receipt_update');
       socket.off('low_balance');
       socket.off('session_terminated');
+      socket.off('session_disconnected');
       stopTimers();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
