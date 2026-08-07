@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
+import { scanContent, flagContentIfNeeded } from '../lib/moderation';
 
 void requireAuth;
 
@@ -732,6 +733,58 @@ router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Respons
     res.json({ success: true, data: { messages } });
   } catch (err) {
     console.error('Chat history error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 8.1 View Call Transcript ────────────────────────────────────────────────
+router.get('/sessions/:id/transcript', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const transcript = await prisma.callTranscript.findUnique({
+      where: { sessionId: id },
+      include: { flaggedContent: true },
+    });
+    
+    res.json({ success: true, data: { transcript } });
+  } catch (err) {
+    console.error('Fetch transcript error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 8.2 Scan Transcript for Flags ───────────────────────────────────────────
+router.post('/sessions/:id/transcript/scan', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    
+    const transcript = await prisma.callTranscript.findUnique({
+      where: { sessionId: id },
+    });
+    
+    if (!transcript) {
+      res.status(404).json({ success: false, message: 'Transcript not found for this session' });
+      return;
+    }
+    
+    const result = scanContent(transcript.transcriptText);
+    
+    if (result.flagged) {
+      await flagContentIfNeeded(
+        transcript.transcriptText,
+        'CALL_TRANSCRIPT',
+        {
+          sessionId: transcript.sessionId,
+          userId: transcript.userId,
+          practitionerId: transcript.practitionerId,
+          transcriptId: transcript.id,
+        }
+      );
+    }
+    
+    res.json({ success: true, data: { scanResult: result } });
+  } catch (err) {
+    console.error('Scan transcript error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

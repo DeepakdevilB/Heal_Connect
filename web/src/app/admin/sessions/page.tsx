@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CalendarClock, Activity, Clock, User, Eye, Search,
-  Filter, CheckCircle, AlertCircle, RefreshCw, Phone, Video, MessageSquare
+  Filter, CheckCircle, AlertCircle, RefreshCw, Phone, Video, MessageSquare,
+  FileText, ShieldAlert
 } from 'lucide-react';
 import {
   AdminShell, StatCard, StatusBadge, SearchBar,
@@ -41,6 +42,12 @@ export default function AdminSessionsPage() {
   const [viewChat, setViewChat] = useState<SessionRecord | null>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [viewTranscript, setViewTranscript] = useState<SessionRecord | null>(null);
+  const [transcriptData, setTranscriptData] = useState<any>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => setToast({ message, type });
 
   const fetchChatLog = async (sessionId: string) => {
     setChatLoading(true);
@@ -55,6 +62,48 @@ export default function AdminSessionsPage() {
       console.error(err);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const fetchTranscript = async (sessionId: string) => {
+    setTranscriptLoading(true);
+    try {
+      const res = await fetch(`/api/admin/sessions/${sessionId}/transcript`, {
+        headers: { 'x-admin-key': ADMIN_KEY },
+      }).then(r => r.json());
+      if (res.success && res.data.transcript) {
+        setTranscriptData(res.data.transcript);
+      } else {
+        setTranscriptData(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setTranscriptData(null);
+    } finally {
+      setTranscriptLoading(false);
+    }
+  };
+
+  const scanTranscript = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/admin/sessions/${sessionId}/transcript/scan`, {
+        method: 'POST',
+        headers: { 'x-admin-key': ADMIN_KEY },
+      }).then(r => r.json());
+      
+      if (res.success) {
+        const { flagged, reasons } = res.data.scanResult;
+        if (flagged) {
+          showToast(`Flagged for: ${reasons.join(', ')}`, 'error');
+          fetchTranscript(sessionId); // refresh to show flags
+        } else {
+          showToast('Transcript is safe. No flags detected.', 'success');
+        }
+      } else {
+        showToast('Scan failed', 'error');
+      }
+    } catch (err) {
+      showToast('Error scanning transcript', 'error');
     }
   };
 
@@ -193,9 +242,13 @@ export default function AdminSessionsPage() {
                 </div>
               </div>
               <div className="mt-5 space-y-2">
-                {selectedSession.type === 'CHAT' && (
+                {selectedSession.type === 'CHAT' ? (
                   <button onClick={() => { setViewChat(selectedSession); setSelectedSession(null); fetchChatLog(selectedSession.id); }} className="w-full py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 font-extrabold rounded-xl text-xs flex items-center justify-center gap-2">
                     <MessageSquare className="w-4 h-4" /> View Chat Log
+                  </button>
+                ) : (
+                  <button onClick={() => { setViewTranscript(selectedSession); setSelectedSession(null); fetchTranscript(selectedSession.id); }} className="w-full py-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-extrabold rounded-xl text-xs flex items-center justify-center gap-2">
+                    <FileText className="w-4 h-4" /> View Transcript
                   </button>
                 )}
                 <button onClick={() => setSelectedSession(null)} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-white font-extrabold rounded-xl text-xs">
@@ -251,6 +304,70 @@ export default function AdminSessionsPage() {
             </div>
           </div>
         )}
+
+        {/* Transcript Modal */}
+        {viewTranscript && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl h-[80vh] shadow-2xl border border-gray-100 dark:border-white/10 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5">
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-500" />
+                    Call Transcript: {viewTranscript.id.slice(0, 8)}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Between {viewTranscript.user} and {viewTranscript.practitioner}</p>
+                </div>
+                <button onClick={() => setViewTranscript(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-black/5">✕</button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                {transcriptLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                  </div>
+                ) : !transcriptData ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <FileText className="w-12 h-12 mb-2 opacity-50" />
+                    <span className="font-medium">No transcript available for this session.</span>
+                  </div>
+                ) : (
+                  <>
+                    {transcriptData.flaggedContent && transcriptData.flaggedContent.length > 0 && (
+                      <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                        <div className="flex items-center gap-2 font-bold mb-1">
+                          <ShieldAlert className="w-4 h-4" />
+                          This transcript contains flagged content!
+                        </div>
+                        <ul className="list-disc list-inside text-xs">
+                          {transcriptData.flaggedContent.map((f: any) => (
+                            <li key={f.id}>Reason: {f.reason} (Status: {f.status})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {transcriptData.transcriptText}
+                  </>
+                )}
+              </div>
+              
+              {transcriptData && (
+                <div className="p-4 border-t border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex justify-end gap-3">
+                  <button onClick={() => setViewTranscript(null)} className="px-5 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 transition-colors">
+                    Close
+                  </button>
+                  <button onClick={() => scanTranscript(viewTranscript.id)} className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-colors flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4" /> Scan for Flags
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Toast */}
+        <AnimatePresence>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </AnimatePresence>
       </div>
     </AdminShell>
   );
