@@ -42,6 +42,8 @@ export default function DashboardPage() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [sessionsDone, setSessionsDone] = useState(0);
+  const [minutesUsed, setMinutesUsed] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Close dropdowns when clicking outside
@@ -125,6 +127,13 @@ export default function DashboardPage() {
     });
 
     fetchWallet();
+
+    sessionsApi.userHistory(token).then((res) => {
+      if (res.success && res.data) {
+        setSessionsDone(res.data.sessions.length);
+        setMinutesUsed(res.data.totalMinutes || 0);
+      }
+    });
 
     // Real-time expert online/offline updates
     const socket = getSocket(token);
@@ -269,8 +278,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: 'Wallet Balance', value: walletBalance !== null ? `₹${walletBalance.toFixed(2)}` : '...', icon: Wallet, color: 'text-amber-500', bg: 'bg-amber-50', shadow: 'shadow-amber-200/30' },
-            { label: 'Sessions Done', value: '0', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', shadow: 'shadow-emerald-200/30' },
-            { label: 'Minutes Used', value: '0 min', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', shadow: 'shadow-orange-200/30' },
+            { label: 'Sessions Done', value: String(sessionsDone), icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', shadow: 'shadow-emerald-200/30' },
+            { label: 'Minutes Used', value: `${minutesUsed} min`, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', shadow: 'shadow-orange-200/30' },
             { label: 'Experts Online', value: onlineCount > 0 ? String(onlineCount) : '—', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50', shadow: 'shadow-blue-200/30' },
           ].map((stat) => (
             <Card key={stat.label} className="bg-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 rounded-2xl overflow-hidden">
