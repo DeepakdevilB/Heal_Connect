@@ -360,7 +360,32 @@ router.get('/users/:id', async (req: Request, res: Response) => {
 router.delete('/users/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
+
+    // Find sessions
+    const userSessions = await prisma.session.findMany({ where: { userId: id }, select: { id: true } });
+    const sessionIds = userSessions.map((s) => s.id);
+
+    // Delete flagged contents
+    if (sessionIds.length > 0) {
+      await prisma.flaggedContent.deleteMany({ where: { OR: [{ userId: id }, { sessionId: { in: sessionIds } }] } });
+    } else {
+      await prisma.flaggedContent.deleteMany({ where: { userId: id } });
+    }
+
+    // Delete wallet and transactions
+    const wallet = await prisma.wallet.findUnique({ where: { userId: id }, select: { id: true } });
+    if (wallet) {
+      await prisma.transaction.deleteMany({ where: { walletId: wallet.id } });
+      await prisma.wallet.delete({ where: { id: wallet.id } });
+    }
+
+    // Delete reviews and sessions
+    await prisma.review.deleteMany({ where: { userId: id } });
+    await prisma.session.deleteMany({ where: { userId: id } });
+
+    // Finally delete the user
     await prisma.user.delete({ where: { id } });
+
     res.json({ success: true, message: 'User deleted' });
   } catch (err) {
     console.error(err);
@@ -476,7 +501,21 @@ router.patch('/practitioners/:id/verify', async (req: Request, res: Response) =>
 router.delete('/practitioners/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
+
+    const practitionerSessions = await prisma.session.findMany({ where: { practitionerId: id }, select: { id: true } });
+    const sessionIds = practitionerSessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      await prisma.flaggedContent.deleteMany({ where: { OR: [{ practitionerId: id }, { sessionId: { in: sessionIds } }] } });
+    } else {
+      await prisma.flaggedContent.deleteMany({ where: { practitionerId: id } });
+    }
+
+    await prisma.review.deleteMany({ where: { practitionerId: id } });
+    await prisma.session.deleteMany({ where: { practitionerId: id } });
+
     await prisma.practitioner.delete({ where: { id } });
+
     res.json({ success: true, message: 'Practitioner deleted' });
   } catch (err) {
     console.error(err);
