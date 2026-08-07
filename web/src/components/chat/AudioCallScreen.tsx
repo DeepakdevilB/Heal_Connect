@@ -49,13 +49,16 @@ export default function AudioCallScreen({ sessionId }: Props) {
 
         {callState === 'idle' && <p className="text-muted-foreground text-sm">Ready to connect</p>}
         {callState === 'joining' && <p className="text-muted-foreground text-sm animate-pulse">Connecting...</p>}
+        {callState === 'waiting' && (
+          <>
+            <p className="font-semibold text-amber-500 animate-pulse">Waiting...</p>
+            <p className="text-xs text-muted-foreground">Waiting for other party to join...</p>
+          </>
+        )}
         {callState === 'connected' && (
           <>
             <p className="font-semibold text-green-500">Connected</p>
             <p className="text-muted-foreground text-sm font-mono">{formatTime(elapsed)}</p>
-            <p className="text-xs text-muted-foreground">
-              {remoteUsers.length > 0 ? `${remoteUsers.length} participant(s) in call` : 'Waiting for other party...'}
-            </p>
           </>
         )}
         {callState === 'ended' && <p className="text-muted-foreground text-sm">Call ended</p>}
@@ -72,7 +75,7 @@ export default function AudioCallScreen({ sessionId }: Props) {
           >
             <Phone className="h-6 w-6" />
           </Button>
-        ) : callState === 'connected' ? (
+        ) : (callState === 'connected' || callState === 'waiting') ? (
           <>
             <Button
               size="lg"

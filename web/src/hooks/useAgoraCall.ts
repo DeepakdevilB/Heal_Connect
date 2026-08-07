@@ -8,7 +8,7 @@ import AgoraRTC, {
 } from 'agora-rtc-sdk-ng';
 import { agoraApi, tokenStore, sessionsApi } from '@/lib/api';
 
-export type CallState = 'idle' | 'joining' | 'connected' | 'ended' | 'error';
+export type CallState = 'idle' | 'joining' | 'waiting' | 'connected' | 'ended' | 'error';
 
 interface UseAgoraCallReturn {
   callState: CallState;
@@ -70,9 +70,24 @@ export function useAgoraCall(): UseAgoraCallReturn {
       client.on('user-published', async (user, mediaType) => {
         await client.subscribe(user, mediaType);
         if (mediaType === 'audio') user.audioTrack?.play();
+      });
+
+      client.on('user-joined', (user) => {
         setRemoteUsers((prev) => {
           const exists = prev.find((u) => u.uid === user.uid);
           return exists ? prev : [...prev, user];
+        });
+        
+        setCallState((current) => {
+          if (current === 'waiting') {
+            sessionsApi.connect(accessToken, sessionId).then((connectRes) => {
+              if (connectRes.success && connectRes.data?.session?.startTime) {
+                setStartTime(connectRes.data.session.startTime);
+              }
+            }).catch(console.error);
+            return 'connected';
+          }
+          return current;
         });
       });
 
@@ -92,13 +107,16 @@ export function useAgoraCall(): UseAgoraCallReturn {
       localTrackRef.current = micTrack;
       await client.publish(micTrack);
 
-      // Notify backend we connected (starts billing & sets startTime)
-      const connectRes = await sessionsApi.connect(accessToken, sessionId);
-      if (connectRes.success && connectRes.data?.session?.startTime) {
-        setStartTime(connectRes.data.session.startTime);
+      if (client.remoteUsers.length > 0) {
+        setRemoteUsers(client.remoteUsers);
+        const connectRes = await sessionsApi.connect(accessToken, sessionId);
+        if (connectRes.success && connectRes.data?.session?.startTime) {
+          setStartTime(connectRes.data.session.startTime);
+        }
+        setCallState('connected');
+      } else {
+        setCallState('waiting');
       }
-
-      setCallState('connected');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to join call';
       setError(message);
