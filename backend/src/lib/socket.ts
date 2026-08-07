@@ -199,15 +199,18 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       }
 
       if (practitionerId) {
-        // Only set offline if no other sockets are connected for this practitioner
-        const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
-        if (roomSize === 0) {
-          prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
-            .then(() => {
-              io!.emit('practitioner_status', { practitionerId, isOnline: false });
-            })
-            .catch(console.error);
-        }
+        // Add a 5 second grace period for page navigations/reloads
+        setTimeout(() => {
+          // Only set offline if no other sockets are connected for this practitioner
+          const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
+          if (roomSize === 0) {
+            prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
+              .then(() => {
+                io!.emit('practitioner_status', { practitionerId, isOnline: false });
+              })
+              .catch(console.error);
+          }
+        }, 5000);
       }
     });
   });
