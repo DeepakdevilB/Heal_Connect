@@ -217,6 +217,23 @@ app.get('/api/blogs', async (req, res) => {
   }
 });
 
+app.get('/api/blogs/:id', async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { prisma } = require('./lib/prisma');
+    const blog = await prisma.blog.findUnique({
+      where: { id }
+    });
+    if (!blog || !blog.published) {
+      res.status(404).json({ success: false, message: 'Blog not found' });
+      return;
+    }
+    res.json({ success: true, data: { blog } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 app.get('/api/faqs', async (req, res) => {
   try {
     const { prisma } = require('./lib/prisma');

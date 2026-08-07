@@ -78,9 +78,24 @@ export default function LandingPage() {
   const router = useRouter();
   const [activeZodiac, setActiveZodiac] = useState(6); // Libra default
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [banners, setBanners] = useState<any[]>([]);
 
   useEffect(() => {
     setIsLoggedIn(!!tokenStore.getAccess());
+    
+    // Fetch Banners
+    const fetchBanners = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/banners`).then(r => r.json());
+        if (res.success) {
+          setBanners(res.data.banners);
+        }
+      } catch (e) {
+        console.error('Failed to fetch banners:', e);
+      }
+    };
+    fetchBanners();
   }, []);
   const [horoscopeTab, setHoroscopeTab] = useState<'today' | 'tomorrow' | 'week' | 'month'>('today');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
