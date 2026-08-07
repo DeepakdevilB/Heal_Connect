@@ -778,4 +778,127 @@ router.post('/db-push', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
+// ─── 12. Content Management (Blogs) ────────────────────────────────────────────
+router.get('/blogs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const blogs = await prisma.blog.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { blogs } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/blogs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { title, content, author, imageUrl, published } = req.body;
+    const blog = await prisma.blog.create({ data: { title, content, author, imageUrl, published } });
+    res.json({ success: true, data: { blog } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const blog = await prisma.blog.update({
+      where: { id: req.params.id },
+      data: req.body,
+    });
+    res.json({ success: true, data: { blog } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.blog.delete({ where: { id: req.params.id } });
+    res.json({ success: true, message: 'Blog deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 13. Content Management (FAQs) ─────────────────────────────────────────────
+router.get('/faqs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { faqs } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/faqs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { question, answer, category } = req.body;
+    const faq = await prisma.faq.create({ data: { question, answer, category } });
+    res.json({ success: true, data: { faq } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const faq = await prisma.faq.update({
+      where: { id: req.params.id },
+      data: req.body,
+    });
+    res.json({ success: true, data: { faq } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.faq.delete({ where: { id: req.params.id } });
+    res.json({ success: true, message: 'FAQ deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 14. Content Management (Banners) ──────────────────────────────────────────
+router.get('/banners', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const banners = await prisma.banner.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { banners } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/banners', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { title, imageUrl, linkUrl, isActive } = req.body;
+    const banner = await prisma.banner.create({ data: { title, imageUrl, linkUrl, isActive } });
+    res.json({ success: true, data: { banner } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const banner = await prisma.banner.update({
+      where: { id: req.params.id },
+      data: req.body,
+    });
+    res.json({ success: true, data: { banner } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.banner.delete({ where: { id: req.params.id } });
+    res.json({ success: true, message: 'Banner deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;

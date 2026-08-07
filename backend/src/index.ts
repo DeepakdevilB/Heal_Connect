@@ -203,6 +203,43 @@ app.use('/api/migrate', migrateRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/contact', contactRouter);
 
+// ─── Public Content Endpoints ────────────────────────────────────────────────
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const blogs = await prisma.blog.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { blogs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/faqs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'asc' } });
+    res.json({ success: true, data: { faqs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/banners', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const banners = await prisma.banner.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { banners } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 
 app.use((_req, res) => {
