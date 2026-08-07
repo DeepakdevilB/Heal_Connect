@@ -285,6 +285,7 @@ router.get('/users', async (req: Request, res: Response) => {
           isPhoneVerified: true,
           createdAt: true,
           photoUrl: true,
+          wallet: { select: { balance: true } },
           _count: { select: { sessions: true, reviews: true } },
         },
       }),
@@ -303,6 +304,7 @@ router.get('/users', async (req: Request, res: Response) => {
       photoUrl: u.photoUrl,
       sessionCount: u._count.sessions,
       reviewCount: u._count.reviews,
+      balance: u.wallet?.balance || 0,
       status: u.isEmailVerified || u.isPhoneVerified ? 'active' : 'unverified',
     }));
 
@@ -315,6 +317,64 @@ router.get('/users', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Admin users error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 4.1 Update User Balance ─────────────────────────────────────────────────
+router.patch('/users/:id/balance', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { balance } = req.body;
+
+    if (typeof balance !== 'number') {
+      res.status(400).json({ success: false, message: 'Invalid balance amount' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { wallet: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    const currentBalance = user.wallet?.balance || 0;
+    const diff = balance - currentBalance;
+
+    if (diff === 0) {
+      res.json({ success: true, message: 'Balance is already set to this amount' });
+      return;
+    }
+
+    // Upsert wallet
+    const updatedWallet = await prisma.wallet.upsert({
+      where: { userId: id },
+      create: { userId: id, balance, currency: 'INR' },
+      update: { balance },
+    });
+
+    // Log transaction
+    await prisma.transaction.create({
+      data: {
+        walletId: updatedWallet.id,
+        amount: Math.abs(diff),
+        type: diff > 0 ? 'RECHARGE' : 'DEBIT',
+        status: 'SUCCESS',
+        referenceId: `admin_adj_${Date.now()}`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Balance updated successfully',
+      data: { balance: updatedWallet.balance },
+    });
+  } catch (err) {
+    console.error('Update balance error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

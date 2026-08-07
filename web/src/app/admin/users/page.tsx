@@ -25,6 +25,7 @@ type UserRecord = {
   photoUrl?: string;
   sessionCount: number;
   reviewCount: number;
+  balance: number;
   status: string;
 };
 
@@ -66,6 +67,9 @@ export default function AdminUsersPage() {
 
   const [viewUser, setViewUser] = useState<UserRecord | null>(null);
   const [viewPract, setViewPract] = useState<PractitionerRecord | null>(null);
+  
+  const [editBalanceUser, setEditBalanceUser] = useState<UserRecord | null>(null);
+  const [balanceInput, setBalanceInput] = useState('');
 
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -196,6 +200,29 @@ export default function AdminUsersPage() {
     });
   };
 
+  const handleUpdateBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editBalanceUser) return;
+    
+    try {
+      const res = await fetch(`/api/admin/users/${editBalanceUser.id}/balance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        body: JSON.stringify({ balance: Number(balanceInput) }),
+      }).then((r) => r.json());
+
+      if (res.success) {
+        showToast('Balance updated successfully!');
+        setEditBalanceUser(null);
+        fetchUsers();
+      } else {
+        showToast(res.message || 'Failed to update balance', 'error');
+      }
+    } catch {
+      showToast('Failed to update balance', 'error');
+    }
+  };
+
   return (
     <AdminShell>
       <div className="space-y-5">
@@ -239,7 +266,7 @@ export default function AdminUsersPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/10">
                   <tr>
-                    {['User', 'Email', 'Phone', 'Provider', 'Verified', 'Sessions', 'Joined', 'Actions'].map((h) => (
+                    {['User', 'Email', 'Phone', 'Provider', 'Verified', 'Sessions', 'Balance', 'Joined', 'Actions'].map((h) => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-extrabold text-gray-500 dark:text-white/50 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -270,10 +297,12 @@ export default function AdminUsersPage() {
                         <td className="px-4 py-3 text-xs font-bold capitalize text-amber-700">{u.provider}</td>
                         <td className="px-4 py-3"><StatusBadge status={u.isEmailVerified || u.isPhoneVerified ? 'verified' : 'unverified'} /></td>
                         <td className="px-4 py-3 text-xs font-extrabold text-gray-900 dark:text-white text-center">{u.sessionCount}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-emerald-600">₹{u.balance}</td>
                         <td className="px-4 py-3 text-xs text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => setViewUser(u)} title="View Profile" className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500"><Eye className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => { setEditBalanceUser(u); setBalanceInput(u.balance.toString()); }} title="Edit Balance" className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600"><DollarSign className="w-3.5 h-3.5" /></button>
                             <button onClick={() => deleteUser(u.id)} title="Delete User" className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </td>
@@ -376,6 +405,56 @@ export default function AdminUsersPage() {
         {/* Toast */}
         <AnimatePresence>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </AnimatePresence>
+
+        {/* Edit Balance Modal */}
+        <AnimatePresence>
+          {editBalanceUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setEditBalanceUser(null)} />
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    Update User Balance
+                  </h3>
+                  <button onClick={() => setEditBalanceUser(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                  Updating balance for <strong>{editBalanceUser.name}</strong> ({editBalanceUser.email}). This will create an admin adjustment transaction.
+                </p>
+
+                <form onSubmit={handleUpdateBalance} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Wallet Balance (INR)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={balanceInput}
+                        onChange={(e) => setBalanceInput(e.target.value)}
+                        className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 dark:bg-white/5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-bold text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3 pt-4">
+                    <button type="button" onClick={() => setEditBalanceUser(null)} className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5 transition-colors">
+                      Cancel
+                    </button>
+                    <button type="submit" className="flex-1 py-2.5 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all">
+                      Save Balance
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
         </AnimatePresence>
       </div>
     </AdminShell>
