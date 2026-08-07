@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   MessageCircle, LogOut, Wifi, WifiOff, User, Clock,
   IndianRupee, Star, TrendingUp, Bell, ChevronRight,
-  Sparkles, HeartHandshake, Phone,
+  Sparkles, HeartHandshake, Phone, Activity, Loader2
 } from 'lucide-react';
 
 interface ActiveSession {
@@ -27,6 +27,7 @@ export default function ExpertDashboardPage() {
   const [practitionerId, setPractitionerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PractitionerProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [sessionsDone, setSessionsDone] = useState(0);
@@ -54,10 +55,27 @@ export default function ExpertDashboardPage() {
   useEffect(() => {
     const token = tokenStore.getAccess();
     const role = localStorage.getItem('hc_role');
-    const pid = localStorage.getItem('hc_practitioner_id');
+    const pid = localStorage.getItem('hc_practitioner_id') || localStorage.getItem('hc_pid');
 
     if (!token || role !== 'practitioner' || !pid) {
-      router.replace('/expert/login');
+      router.replace('/login?role=expert');
+      return;
+    }
+
+    // Verify the token actually has practitionerId embedded
+    try {
+      const jwtPayload = JSON.parse(atob(token.split('.')[1]));
+      if (!jwtPayload.practitionerId) {
+        // Token is a user token, not a practitioner token — force re-login
+        tokenStore.clear();
+        localStorage.removeItem('hc_role');
+        localStorage.removeItem('hc_practitioner_id');
+        localStorage.removeItem('hc_pid');
+        router.replace('/login?role=expert');
+        return;
+      }
+    } catch {
+      router.replace('/login?role=expert');
       return;
     }
 
@@ -67,6 +85,7 @@ export default function ExpertDashboardPage() {
       if (res.success && res.data) {
         setProfile(res.data.practitioner);
         setIsOnline(res.data.practitioner.isOnline);
+        setIsBusy(res.data.practitioner.isBusy ?? false);
       }
     });
 
@@ -82,13 +101,16 @@ export default function ExpertDashboardPage() {
     const socket = getSocket(token);
     socket.on('new_session_request', (data: ActiveSession) => {
       setSessions((prev) => prev.find((s) => s.id === data.id) ? prev : [data, ...prev]);
+      // Immediately refresh from server to ensure accuracy
+      fetchSessions();
     });
     
     socket.on('session_terminated', ({ sessionId }: { sessionId: string }) => {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     });
 
-    const poll = setInterval(fetchSessions, 15000);
+    // Poll every 10s to catch any missed socket events
+    const poll = setInterval(fetchSessions, 10000);
     return () => {
       clearInterval(poll);
       socket.off('new_session_request');
@@ -202,18 +224,33 @@ export default function ExpertDashboardPage() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${
-                isOnline ? 'bg-emerald-500 text-white' : 'bg-white/20 text-white'
+            <div className="flex flex-col items-end gap-4">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold shadow-lg ${
+                isBusy ? 'bg-orange-500 text-white shadow-orange-500/30' :
+                isOnline ? 'bg-emerald-500 text-white shadow-emerald-500/30' : 'bg-white/20 text-white shadow-black/10'
               }`}>
-                {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-                {isOnline ? 'Accepting Sessions' : 'Currently Offline'}
+                {isBusy ? <Activity className="w-4 h-4 animate-pulse" /> : isOnline ? <Wifi className="w-4 h-4 animate-pulse" /> : <WifiOff className="w-4 h-4" />}
+                {isBusy ? 'Busy (In Session)' : isOnline ? 'Accepting Sessions' : 'Currently Offline'}
               </div>
-              {!isOnline && (
-                <button onClick={toggleOnline} className="text-xs text-amber-100 underline underline-offset-2 hover:text-white">
-                  Go online to receive sessions →
-                </button>
-              )}
+              <Button
+                onClick={toggleOnline}
+                disabled={togglingOnline || isBusy}
+                size="lg"
+                className={`rounded-2xl font-extrabold shadow-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 ${
+                  isOnline 
+                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/20' 
+                    : 'bg-white text-orange-600 hover:bg-orange-50 border-0'
+                }`}
+              >
+                {togglingOnline ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : isOnline ? (
+                  <WifiOff className="w-5 h-5 mr-2" />
+                ) : (
+                  <Wifi className="w-5 h-5 mr-2" />
+                )}
+                {isOnline ? 'Go Offline' : 'Go Online Now'}
+              </Button>
             </div>
           </div>
         </div>
@@ -304,7 +341,11 @@ export default function ExpertDashboardPage() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => router.push(`/session/${session.id}`)}
+                      onClick={async () => {
+                        const token = tokenStore.getAccess();
+                        if (token) await sessionsApi.accept(token, session.id).catch(console.error);
+                        router.push(`/session/${session.id}`);
+                      }}
                       size="sm"
                       className="bg-amber-500 hover:bg-amber-600 text-white border-0 rounded-full px-5 font-semibold shrink-0"
                     >
@@ -338,25 +379,15 @@ export default function ExpertDashboardPage() {
                   <div className="flex items-center justify-between py-2">
                     <span className="text-gray-500">Status</span>
                     <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                      isBusy ? 'bg-orange-100 text-orange-700' :
                       isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                      {isOnline ? 'Online' : 'Offline'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-orange-500' : isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                      {isBusy ? 'Busy' : isOnline ? 'Online' : 'Offline'}
                     </span>
                   </div>
                 </div>
 
-                <button
-                  onClick={toggleOnline}
-                  disabled={togglingOnline}
-                  className={`w-full mt-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    isOnline
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      : 'bg-amber-500 text-white hover:bg-amber-600'
-                  }`}
-                >
-                  {isOnline ? 'Go Offline' : 'Go Online'}
-                </button>
               </CardContent>
             </Card>
 

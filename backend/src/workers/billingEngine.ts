@@ -6,6 +6,10 @@ const BILLING_INTERVAL_MS = 10000; // Check every 10 seconds
 const BILLING_CYCLE_MS = 60000; // Bill every 60 seconds
 const GRACE_PERIOD_MS = 60000; // 60 seconds grace period before termination
 
+// Backoff state for DB connection errors
+let _consecutiveDbErrors = 0;
+const MAX_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes max backoff
+
 /**
  * Background worker to handle per-minute billing for active sessions.
  * Designed to be safely run on multiple instances using Redis locks.
@@ -14,7 +18,42 @@ export function startBillingEngine() {
   console.log('Starting Per-Minute Billing Engine...');
 
   setInterval(async () => {
+    // Exponential backoff when DB is unreachable — avoids log flooding
+    if (_consecutiveDbErrors > 0) {
+      const backoff = Math.min(1000 * Math.pow(2, _consecutiveDbErrors - 1), MAX_BACKOFF_MS);
+      const elapsed = Date.now() % BILLING_INTERVAL_MS;
+      if (elapsed < backoff % BILLING_INTERVAL_MS) return;
+    }
+
     try {
+      // 0. Clean up stale INITIATED/ACCEPTED sessions that were never properly started
+      const nowTs = new Date();
+      const twoMinutesAgo = new Date(nowTs.getTime() - 2 * 60 * 1000);
+      const fiveMinutesAgo = new Date(nowTs.getTime() - 5 * 60 * 1000);
+
+      const staleSessions = await prisma.session.findMany({
+        where: {
+          OR: [
+            { status: 'INITIATED', createdAt: { lt: twoMinutesAgo } },
+            { status: 'ACCEPTED', createdAt: { lt: fiveMinutesAgo } },
+          ],
+        },
+      });
+
+      for (const stale of staleSessions) {
+        console.log(`[BillingEngine] Cleaning up stale ${stale.status} session ${stale.id}`);
+        await prisma.session.update({
+          where: { id: stale.id },
+          data: { status: 'CANCELLED', endTime: nowTs },
+        });
+        import('../lib/socket').then(({ emitConsultationEvent }) => {
+          emitConsultationEvent('session_terminated', stale.id,
+            { sessionId: stale.id, reason: 'timed_out' },
+            { userId: stale.userId, practitionerId: stale.practitionerId }
+          );
+        }).catch(() => {});
+      }
+
       // 1. Fetch all ACTIVE sessions
       const activeSessions = await prisma.session.findMany({
         where: { status: 'ACTIVE' },
@@ -24,6 +63,7 @@ export function startBillingEngine() {
         },
       });
 
+      _consecutiveDbErrors = 0; // reset on success
       for (const session of activeSessions) {
         const lockKey = `lock:billing:${session.id}`;
         
@@ -63,8 +103,18 @@ export function startBillingEngine() {
           console.error(`Error billing session ${session.id}:`, sessionErr);
         }
       }
-    } catch (err) {
-      console.error('Billing engine cycle error:', err);
+    } catch (err: any) {
+      // P1001 = DB not reachable (Neon suspended, network issue, etc.)
+      if (err?.code === 'P1001') {
+        _consecutiveDbErrors++;
+        const waitMin = Math.round(Math.min(1000 * Math.pow(2, _consecutiveDbErrors - 1), MAX_BACKOFF_MS) / 1000);
+        if (_consecutiveDbErrors === 1) {
+          console.warn(`Billing engine: DB unreachable (Neon may be waking up). Will retry in ~${waitMin}s.`);
+        }
+      } else {
+        _consecutiveDbErrors = 0;
+        console.error('Billing engine cycle error:', err);
+      }
     }
   }, BILLING_INTERVAL_MS);
 }
@@ -194,12 +244,22 @@ async function terminateSession(sessionId: string) {
   try {
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
     if (session) {
-      import('../lib/socket').then(({ emitConsultationEvent }) => {
+      await prisma.practitioner.update({
+        where: { id: session.practitionerId },
+        data: { isBusy: false },
+      });
+      import('../lib/socket').then(({ emitConsultationEvent, getIO }) => {
         emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'insufficient_balance' }, {
           userId: session.userId,
           practitionerId: session.practitionerId
         });
+        const io = getIO();
+        if (io) {
+          io.emit('practitioner_status', { practitionerId: session.practitionerId, isOnline: true, isBusy: false });
+        }
       });
     }
-  } catch {}
+  } catch (err) {
+    console.error('Error terminating session:', err);
+  }
 }

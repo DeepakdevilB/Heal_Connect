@@ -10,7 +10,7 @@ async function main() {
     where: { email: 'abhishekgiri1978@gmail.com' },
     update: { passwordHash: expertHash },
     create: {
-      name: 'Abhishek Expert',
+      name: 'Abhishek Giri',
       email: 'abhishekgiri1978@gmail.com',
       passwordHash: expertHash,
       isVerified: true,

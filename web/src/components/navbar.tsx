@@ -77,13 +77,15 @@ export default function Navbar() {
     if (!token) return;
     const role = localStorage.getItem('hc_role');
     if (role === 'practitioner') {
-      const pid = localStorage.getItem('hc_pid');
+      const pid = localStorage.getItem('hc_pid') || localStorage.getItem('hc_practitioner_id');
+      const pname = localStorage.getItem('hc_practitioner_name') || 'Expert';
       if (pid) {
+        setUserProfile({ photoUrl: null, role: 'practitioner', id: pid, name: pname });
         practitionersApi.get(pid).then((res) => {
           if (res.success && res.data) {
             setUserProfile({ photoUrl: res.data.practitioner.photoUrl, role: 'practitioner', id: pid, name: res.data.practitioner.name });
           }
-        });
+        }).catch(() => {});
       }
     } else {
       authApi.me(token).then((res) => {
@@ -91,7 +93,7 @@ export default function Navbar() {
           const u = (res.data as any).user;
           setUserProfile({ photoUrl: u.photoUrl, role: 'user', id: u.id, name: u.name });
         }
-      });
+      }).catch(() => {});
     }
   }, []);
 

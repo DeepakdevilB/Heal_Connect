@@ -14,6 +14,9 @@ import sessionsRouter from './routes/sessions';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
+import migrateRouter from './routes/migrate';
+import adminRouter from './routes/admin';
+import contactRouter from './routes/contact';
 import { startBillingEngine } from './workers/billingEngine';
 import { initSocketServer } from './lib/socket';
 
@@ -45,7 +48,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
 app.use(express.json({
@@ -82,6 +85,63 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
+app.use('/api/migrate', migrateRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/contact', contactRouter);
+
+// ─── Public Content Endpoints ────────────────────────────────────────────────
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const blogs = await prisma.blog.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { blogs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/blogs/:id', async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { prisma } = require('./lib/prisma');
+    const blog = await prisma.blog.findUnique({
+      where: { id }
+    });
+    if (!blog || !blog.published) {
+      res.status(404).json({ success: false, message: 'Blog not found' });
+      return;
+    }
+    res.json({ success: true, data: { blog } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/faqs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'asc' } });
+    res.json({ success: true, data: { faqs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/banners', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const banners = await prisma.banner.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { banners } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 

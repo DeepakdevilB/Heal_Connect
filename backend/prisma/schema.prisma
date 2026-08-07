@@ -88,6 +88,7 @@ model Practitioner {
   photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
+  isBusy         Boolean  @default(false)
   // Denormalized rating stats — updated atomically on each review submission
   avgRating      Float    @default(0)
   reviewCount    Int      @default(0)
@@ -225,4 +226,47 @@ model FlaggedContent {
   @@index([status])
   @@index([source])
   @@index([sessionId])
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    String   @default("new") // "new" | "replied" | "resolved"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Phase 4: Content Management ──────────────────────────────────────────────
+
+model Blog {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  author    String
+  imageUrl  String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Banner {
+  id        String   @id @default(uuid())
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

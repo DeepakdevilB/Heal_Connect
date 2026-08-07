@@ -85,7 +85,7 @@ router.get(
           select: {
             id: true, name: true, bio: true, specialties: true, languages: true,
             certifications: true, experienceYrs: true, perMinuteRate: true,
-            photoUrl: true, isVerified: true, isOnline: true,
+            photoUrl: true, isVerified: true, isOnline: true, isBusy: true,
             reviews: { select: { rating: true } },
           },
           orderBy: { createdAt: 'desc' },
@@ -128,7 +128,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       select: {
         id: true, name: true, bio: true, specialties: true, languages: true,
         certifications: true, experienceYrs: true, perMinuteRate: true,
-        photoUrl: true, isVerified: true, isOnline: true, email: true, phone: true,
+        photoUrl: true, isVerified: true, isOnline: true, isBusy: true, email: true, phone: true,
         reviews: {
           select: {
             id: true, rating: true, comment: true, createdAt: true,
@@ -308,6 +308,59 @@ router.patch('/:id/availability', requireAuth, async (req: AuthRequest, res: Res
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
+// POST /api/practitioners/:id/reviews
+router.post(
+  '/:id/reviews',
+  requireAuth,
+  [
+    body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1–5'),
+    body('comment').optional().trim().isLength({ max: 1000 }),
+    body('sessionId').notEmpty().withMessage('sessionId required'),
+  ],
+  handleValidation,
+  async (req: AuthRequest, res: Response) => {
+    const practitionerId = getParam(req, 'id');
+    if (!practitionerId) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
+
+    // Only users (not practitioners) can leave reviews
+    if (req.user!.practitionerId) {
+      res.status(403).json({ success: false, message: 'Practitioners cannot leave reviews' });
+      return;
+    }
+
+    const userId = req.user!.userId;
+    const { rating, comment, sessionId } = req.body as { rating: number; comment?: string; sessionId: string };
+
+    try {
+      // Verify the session exists, belongs to this user, and is completed
+      const session = await prisma.session.findFirst({
+        where: { id: sessionId, userId, practitionerId, status: 'COMPLETED' },
+      });
+      if (!session) {
+        res.status(400).json({ success: false, message: 'No completed session found for this practitioner' });
+        return;
+      }
+
+      // One review per session
+      const existing = await prisma.review.findFirst({ where: { sessionId } });
+      if (existing) {
+        res.status(409).json({ success: false, message: 'Review already submitted for this session' });
+        return;
+      }
+
+      const review = await prisma.review.create({
+        data: { userId, practitionerId, sessionId, rating, comment: comment ?? null },
+        include: { user: { select: { name: true, photoUrl: true } } },
+      });
+
+      res.status(201).json({ success: true, data: { review } });
+    } catch (err) {
+      console.error('Review error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
 
 // DELETE /api/practitioners/:id
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {

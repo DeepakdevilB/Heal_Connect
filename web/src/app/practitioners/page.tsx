@@ -23,6 +23,7 @@ interface Practitioner {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating: number;
   reviewCount: number;
 }
@@ -194,10 +195,14 @@ function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
           </div>
           <div className="absolute top-3 right-4">
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+              p.isBusy ? 'bg-orange-100 text-orange-700' : 
               p.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${p.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-              {p.isOnline ? 'Online' : 'Offline'}
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                p.isBusy ? 'bg-orange-500' : 
+                p.isOnline ? 'bg-emerald-500' : 'bg-gray-400'
+              }`} />
+              {p.isBusy ? 'Busy' : p.isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>
@@ -243,10 +248,10 @@ function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
               <span className="text-xs text-gray-400">/min</span>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" disabled={!p.isOnline || p.isBusy} onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
                 <MessageCircle className="h-3.5 w-3.5" /> Chat
               </Button>
-              <Button size="sm" disabled={!p.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
+              <Button size="sm" disabled={!p.isOnline || p.isBusy} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.stopPropagation(); router.push('/login'); }}>
                 <Phone className="h-3.5 w-3.5" /> Call
               </Button>
             </div>

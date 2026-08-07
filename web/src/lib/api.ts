@@ -51,6 +51,7 @@ export interface PractitionerProfile {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating?: number;
   reviewCount?: number;
 }
@@ -263,7 +264,7 @@ export const sessionsApi = {
     request(`/api/sessions/${sessionId}/reject`, { method: 'POST', headers: authHeader(token) }),
 
   connect: (token: string, sessionId: string) =>
-    request(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
+    request<{ session: { startTime: string } }>(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
 
   submitTranscript: (token: string, sessionId: string, transcriptText: string) =>
     request(`/api/sessions/${sessionId}/transcript`, {

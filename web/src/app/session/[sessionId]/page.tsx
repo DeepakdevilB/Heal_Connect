@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import ChatWindow from '@/components/chat/ChatWindow';
-import AudioCallScreen from '@/components/chat/AudioCallScreen';
-import { tokenStore, agoraApi, sessionsApi, type PractitionerProfile } from '@/lib/api';
+import dynamic from 'next/dynamic';
 import { ArrowLeft, MessageSquare, Phone } from 'lucide-react';
+import ChatWindow from '@/components/chat/ChatWindow';
 import { Button } from '@/components/ui/button';
+import { tokenStore, agoraApi, sessionsApi, type PractitionerProfile } from '@/lib/api';
+
+// Agora SDK uses `window` at import time — must never be SSR'd
+const AudioCallScreen = dynamic(() => import('@/components/chat/AudioCallScreen'), { ssr: false });
 
 type Tab = 'chat' | 'call';
 
@@ -38,6 +41,9 @@ export default function SessionPage() {
     agoraApi.getChannel(token, sessionId).then((res) => {
       if (res.success && res.data) {
         setSessionType(res.data.sessionType);
+        if (res.data.sessionType === 'AUDIO' || res.data.sessionType === 'VIDEO') {
+          setTab('call');
+        }
       }
     });
 
@@ -144,7 +150,13 @@ export default function SessionPage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {tab === 'chat' ? (
-          <ChatWindow sessionId={sessionId} currentUserId={isExpert ? activeSession?.practitionerId : userId} />
+          <ChatWindow
+            sessionId={sessionId}
+            currentUserId={isExpert ? activeSession?.practitionerId : userId}
+            isExpert={isExpert}
+            practitionerId={activeSession?.practitionerId ?? ''}
+            practitionerName={isExpert ? '' : (peer?.name ?? 'the expert')}
+          />
         ) : (
           <AudioCallScreen sessionId={sessionId} />
         )}
