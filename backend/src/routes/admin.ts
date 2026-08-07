@@ -664,7 +664,7 @@ router.get('/analytics/chat', async (_req: Request, res: Response) => {
 // ─── 8. Chat Session History ──────────────────────────────────────────────────
 router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const messages = await prisma.chatMessage.findMany({
       where: { sessionId: id },
       orderBy: { createdAt: 'asc' },
@@ -705,7 +705,7 @@ router.get('/moderation', requireAdmin, async (req: Request, res: Response) => {
 
 router.patch('/moderation/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { status } = req.body;
     const updated = await prisma.flaggedContent.update({
       where: { id },
@@ -739,7 +739,7 @@ router.get('/messages', requireAdmin, async (req: Request, res: Response) => {
 
 router.patch('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { status } = req.body;
     const updated = await prisma.contactMessage.update({
       where: { id },
@@ -754,7 +754,7 @@ router.patch('/messages/:id', requireAdmin, async (req: Request, res: Response) 
 
 router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     await prisma.contactMessage.delete({ where: { id } });
     res.json({ success: true, message: 'Message deleted' });
   } catch (err) {
@@ -801,7 +801,7 @@ router.post('/blogs', requireAdmin, async (req: Request, res: Response) => {
 router.patch('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const blog = await prisma.blog.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: req.body,
     });
     res.json({ success: true, data: { blog } });
@@ -812,7 +812,7 @@ router.patch('/blogs/:id', requireAdmin, async (req: Request, res: Response) => 
 
 router.delete('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    await prisma.blog.delete({ where: { id: req.params.id } });
+    await prisma.blog.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'Blog deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -842,7 +842,7 @@ router.post('/faqs', requireAdmin, async (req: Request, res: Response) => {
 router.patch('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const faq = await prisma.faq.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: req.body,
     });
     res.json({ success: true, data: { faq } });
@@ -853,7 +853,7 @@ router.patch('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
 
 router.delete('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    await prisma.faq.delete({ where: { id: req.params.id } });
+    await prisma.faq.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'FAQ deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -883,7 +883,7 @@ router.post('/banners', requireAdmin, async (req: Request, res: Response) => {
 router.patch('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const banner = await prisma.banner.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: req.body,
     });
     res.json({ success: true, data: { banner } });
@@ -894,7 +894,7 @@ router.patch('/banners/:id', requireAdmin, async (req: Request, res: Response) =
 
 router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    await prisma.banner.delete({ where: { id: req.params.id } });
+    await prisma.banner.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'Banner deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
