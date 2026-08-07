@@ -661,4 +661,121 @@ router.get('/analytics/chat', async (_req: Request, res: Response) => {
   }
 });
 
+// ─── 8. Chat Session History ──────────────────────────────────────────────────
+router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ success: true, data: { messages } });
+  } catch (err) {
+    console.error('Chat history error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 9. Moderation ─────────────────────────────────────────────────────────────
+router.get('/moderation', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const where: Prisma.FlaggedContentWhereInput = {};
+    if (statusParam && statusParam !== 'all') {
+      where.status = statusParam.toUpperCase();
+    }
+    const flagged = await prisma.flaggedContent.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    // We need to fetch the related user/practitioner details manually since they aren't strict relations in the schema
+    const results = await Promise.all(flagged.map(async (flag) => {
+      let user = null;
+      let practitioner = null;
+      if (flag.userId) user = await prisma.user.findUnique({ where: { id: flag.userId }, select: { name: true, email: true } });
+      if (flag.practitionerId) practitioner = await prisma.practitioner.findUnique({ where: { id: flag.practitionerId }, select: { name: true } });
+      return { ...flag, user, practitioner };
+    }));
+    res.json({ success: true, data: { flagged: results } });
+  } catch (err) {
+    console.error('Moderation fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.patch('/moderation/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const updated = await prisma.flaggedContent.update({
+      where: { id },
+      data: { status },
+    });
+    res.json({ success: true, data: { flagged: updated } });
+  } catch (err) {
+    console.error('Moderation update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 10. Contact Messages ────────────────────────────────────────────────────
+router.get('/messages', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const where: any = {};
+    if (statusParam && statusParam !== 'all') {
+      where.status = statusParam;
+    }
+    const messages = await prisma.contactMessage.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: { messages } });
+  } catch (err) {
+    console.error('Messages fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.patch('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const updated = await prisma.contactMessage.update({
+      where: { id },
+      data: { status },
+    });
+    res.json({ success: true, data: { message: updated } });
+  } catch (err) {
+    console.error('Message update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.contactMessage.delete({ where: { id } });
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (err) {
+    console.error('Message delete error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 11. DB Push (Temporary Migration Runner) ────────────────────────────────
+router.post('/db-push', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    const { stdout, stderr } = await execAsync('npx prisma db push --accept-data-loss');
+    res.json({ success: true, stdout, stderr });
+  } catch (err: any) {
+    console.error('DB push error:', err);
+    res.status(500).json({ success: false, message: err.message, stderr: err.stderr });
+  }
+});
+
 export default router;

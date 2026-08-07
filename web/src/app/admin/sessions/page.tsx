@@ -38,6 +38,25 @@ export default function AdminSessionsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+  const [viewChat, setViewChat] = useState<SessionRecord | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const fetchChatLog = async (sessionId: string) => {
+    setChatLoading(true);
+    try {
+      const res = await fetch(`/api/admin/sessions/${sessionId}/chat`, {
+        headers: { 'x-admin-key': ADMIN_KEY },
+      }).then(r => r.json());
+      if (res.success) {
+        setChatMessages(res.data.messages || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -173,9 +192,62 @@ export default function AdminSessionsPage() {
                   <span className="font-extrabold text-emerald-600">₹{selectedSession.totalCost}</span>
                 </div>
               </div>
-              <button onClick={() => setSelectedSession(null)} className="w-full mt-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-white font-extrabold rounded-xl text-xs">
-                Close
-              </button>
+              <div className="mt-5 space-y-2">
+                {selectedSession.type === 'CHAT' && (
+                  <button onClick={() => { setViewChat(selectedSession); setSelectedSession(null); fetchChatLog(selectedSession.id); }} className="w-full py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 font-extrabold rounded-xl text-xs flex items-center justify-center gap-2">
+                    <MessageSquare className="w-4 h-4" /> View Chat Log
+                  </button>
+                )}
+                <button onClick={() => setSelectedSession(null)} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-white font-extrabold rounded-xl text-xs">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Log Modal */}
+        {viewChat && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl h-[80vh] shadow-2xl border border-gray-100 dark:border-white/10 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5">
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">Chat Transcript: {viewChat.id.slice(0, 8)}</h3>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Between {viewChat.user} and {viewChat.practitioner}</p>
+                </div>
+                <button onClick={() => setViewChat(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-black/5">✕</button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900">
+                {chatLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-sm text-gray-400 font-medium">No messages found in this session.</div>
+                ) : (
+                  chatMessages.map(msg => {
+                    const isPractitioner = msg.senderType === 'PRACTITIONER';
+                    return (
+                      <div key={msg.id} className={`flex ${isPractitioner ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-sm ${
+                          isPractitioner 
+                            ? 'bg-blue-600 text-white rounded-br-none' 
+                            : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 border border-gray-100 dark:border-white/5 rounded-bl-none'
+                        }`}>
+                          <div className="text-[10px] font-bold opacity-70 mb-1 uppercase tracking-wider">
+                            {isPractitioner ? viewChat.practitioner : viewChat.user}
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          <div className={`text-[10px] mt-2 font-medium ${isPractitioner ? 'text-blue-100' : 'text-gray-400'}`}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         )}
