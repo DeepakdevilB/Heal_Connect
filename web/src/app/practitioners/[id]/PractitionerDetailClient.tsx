@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, CheckCircle2, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -45,6 +45,7 @@ export default function PractitionerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState(false);
   const [chatting, setChatting] = useState(false);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -78,6 +79,35 @@ export default function PractitionerDetailPage() {
       });
     };
   }, [id]);
+
+  const handleShare = async () => {
+    if (!p) return;
+    const url = `${window.location.origin}/practitioners/${p.id}`;
+    const shareData = {
+      title: `${p.name} on HealConnect`,
+      text: `Check out ${p.name}'s profile on HealConnect${p.specialties[0] ? ` — ${p.specialties[0]} expert` : ''}.`,
+      url,
+    };
+
+    // Prefer the native share sheet on supported devices (mobile browsers)
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // User cancelled the share sheet, or it failed — fall through to clipboard copy
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {
+      // Clipboard API unavailable (very old browser / non-secure context) — last resort
+      window.prompt('Copy this link to share:', url);
+    }
+  };
 
   const handleStartCall = async () => {
     if (!p) return;
@@ -174,6 +204,23 @@ export default function PractitionerDetailPage() {
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full shadow-sm" />
             <span className="font-extrabold text-[#f59e0b] tracking-tight">HealConnect</span>
+          </button>
+          <button
+            onClick={handleShare}
+            aria-label="Share this profile"
+            className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-[#f59e0b] transition-colors bg-transparent border border-yellow-200 hover:border-yellow-400 rounded-full px-3.5 py-1.5 cursor-pointer"
+          >
+            {shared ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-emerald-600">Link copied</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3.5 w-3.5" />
+                <span>Share</span>
+              </>
+            )}
           </button>
         </div>
       </header>

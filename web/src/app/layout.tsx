@@ -3,6 +3,7 @@ import { Inter, Great_Vibes, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
+import ConsentBanner from "@/components/ConsentBanner";
 import { SITE_NAME, SITE_URL, DEFAULT_TITLE, DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE } from "@/lib/seo";
 
 const inter = Inter({ subsets: ['latin'] });
@@ -65,6 +66,7 @@ export default function RootLayout({
         >
           <LangProvider>
             {children}
+            <ConsentBanner />
           </LangProvider>
         </ThemeProvider>
       </body>

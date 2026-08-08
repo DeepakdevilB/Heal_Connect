@@ -926,11 +926,19 @@ export default function LandingPage() {
                   <div key={col.title}>
                     <h4 className="text-amber-800 font-bold text-sm mb-3">{col.title}</h4>
                     <ul className="space-y-1.5">
-                      {col.links.map((link) => (
-                        <li key={link}>
-                          <Link href={link.toLowerCase().includes('chat') || link.toLowerCase().includes('talk') || link.toLowerCase().includes('horoscope') || link.toLowerCase().includes('kundli') || link.toLowerCase().includes('calculator') ? '/signup' : '#'} className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
-                        </li>
-                      ))}
+                      {col.links.map((link) => {
+                        const lower = link.toLowerCase();
+                        const href = lower.includes('privacy')
+                          ? '/privacy'
+                          : lower.includes('chat') || lower.includes('talk') || lower.includes('horoscope') || lower.includes('kundli') || lower.includes('calculator')
+                            ? '/signup'
+                            : '#';
+                        return (
+                          <li key={link}>
+                            <Link href={href} className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))}

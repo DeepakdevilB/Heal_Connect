@@ -56,7 +56,26 @@ export interface PractitionerProfile {
   reviewCount?: number;
 }
 
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
 
+export interface TranscriptEntry {
+  id: string;
+  transcriptText: string;
+  submittedAt: string;
+  session: {
+    id: string;
+    type: string;
+    startTime: string | null;
+    endTime: string | null;
+    practitioner?: { id: string; name: string; photoUrl: string | null };
+    user?: { id: string; name: string | null; photoUrl: string | null };
+  };
+}
 
 async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<ApiResponse<T>> {
   const mergedHeaders: Record<string, string> = {
@@ -185,6 +204,9 @@ export const usersApi = {
 
   deleteAccount: (token: string) =>
     request('/api/users/me', { method: 'DELETE', headers: authHeader(token) }),
+
+  exportData: (token: string) =>
+    request<Record<string, unknown>>('/api/users/me/export', { headers: authHeader(token) }),
 };
 
 export const practitionersApi = {
@@ -237,6 +259,9 @@ export const practitionersApi = {
 
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
+
+  exportData: (token: string) =>
+    request<Record<string, unknown>>('/api/practitioners/me/export', { headers: authHeader(token) }),
 };
 
 
@@ -297,6 +322,64 @@ export const sessionsApi = {
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
+
+  myTranscripts: (token: string, page = 1) =>
+    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>(
+      `/api/sessions/user/transcripts?page=${page}`,
+      { headers: authHeader(token) }
+    ),
+
+  practitionerTranscripts: (token: string, page = 1) =>
+    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>(
+      `/api/sessions/practitioner/transcripts?page=${page}`,
+      { headers: authHeader(token) }
+    ),
+};
+
+export interface TicketMessageEntry {
+  id: string;
+  senderType: 'USER' | 'PRACTITIONER' | 'ADMIN';
+  message: string;
+  createdAt: string;
+}
+
+export interface SupportTicketEntry {
+  id: string;
+  subject: string;
+  category: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  createdAt: string;
+  updatedAt: string;
+  _count?: { messages: number };
+  messages?: TicketMessageEntry[];
+}
+
+export const ticketsApi = {
+  create: (token: string, subject: string, message: string, category?: string) =>
+    request<{ ticket: SupportTicketEntry }>('/api/tickets', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ subject, message, category }),
+    }),
+
+  mine: (token: string, page = 1, status?: string) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (status) params.set('status', status);
+    return request<{ tickets: SupportTicketEntry[]; pagination: Pagination }>(
+      `/api/tickets/mine?${params.toString()}`,
+      { headers: authHeader(token) }
+    );
+  },
+
+  get: (token: string, id: string) =>
+    request<{ ticket: SupportTicketEntry }>(`/api/tickets/${id}`, { headers: authHeader(token) }),
+
+  reply: (token: string, id: string, message: string) =>
+    request<{ message: TicketMessageEntry }>(`/api/tickets/${id}/messages`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ message }),
+    }),
 };
 
 export const moderationApi = {
@@ -381,5 +464,38 @@ export const tokenStore = {
       localStorage.removeItem('hc_access');
       localStorage.removeItem('hc_refresh');
     }
+  },
+};
+
+// ─── GDPR: Consent ────────────────────────────────────────────────────────────
+
+export type ConsentCategory = 'ANALYTICS' | 'MARKETING';
+export type ConsentState = Partial<Record<ConsentCategory, { granted: boolean; updatedAt: string }>>;
+
+/** First-party random id used to track consent for visitors who aren't logged in yet. */
+export function getVisitorId(): string {
+  if (typeof window === 'undefined') return '';
+  let id = localStorage.getItem('hc_visitor_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('hc_visitor_id', id);
+  }
+  return id;
+}
+
+export const consentApi = {
+  get: () => {
+    const token = tokenStore.getAccess();
+    const q = token ? '' : `?visitorId=${encodeURIComponent(getVisitorId())}`;
+    return request<{ consent: ConsentState }>(`/api/consent${q}`, token ? { headers: authHeader(token) } : {});
+  },
+
+  record: (category: ConsentCategory, granted: boolean) => {
+    const token = tokenStore.getAccess();
+    return request('/api/consent', {
+      method: 'POST',
+      headers: token ? authHeader(token) : {},
+      body: JSON.stringify(token ? { category, granted } : { category, granted, visitorId: getVisitorId() }),
+    });
   },
 };

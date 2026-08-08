@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, UserCheck, CalendarClock, MessageSquare,
   BookOpen, Star, HelpCircle, Image, Bell, BarChart3, Settings,
   LogOut, Menu, X, ChevronRight, Shield, Sparkles, Wallet,
-  FileText, Layers, Sun, Moon, Hash, Video, ShieldAlert
+  FileText, Layers, Sun, Moon, Hash, Video, ShieldAlert, LifeBuoy
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { label: 'Banners',         href: '/admin/banners',        icon: Image },
   { label: 'Moderation',      href: '/admin/moderation',     icon: ShieldAlert },
   { label: 'Messages',        href: '/admin/messages',       icon: MessageSquare },
+  { label: 'Tickets',         href: '/admin/tickets',        icon: LifeBuoy },
   { label: 'Analytics',       href: '/admin/analytics',      icon: BarChart3 },
   { label: 'Settings',        href: '/admin/settings',       icon: Settings },
 ];

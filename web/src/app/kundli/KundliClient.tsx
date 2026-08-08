@@ -693,7 +693,7 @@ export default function KundliPage() {
                   <h4 className="text-amber-800 font-bold text-sm mb-3">{col.title}</h4>
                   <ul className="space-y-1.5">
                     {col.links.map((link) => (
-                      <li key={link}><Link href="/kundli" className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link></li>
+                      <li key={link}><Link href={link === 'Privacy Policy' ? '/privacy' : '/kundli'} className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link></li>
                     ))}
                   </ul>
                 </div>

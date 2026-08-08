@@ -118,6 +118,69 @@ router.get(
   }
 );
 
+// ─── GDPR: Data Export (Right to Access / Portability) ───────────────────────
+// GET /api/practitioners/me/export — mirrors the user-side export in users.ts.
+// IMPORTANT: This MUST be registered before GET /:id or Express will match
+// "me" as the :id param and return 404 before reaching this handler.
+router.get('/me/export', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'This endpoint is for practitioner accounts' });
+    return;
+  }
+  try {
+    const [practitioner, sessions, reviews, tickets, consents] = await Promise.all([
+      prisma.practitioner.findUnique({
+        where: { id: practitionerId },
+        select: {
+          id: true, email: true, phone: true, name: true, bio: true, specialties: true,
+          certifications: true, languages: true, experienceYrs: true, perMinuteRate: true,
+          photoUrl: true, isVerified: true, avgRating: true, reviewCount: true,
+          createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.session.findMany({
+        where: { practitionerId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, name: true } },
+          review: true,
+          transcript: { select: { transcriptText: true, purgedAt: true, submittedAt: true } },
+          messages: { orderBy: { createdAt: 'asc' } },
+        },
+      }),
+      prisma.review.findMany({ where: { practitionerId }, orderBy: { createdAt: 'desc' } }),
+      prisma.supportTicket.findMany({
+        where: { practitionerId },
+        orderBy: { createdAt: 'desc' },
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+      }),
+      prisma.consent.findMany({ where: { practitionerId }, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+    if (!practitioner) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
+
+    await prisma.privacyRequestLog.create({
+      data: { subjectType: 'PRACTITIONER', subjectId: practitionerId, type: 'EXPORT', ipAddress: req.ip ?? null },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        exportedAt: new Date().toISOString(),
+        profile: practitioner,
+        sessions,
+        reviews,
+        supportTickets: tickets,
+        consentHistory: consents,
+      },
+    });
+  } catch (err) {
+    console.error('Export error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // GET /api/practitioners/:id
 router.get('/:id', async (req: Request, res: Response) => {
   const id = getParam(req, 'id');
@@ -362,16 +425,87 @@ router.post(
   }
 );
 
+// ─── GDPR: Erasure (Right to be Forgotten) ────────────────────────────────────
+// /me/export was moved before /:id above. Only the DELETE erasure handler lives here.
+
 // DELETE /api/practitioners/:id
+// GDPR erasure for practitioners. Restricted to the practitioner's own account —
+// previously this route had NO ownership check at all (any authenticated user or
+// practitioner could delete any practitioner by ID), which is a separate, serious
+// pre-existing bug fixed here as part of tightening this same handler. Admins use
+// the dedicated DELETE /api/admin/practitioners/:id route, which is unaffected.
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
+  if (req.user!.practitionerId !== id) {
+    res.status(403).json({ success: false, message: 'You can only delete your own account' });
+    return;
+  }
   try {
-    const p = await prisma.practitioner.findUnique({ where: { id }, select: { photoUrl: true } });
+    const p = await prisma.practitioner.findUnique({ where: { id }, select: { photoUrl: true, erasedAt: true } });
     if (!p) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
-    if (p.photoUrl) await deleteProfilePhoto(p.photoUrl);
-    await prisma.practitioner.delete({ where: { id } });
-    res.json({ success: true, message: 'Practitioner deleted' });
+    if (p.erasedAt) {
+      res.status(410).json({ success: false, message: 'Account already erased' });
+      return;
+    }
+
+    if (p.photoUrl) await deleteProfilePhoto(p.photoUrl).catch(() => {});
+
+    const sessions = await prisma.session.findMany({ where: { practitionerId: id }, select: { id: true } });
+    const sessionIds = sessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      const heldChat = await prisma.flaggedContent.findMany({
+        where: { sessionId: { in: sessionIds }, status: 'PENDING', source: 'CHAT' },
+        select: { chatMessageId: true },
+      });
+      const heldChatIds = new Set(
+        heldChat.map((h) => h.chatMessageId).filter((cid): cid is string => cid !== null)
+      );
+
+      await prisma.chatMessage.updateMany({
+        where: { sessionId: { in: sessionIds }, purgedAt: null, id: { notIn: [...heldChatIds] } },
+        data: { content: '[Removed — account erased]', purgedAt: new Date() },
+      });
+
+      const heldTranscripts = await prisma.flaggedContent.findMany({
+        where: { sessionId: { in: sessionIds }, status: 'PENDING', source: 'CALL_TRANSCRIPT' },
+        select: { transcriptId: true },
+      });
+      const heldTranscriptIds = new Set(
+        heldTranscripts.map((h) => h.transcriptId).filter((tid): tid is string => tid !== null)
+      );
+
+      await prisma.callTranscript.updateMany({
+        where: { sessionId: { in: sessionIds }, purgedAt: null, id: { notIn: [...heldTranscriptIds] } },
+        data: { transcriptText: '[Removed — account erased]', purgedAt: new Date() },
+      });
+    }
+
+    await prisma.review.updateMany({ where: { practitionerId: id }, data: { comment: null } });
+    await prisma.supportTicket.deleteMany({ where: { practitionerId: id } });
+
+    await prisma.practitioner.update({
+      where: { id },
+      data: {
+        name: 'Deleted Practitioner',
+        email: null,
+        phone: null,
+        passwordHash: `erased:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+        bio: null,
+        specialties: { set: [] },
+        certifications: { set: [] },
+        photoUrl: null,
+        isOnline: false,
+        erasedAt: new Date(),
+      },
+    });
+
+    await prisma.privacyRequestLog.create({
+      data: { subjectType: 'PRACTITIONER', subjectId: id, type: 'ERASURE', ipAddress: req.ip ?? null },
+    });
+
+    res.json({ success: true, message: 'Account erased' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Internal server error' });

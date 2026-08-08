@@ -51,6 +51,9 @@ export interface AdminUser {
   isEmailVerified: boolean;
   isPhoneVerified: boolean;
   createdAt: string;
+  isBanned?: boolean;
+  banReason?: string | null;
+  banUntil?: string | null;
 }
 
 export interface AdminPractitioner {
@@ -71,6 +74,9 @@ export interface AdminPractitioner {
   updatedAt: string;
   sessionCount: number;
   avgRating: number | null;
+  isBanned?: boolean;
+  banReason?: string | null;
+  banUntil?: string | null;
 }
 
 export interface AdminSession {
@@ -192,4 +198,82 @@ export const adminApi = {
   // Analytics
   getAnalytics: () =>
     adminFetch<AdminAnalytics>('/api/admin/analytics'),
+};
+
+// ─── Support Tickets ────────────────────────────────────────────────────────
+
+export interface AdminTicketMessage {
+  id: string;
+  senderType: 'USER' | 'PRACTITIONER' | 'ADMIN';
+  message: string;
+  createdAt: string;
+}
+
+export interface AdminTicket {
+  id: string;
+  subject: string;
+  category: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; name: string | null; email: string | null } | null;
+  practitioner: { id: string; name: string; email: string | null } | null;
+  _count?: { messages: number };
+  messages?: AdminTicketMessage[];
+}
+
+export const ticketsApi = {
+  list: (status?: string, page = 1) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (status) params.set('status', status);
+    return adminFetch<{ tickets: AdminTicket[]; pagination: Pagination }>(
+      `/api/admin/tickets?${params.toString()}`
+    );
+  },
+
+  get: (id: string) =>
+    adminFetch<{ ticket: AdminTicket }>(`/api/admin/tickets/${id}`),
+
+  reply: (id: string, message: string, status?: string) =>
+    adminFetch<{ message: AdminTicketMessage | null; status: string }>(
+      `/api/admin/tickets/${id}/messages`,
+      { method: 'POST', body: JSON.stringify({ message, status }) }
+    ),
+};
+
+// ─── Moderation: Ban / Suspend ───────────────────────────────────────────────
+
+export interface BanResult {
+  id: string;
+  name: string | null;
+  email: string | null;
+  isBanned: boolean;
+  banReason: string | null;
+  banUntil: string | null;
+}
+
+export const banApi = {
+  banUser: (id: string, days: number | null, reason?: string) =>
+    adminFetch<{ user: BanResult }>(`/api/admin/users/${id}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ banned: true, days: days ?? undefined, reason }),
+    }),
+
+  unbanUser: (id: string) =>
+    adminFetch<{ user: BanResult }>(`/api/admin/users/${id}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ banned: false }),
+    }),
+
+  banPractitioner: (id: string, days: number | null, reason?: string) =>
+    adminFetch<{ practitioner: BanResult }>(`/api/admin/practitioners/${id}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ banned: true, days: days ?? undefined, reason }),
+    }),
+
+  unbanPractitioner: (id: string) =>
+    adminFetch<{ practitioner: BanResult }>(`/api/admin/practitioners/${id}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ banned: false }),
+    }),
 };

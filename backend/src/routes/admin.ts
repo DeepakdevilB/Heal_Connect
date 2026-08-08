@@ -286,6 +286,9 @@ router.get('/users', async (req: Request, res: Response) => {
           isPhoneVerified: true,
           createdAt: true,
           photoUrl: true,
+          isBanned: true,
+          banReason: true,
+          banUntil: true,
           wallet: { select: { balance: true } },
           _count: { select: { sessions: true, reviews: true } },
         },
@@ -307,6 +310,9 @@ router.get('/users', async (req: Request, res: Response) => {
       reviewCount: u._count.reviews,
       balance: u.wallet?.balance || 0,
       status: u.isEmailVerified || u.isPhoneVerified ? 'active' : 'unverified',
+      isBanned: u.isBanned,
+      banReason: u.banReason,
+      banUntil: u.banUntil,
     }));
 
     res.json({
@@ -376,6 +382,39 @@ router.patch('/users/:id/balance', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Update balance error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// PATCH /api/admin/users/:id/ban — temporary or permanent suspension
+router.patch('/users/:id/ban', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { banned, days, reason } = req.body as { banned: boolean; days?: number; reason?: string };
+
+    if (typeof banned !== 'boolean') {
+      res.status(400).json({ success: false, message: '"banned" must be a boolean' });
+      return;
+    }
+
+    const banUntil = banned && typeof days === 'number' && days > 0
+      ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+      : null; // no days provided while banning => permanent; unbanning always clears it
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: {
+        isBanned: banned,
+        banReason: banned ? (reason ?? null) : null,
+        banUntil,
+      },
+      select: { id: true, name: true, email: true, isBanned: true, banReason: true, banUntil: true },
+    });
+
+    res.json({ success: true, data: { user } });
+  } catch (err: any) {
+    if (err.code === 'P2025') { res.status(404).json({ success: false, message: 'User not found' }); return; }
+    console.error('Ban user error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
@@ -554,6 +593,39 @@ router.patch('/practitioners/:id/verify', async (req: Request, res: Response) =>
     res.json({ success: true, data: { practitioner: updated } });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// PATCH /api/admin/practitioners/:id/ban — temporary or permanent suspension
+router.patch('/practitioners/:id/ban', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { banned, days, reason } = req.body as { banned: boolean; days?: number; reason?: string };
+
+    if (typeof banned !== 'boolean') {
+      res.status(400).json({ success: false, message: '"banned" must be a boolean' });
+      return;
+    }
+
+    const banUntil = banned && typeof days === 'number' && days > 0
+      ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+      : null;
+
+    const practitioner = await prisma.practitioner.update({
+      where: { id },
+      data: {
+        isBanned: banned,
+        banReason: banned ? (reason ?? null) : null,
+        banUntil,
+      },
+      select: { id: true, name: true, email: true, isBanned: true, banReason: true, banUntil: true },
+    });
+
+    res.json({ success: true, data: { practitioner } });
+  } catch (err: any) {
+    if (err.code === 'P2025') { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
+    console.error('Ban practitioner error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
@@ -872,6 +944,94 @@ router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response)
     res.json({ success: true, message: 'Message deleted' });
   } catch (err) {
     console.error('Message delete error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 10b. Support Tickets ─────────────────────────────────────────────────────
+router.get('/tickets', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const where: any = {};
+    if (statusParam && statusParam !== 'all') where.status = statusParam;
+
+    const page = parseInt(String(req.query['page'] ?? '1'));
+    const limit = Math.min(parseInt(String(req.query['limit'] ?? '20')), 100);
+    const skip = (page - 1) * limit;
+
+    const [tickets, total] = await Promise.all([
+      prisma.supportTicket.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          practitioner: { select: { id: true, name: true, email: true } },
+          _count: { select: { messages: true } },
+        },
+      }),
+      prisma.supportTicket.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: { tickets, pagination: { total, page, limit, pages: Math.ceil(total / limit) } },
+    });
+  } catch (err) {
+    console.error('Admin ticket list error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.get('/tickets/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        practitioner: { select: { id: true, name: true, email: true } },
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!ticket) {
+      res.status(404).json({ success: false, message: 'Ticket not found' });
+      return;
+    }
+    res.json({ success: true, data: { ticket } });
+  } catch (err) {
+    console.error('Admin ticket detail error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.post('/tickets/:id/messages', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { message, status } = req.body as { message?: string; status?: string };
+
+    const ticket = await prisma.supportTicket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) {
+      res.status(404).json({ success: false, message: 'Ticket not found' });
+      return;
+    }
+
+    const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+    const nextStatus = status && validStatuses.includes(status) ? status : 'IN_PROGRESS';
+    const trimmedMessage = message?.trim();
+
+    const ticketMessage = await prisma.$transaction(async (tx) => {
+      const created = trimmedMessage
+        ? await tx.ticketMessage.create({ data: { ticketId: id, senderType: 'ADMIN', message: trimmedMessage } })
+        : null;
+      await tx.supportTicket.update({ where: { id }, data: { status: nextStatus } });
+      return created;
+    });
+
+    res.json({ success: true, data: { message: ticketMessage, status: nextStatus } });
+  } catch (err) {
+    console.error('Admin ticket reply error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

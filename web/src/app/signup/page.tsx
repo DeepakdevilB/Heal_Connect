@@ -232,7 +232,7 @@ function SignupInner() {
             <p className="text-center text-xs text-gray-400">
               By continuing, you agree to our{' '}
               <Link href="#" className="hover:underline">Terms of Service</Link>{' '}and{' '}
-              <Link href="#" className="hover:underline">Privacy Policy</Link>.
+              <Link href="/privacy" className="hover:underline">Privacy Policy</Link>.
             </p>
           </CardContent>
         </Card>

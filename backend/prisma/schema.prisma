@@ -38,11 +38,23 @@ model User {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  // Moderation: temporary/permanent suspension
+  isBanned              Boolean   @default(false)
+  banReason             String?
+  banUntil              DateTime? // null = permanent (while isBanned is true)
+
+  // GDPR: set when the account has been erased via the right-to-erasure flow.
+  // PII fields are nulled/anonymized at that point; row is kept (not hard-deleted)
+  // because Session/Review/Transaction rows reference it for financial/audit records.
+  erasedAt              DateTime?
+
   wallet                Wallet?
   sessions              Session[]
   reviews               Review[]
   refreshTokens         RefreshToken[]
   otps                  Otp[]
+  supportTickets        SupportTicket[]
+  consents              Consent[]
 }
 
 // ─── OTP model for SMS verification ──────────────────────────────────────────
@@ -95,8 +107,18 @@ model Practitioner {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Moderation: temporary/permanent suspension
+  isBanned       Boolean   @default(false)
+  banReason      String?
+  banUntil       DateTime? // null = permanent (while isBanned is true)
+
+  // GDPR: see User.erasedAt for the same rationale (anonymize, don't hard-delete).
+  erasedAt       DateTime?
+
   sessions       Session[]
   reviews        Review[]
+  supportTickets SupportTicket[]
+  consents       Consent[]
 }
 
 model Wallet {
@@ -171,6 +193,11 @@ model ChatMessage {
   readAt       DateTime?
   createdAt    DateTime  @default(now())
 
+  // GDPR: set when `content` has been overwritten by the 90-day retention purge
+  // (or immediate erasure request). Row is kept for session/thread integrity;
+  // only the message text is removed.
+  purgedAt     DateTime?
+
   @@index([sessionId])
   @@index([senderId])
 }
@@ -200,6 +227,10 @@ model CallTranscript {
   practitionerId String
   submittedAt    DateTime @default(now())
   createdAt      DateTime @default(now())
+
+  // GDPR: set when `transcriptText` has been overwritten by the 90-day retention
+  // purge (or immediate erasure request). See ChatMessage.purgedAt.
+  purgedAt       DateTime?
 
   flaggedContent FlaggedContent[]
 
@@ -269,4 +300,84 @@ model Banner {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Support Tickets ───────────────────────────────────────────────────────────
+// Authenticated ticketing system for users/experts (distinct from the anonymous
+// public ContactMessage form). One of userId/practitionerId is set, never both.
+
+model SupportTicket {
+  id             String   @id @default(uuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  practitionerId String?
+  practitioner   Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  subject        String
+  category       String   @default("OTHER") // "BILLING" | "TECHNICAL" | "ACCOUNT" | "SESSION" | "OTHER"
+  status         String   @default("OPEN")  // "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages       TicketMessage[]
+
+  @@index([userId])
+  @@index([practitionerId])
+  @@index([status])
+}
+
+model TicketMessage {
+  id         String        @id @default(uuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType String        // "USER" | "PRACTITIONER" | "ADMIN"
+  message    String
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId])
+}
+
+// ─── GDPR: Consent (immutable audit log) ─────────────────────────────────────
+// Every consent decision (grant or withdraw) is inserted as a NEW row — existing
+// rows are never updated or deleted. "Current" consent for a subject+category is
+// the most recent row by createdAt. This gives us the immutable audit trail the
+// guide requires without a separate log table for this specific right.
+
+model Consent {
+  id             String   @id @default(uuid())
+  userId         String?
+  // SetNull (not Cascade): this is an audit log — if an admin hard-deletes a User
+  // row via DELETE /api/admin/users/:id, the consent history should still survive
+  // as evidence of what was agreed to and when, just detached from the account.
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  practitionerId String?
+  practitioner   Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: SetNull)
+  // For consent captured before login (banner shown to anonymous visitors), we key
+  // off a random id stored in a first-party cookie instead of a user/practitioner id.
+  visitorId      String?
+  category       String   // "ANALYTICS" | "MARKETING"  (necessary/functional cookies need no consent)
+  granted        Boolean
+  source         String   @default("BANNER") // "BANNER" | "SETTINGS"
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([practitionerId])
+  @@index([visitorId])
+  @@index([category])
+}
+
+// ─── GDPR: Privacy request audit log (export / erasure) ──────────────────────
+// Standalone (no FK) so the record survives even after an erasure request has
+// anonymized the User/Practitioner row it refers to.
+
+model PrivacyRequestLog {
+  id             String   @id @default(uuid())
+  subjectType    String   // "USER" | "PRACTITIONER"
+  subjectId      String
+  type           String   // "EXPORT" | "ERASURE"
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  @@index([subjectId])
 }

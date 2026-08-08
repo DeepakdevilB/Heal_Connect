@@ -1207,7 +1207,7 @@ export default function HoroscopePage() {
                   <ul className="space-y-1.5">
                     {col.links.map((link) => (
                       <li key={link}>
-                        <Link href="/signup" className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
+                        <Link href={link === 'Privacy Policy' ? '/privacy' : '/signup'} className="text-xs text-gray-500 hover:text-amber-600 transition-colors">{link}</Link>
                       </li>
                     ))}
                   </ul>

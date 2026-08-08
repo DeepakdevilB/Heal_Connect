@@ -30,6 +30,23 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** A ban is active if isBanned is set and (banUntil is unset [permanent] or still in the future). */
+function isActivelyBanned(account: { isBanned: boolean; banUntil: Date | null }): boolean {
+  if (!account.isBanned) return false;
+  if (!account.banUntil) return true; // permanent
+  return account.banUntil.getTime() > Date.now();
+}
+
+function bannedResponse(res: Response, account: { banReason: string | null; banUntil: Date | null }) {
+  res.status(403).json({
+    success: false,
+    message: account.banUntil
+      ? `Your account is suspended until ${account.banUntil.toISOString()}.${account.banReason ? ` Reason: ${account.banReason}` : ''}`
+      : `Your account has been suspended.${account.banReason ? ` Reason: ${account.banReason}` : ''}`,
+    code: 'ACCOUNT_SUSPENDED',
+  });
+}
+
 async function issueTokens(userId: string, email?: string | null) {
   const payload = { userId, ...(email ? { email } : {}) };
   const accessToken  = signAccessToken(payload);
@@ -185,6 +202,11 @@ router.post(
         return;
       }
 
+      if (isActivelyBanned(user)) {
+        bannedResponse(res, user);
+        return;
+      }
+
       // ── Block login until account is verified ──────────────────────────────
       const isVerified = user.isEmailVerified || user.isPhoneVerified;
       if (!isVerified) {
@@ -251,12 +273,21 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     // Bypass DB check for practitioners (we don't store their refresh tokens in the DB yet)
     if (payload.practitionerId) {
-      const newPayload: import('../lib/jwt').JwtPayload = { 
-        userId: payload.userId, 
+      const practitioner = await prisma.practitioner.findUnique({
+        where: { id: payload.practitionerId },
+        select: { isBanned: true, banReason: true, banUntil: true },
+      });
+      if (practitioner && isActivelyBanned(practitioner)) {
+        bannedResponse(res, practitioner);
+        return;
+      }
+
+      const newPayload: import('../lib/jwt').JwtPayload = {
+        userId: payload.userId,
         ...(payload.email ? { email: payload.email } : {}),
         practitionerId: payload.practitionerId
       };
-      
+
       const accessToken = signAccessToken(newPayload);
       const newRefreshToken = signRefreshToken(newPayload);
       res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
@@ -266,6 +297,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
     if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
       res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+      return;
+    }
+
+    const refreshingUser = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { isBanned: true, banReason: true, banUntil: true },
+    });
+    if (refreshingUser && isActivelyBanned(refreshingUser)) {
+      bannedResponse(res, refreshingUser);
       return;
     }
 
@@ -850,6 +890,11 @@ router.post(
       const valid = await bcrypt.compare(password, practitioner.passwordHash);
       if (!valid) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      if (isActivelyBanned(practitioner)) {
+        bannedResponse(res, practitioner);
         return;
       }
 

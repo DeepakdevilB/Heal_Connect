@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   MessageCircle, LogOut, Wifi, WifiOff, User, Clock,
   IndianRupee, Star, TrendingUp, Bell, ChevronRight,
-  Sparkles, HeartHandshake, Phone, Activity, Loader2
+  Sparkles, HeartHandshake, Phone, Activity, Loader2, FileText, LifeBuoy
 } from 'lucide-react';
 
 interface ActiveSession {
@@ -188,6 +188,14 @@ export default function ExpertDashboardPage() {
                   <Link href="/expert/profile" onClick={() => setShowProfileMenu(false)} className="w-full px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3">
                     <User className="w-4 h-4 text-amber-500" />
                     <span className="text-sm font-medium text-gray-700">My Profile</span>
+                  </Link>
+                  <Link href="/expert/transcripts" onClick={() => setShowProfileMenu(false)} className="w-full px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm font-medium text-gray-700">Call Transcripts</span>
+                  </Link>
+                  <Link href="/expert/support" onClick={() => setShowProfileMenu(false)} className="w-full px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3">
+                    <LifeBuoy className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm font-medium text-gray-700">Support</span>
                   </Link>
                   <button onClick={handleLogout} className="w-full px-4 py-3 hover:bg-red-50 transition-colors flex items-center gap-3">
                     <LogOut className="w-4 h-4 text-red-500" />

@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ShieldAlert, UserX, CheckCircle, AlertTriangle, MessageSquare, Trash2
+  ShieldAlert, UserX, CheckCircle, AlertTriangle, MessageSquare, Trash2, X
 } from 'lucide-react';
 import {
   AdminShell, StatCard, StatusBadge, Toast, Pagination, SkeletonRow
 } from '@/components/admin-shell';
+import { banApi } from '@/lib/adminApi';
 
 const ADMIN_KEY = 'healconnect-admin-2026';
 
@@ -30,6 +31,12 @@ export default function AdminModerationPage() {
   const [statusFilter, setStatusFilter] = useState('PENDING');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [banTarget, setBanTarget] = useState<{
+    flagId: string; type: 'user' | 'practitioner'; id: string; name: string;
+  } | null>(null);
+  const [banDays, setBanDays] = useState('7');
+  const [banReason, setBanReason] = useState('');
+  const [banSubmitting, setBanSubmitting] = useState(false);
 
   const fetchFlags = useCallback(async () => {
     setLoading(true);
@@ -74,6 +81,48 @@ export default function AdminModerationPage() {
     } catch (err) {
       console.error(err);
       showToast('An error occurred', 'error');
+    }
+  };
+
+  const openBanModal = (flag: FlaggedRecord) => {
+    if (flag.userId) {
+      setBanTarget({ flagId: flag.id, type: 'user', id: flag.userId, name: flag.user?.name || 'this user' });
+    } else if (flag.practitionerId) {
+      setBanTarget({ flagId: flag.id, type: 'practitioner', id: flag.practitionerId, name: flag.practitioner?.name || 'this expert' });
+    } else {
+      showToast('No user or expert linked to this flag', 'error');
+      return;
+    }
+    setBanDays('7');
+    setBanReason(flag.reason.replace(/_/g, ' '));
+  };
+
+  const handleConfirmBan = async () => {
+    if (!banTarget) return;
+    const days = banDays.trim() === '' ? null : Number(banDays);
+    if (days !== null && (Number.isNaN(days) || days <= 0)) {
+      showToast('Duration must be a positive number of days (or blank for permanent)', 'error');
+      return;
+    }
+    setBanSubmitting(true);
+    try {
+      const res = banTarget.type === 'user'
+        ? await banApi.banUser(banTarget.id, days, banReason || undefined)
+        : await banApi.banPractitioner(banTarget.id, days, banReason || undefined);
+
+      if (res.success) {
+        showToast(`${banTarget.type === 'user' ? 'User' : 'Expert'} suspended${days ? ` for ${days} day(s)` : ' permanently'}`);
+        // Mark the flag resolved since action has been taken
+        await handleUpdateStatus(banTarget.flagId, 'RESOLVED');
+        setBanTarget(null);
+      } else {
+        showToast(res.message || 'Failed to suspend', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('An error occurred', 'error');
+    } finally {
+      setBanSubmitting(false);
     }
   };
 
@@ -143,6 +192,15 @@ export default function AdminModerationPage() {
                     <td className="px-4 py-3 flex gap-2">
                       {flag.status === 'PENDING' && (
                         <>
+                          {(flag.userId || flag.practitionerId) && (
+                            <button
+                              onClick={() => openBanModal(flag)}
+                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                              title="Suspend account"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleUpdateStatus(flag.id, 'RESOLVED')}
                             className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100"
@@ -168,6 +226,62 @@ export default function AdminModerationPage() {
         </div>
       </div>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {banTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <UserX className="w-4 h-4 text-red-600" /> Suspend {banTarget.type === 'user' ? 'User' : 'Expert'}
+              </h3>
+              <button onClick={() => setBanTarget(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              This temporarily suspends <span className="font-bold">{banTarget.name}</span> from logging in. They can be unsuspended anytime from the {banTarget.type === 'user' ? 'Users' : 'Practitioners'} page.
+            </p>
+
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">Duration (days)</label>
+            <input
+              type="number"
+              min={1}
+              value={banDays}
+              onChange={(e) => setBanDays(e.target.value)}
+              placeholder="Leave blank for permanent"
+              className="w-full mb-3 px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm"
+            />
+
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">Reason</label>
+            <textarea
+              value={banReason}
+              onChange={(e) => setBanReason(e.target.value)}
+              rows={2}
+              className="w-full mb-4 px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm"
+            />
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setBanTarget(null)}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmBan}
+                disabled={banSubmitting}
+                className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {banSubmitting ? 'Suspending...' : 'Suspend'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </AdminShell>
   );
 }

@@ -181,6 +181,88 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
   res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
 });
 
+// ─── GET /api/sessions/user/transcripts — user's own call transcripts ────────
+router.get('/user/transcripts', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const page = parseInt(String(req.query.page ?? '1'));
+  const limit = Math.min(parseInt(String(req.query.limit ?? '20')), 50);
+  const skip = (page - 1) * limit;
+
+  try {
+    const [transcripts, total] = await Promise.all([
+      prisma.callTranscript.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          transcriptText: true,
+          submittedAt: true,
+          session: {
+            select: {
+              id: true, type: true, startTime: true, endTime: true,
+              practitioner: { select: { id: true, name: true, photoUrl: true } },
+            },
+          },
+        },
+      }),
+      prisma.callTranscript.count({ where: { userId } }),
+    ]);
+
+    res.json({
+      success: true,
+      data: { transcripts, pagination: { total, page, limit, pages: Math.ceil(total / limit) } },
+    });
+  } catch (err) {
+    console.error('User transcripts fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/sessions/practitioner/transcripts — practitioner's own call transcripts
+router.get('/practitioner/transcripts', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'Not a practitioner' });
+    return;
+  }
+  const page = parseInt(String(req.query.page ?? '1'));
+  const limit = Math.min(parseInt(String(req.query.limit ?? '20')), 50);
+  const skip = (page - 1) * limit;
+
+  try {
+    const [transcripts, total] = await Promise.all([
+      prisma.callTranscript.findMany({
+        where: { practitionerId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          transcriptText: true,
+          submittedAt: true,
+          session: {
+            select: {
+              id: true, type: true, startTime: true, endTime: true,
+              user: { select: { id: true, name: true, photoUrl: true } },
+            },
+          },
+        },
+      }),
+      prisma.callTranscript.count({ where: { practitionerId } }),
+    ]);
+
+    res.json({
+      success: true,
+      data: { transcripts, pagination: { total, page, limit, pages: Math.ceil(total / limit) } },
+    });
+  } catch (err) {
+    console.error('Practitioner transcripts fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // DEV TEMP: Clear stuck active sessions
 router.post('/dev-clear', async (req: any, res: Response) => {
   try {
