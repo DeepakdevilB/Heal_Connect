@@ -16,13 +16,21 @@ For security reasons, `.env` files are ignored in `.gitignore`. To run the proje
 
 Drop these files into their respective folders before starting!
 
+### Local Development Stack
+This repository now includes a `docker-compose.yml` that starts a local PostgreSQL 15 database and Redis 7 cache on the default ports:
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+
+Run the infrastructure first, then start the app servers.
+
 ### 1. Backend Setup
 ```bash
+docker-compose up -d
 cd backend
 npm install
+npx prisma migrate deploy
 npm run dev
 ```
-*Note: Because our Azure PostgreSQL Database is locked behind an Azure VNet, `npx prisma db push` will time out locally. To apply schema changes, see the **Database Migrations** section below.*
 
 ### 2. Frontend Setup
 ```bash
@@ -30,8 +38,8 @@ cd web
 npm install
 npm run dev
 ```
-The application will be available at `http://localhost:3000`. 
-*Note: All API requests to `/api/*` are automatically proxied to the live Azure Backend in `next.config.mjs`!*
+The application will be available at `http://localhost:3000`.
+API requests to `/api/*` now proxy to the local backend by default.
 
 ---
 

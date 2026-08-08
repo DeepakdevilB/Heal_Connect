@@ -804,9 +804,11 @@ router.post(
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
 
-      await prisma.refreshToken.create({
-        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
-      });
+      // NOTE: intentionally not persisted to RefreshToken — that table's userId is FK'd
+      // to User.id, not Practitioner.id, so writing practitioner.id here throws a foreign
+      // key constraint violation (this exact bug was fixed once already in ce17307).
+      // POST /auth/refresh already bypasses the DB lookup for practitioners via
+      // payload.practitionerId, so nothing currently reads this row anyway.
 
       res.status(201).json({
         success: true,
@@ -856,9 +858,8 @@ router.post(
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
 
-      await prisma.refreshToken.create({
-        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
-      });
+      // NOTE: intentionally not persisted to RefreshToken — see comment in
+      // /practitioner/register above.
 
       res.json({
         success: true,
