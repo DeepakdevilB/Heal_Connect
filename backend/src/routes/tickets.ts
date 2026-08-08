@@ -102,13 +102,16 @@ router.get(
 // ─── GET /api/tickets/:id — ticket detail + message thread ───────────────────
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const isPractitioner = Boolean(req.user!.practitionerId);
-  const ownerFilter = isPractitioner
-    ? { practitionerId: req.user!.practitionerId }
-    : { userId: req.user!.userId };
+  const where: any = { id: req.params.id as string };
+  if (isPractitioner) {
+    where.practitionerId = req.user!.practitionerId;
+  } else {
+    where.userId = req.user!.userId;
+  }
 
   try {
     const ticket = await prisma.supportTicket.findFirst({
-      where: { id: req.params.id as string, ...ownerFilter },
+      where,
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
 
@@ -132,14 +135,17 @@ router.post(
   handleValidation,
   async (req: AuthRequest, res: Response) => {
     const isPractitioner = Boolean(req.user!.practitionerId);
-    const ownerFilter = isPractitioner
-      ? { practitionerId: req.user!.practitionerId }
-      : { userId: req.user!.userId };
+    const where: any = { id: req.params.id as string };
+    if (isPractitioner) {
+      where.practitionerId = req.user!.practitionerId;
+    } else {
+      where.userId = req.user!.userId;
+    }
     const { message } = req.body as { message: string };
 
     try {
       const ticket = await prisma.supportTicket.findFirst({
-        where: { id: req.params.id as string, ...ownerFilter },
+        where,
         select: { id: true, status: true },
       });
 
