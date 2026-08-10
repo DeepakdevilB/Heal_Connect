@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { tokenStore } from '@/lib/api';
 
 // Uses Next.js proxy rewrite — same as the rest of the app (see next.config.mjs)
 const API_URL = '';

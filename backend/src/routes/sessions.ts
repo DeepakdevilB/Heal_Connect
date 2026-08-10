@@ -1,6 +1,9 @@
 import { Router, type Response } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../lib/prisma';
+import { getIO } from '../lib/socket';
+import { SESSION_SAFETY_GUIDELINES, SESSION_DISCLAIMER } from '../lib/safetyGuidelines';
+import { flagContentIfNeeded } from '../lib/moderation';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 

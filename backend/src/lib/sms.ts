@@ -44,8 +44,10 @@ export function isMsg91Configured(): boolean {
  * Indian numbers (+91…) use MSG91; everything else uses Twilio Verify.
  */
 function selectProvider(phone: string): 'msg91' | 'twilio' {
-  // E.164 format: +91XXXXXXXXXX
-  return phone.startsWith('+91') ? 'msg91' : 'twilio';
+  if (phone.startsWith('+91') && isMsg91Configured()) {
+    return 'msg91';
+  }
+  return 'twilio';
 }
 
 // ─── MSG91 helpers ────────────────────────────────────────────────────────────

@@ -18,8 +18,8 @@ import {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
 } from '../lib/email';
-import { isOtpConfigured } from '../lib/sms';
-import { sendTwilioOTP, verifyTwilioOTP } from '../services/twilio.service';
+import { sendOtpSms, verifyOtpSms, isOtpConfigured } from '../lib/sms';
+import { sendOTP, verifyOTP, isValidE164 } from '../services/twilio.service';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
@@ -68,16 +68,6 @@ router.post(
         phone?: string; verifyMethod?: 'email' | 'sms';
       };
 
-    // SMS + +91 → MSG91 not ready yet, tell the user to use email instead
-    if (verifyMethod === 'sms' && phone?.startsWith('+91')) {
-      res.status(503).json({
-        success: false,
-        message: 'SMS OTP for Indian numbers (+91) is coming soon. Please use Email verification for now.',
-      });
-      return;
-    }
-
-    // SMS chosen but provider not configured for this number → fall back to email silently
     const useEmail = verifyMethod === 'email' || (phone ? !isOtpConfigured(phone) : true);
 
     try {
@@ -97,10 +87,9 @@ router.post(
 
       const passwordHash = await bcrypt.hash(password, 12);
 
-      // Generate & hash email verify token
       const rawEmailToken    = generateSecureToken();
       const emailVerifyToken = hashToken(rawEmailToken);
-      const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+      const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
       const user = await prisma.user.create({
         data: {
@@ -115,7 +104,6 @@ router.post(
         },
       });
 
-      // Send welcome email (non-blocking — never crash registration)
       void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
 
       if (useEmail) {
@@ -124,11 +112,7 @@ router.post(
           console.error('Verification email failed:', e)
         );
       } else if (phone) {
-        if (phone.startsWith('+91')) {
-          console.warn('MSG91 configuration pending — skipping OTP for Indian number during registration.');
-        } else {
-          void sendTwilioOTP(phone).catch((e) => console.error('OTP SMS failed:', e));
-        }
+        void sendOtpSms(phone).catch((e) => console.error('OTP SMS failed:', e));
       }
 
       const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
@@ -634,87 +618,134 @@ router.post(
 
 // ─── Send Phone OTP ───────────────────────────────────────────────────────────
 
+// ─── Send Phone OTP (Twilio Verify API) ───────────────────────────────────────
+
 router.post(
   '/send-otp',
-  emailLimiter,
-  [body('phone').isMobilePhone('any').withMessage('Valid phone number required')],
-  handleValidation,
+  authLimiter,
   async (req: Request, res: Response) => {
-    const { phone } = req.body as { phone: string };
-
     try {
-      const user = await prisma.user.findUnique({ where: { phone } });
-      if (!user) {
-        // Return success to prevent phone enumeration
-        res.json({ success: true, message: 'If this number is registered, an OTP has been sent.' });
+      const { phone } = (req.body ?? {}) as { phone?: string };
+
+      if (!phone || typeof phone !== 'string' || !isValidE164(phone)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid phone number format. Must be in E.164 format (e.g. +919876543210).',
+        });
         return;
       }
 
-      if (user.isPhoneVerified) {
-        res.json({ success: true, message: 'Phone already verified.' });
-        return;
-      }
+      await sendOTP(phone);
 
-      if (phone.startsWith('+91')) {
-        throw new Error('MSG91 configuration pending.');
-      }
-
-      await sendTwilioOTP(phone);
-
-      res.json({ success: true, message: 'OTP sent successfully.' });
-    } catch (err) {
-      console.error('Send OTP error:', err);
-      res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.' });
+      res.status(200).json({
+        success: true,
+        message: 'OTP sent successfully',
+      });
+    } catch (err: any) {
+      console.error('❌ /api/auth/send-otp error:', err?.message || err);
+      const status = err?.statusCode || 500;
+      res.status(status).json({
+        success: false,
+        message: err?.message || 'Failed to send OTP via Twilio',
+      });
     }
   }
 );
 
-// ─── Verify Phone OTP ─────────────────────────────────────────────────────────
+// ─── Verify Phone OTP (Twilio Verify API) ─────────────────────────────────────
 
 router.post(
   '/verify-otp',
   authLimiter,
-  [
-    body('phone').isMobilePhone('any').withMessage('Valid phone number required'),
-    body('otp').isLength({ min: 6, max: 6 }).isNumeric().withMessage('OTP must be 6 digits'),
-  ],
-  handleValidation,
   async (req: Request, res: Response) => {
-    const { phone, otp } = req.body as { phone: string; otp: string };
-
     try {
-      const user = await prisma.user.findUnique({ where: { phone } });
+      const { phone, otp, name, email, password } = (req.body ?? {}) as {
+        phone?: string; otp?: string; name?: string; email?: string; password?: string;
+      };
+
+      if (!phone || typeof phone !== 'string' || !isValidE164(phone)) {
+        res.status(400).json({
+          verified: false,
+          success: false,
+          message: 'Invalid phone number format. Must be in E.164 format.',
+        });
+        return;
+      }
+
+      if (!otp || typeof otp !== 'string' || !/^\d{4,8}$/.test(otp.trim())) {
+        res.status(400).json({
+          verified: false,
+          success: false,
+          message: 'Invalid OTP format. OTP must be a numeric string.',
+        });
+        return;
+      }
+
+      const check = await verifyOTP(phone, otp);
+
+      if (check.status !== 'approved') {
+        res.status(400).json({
+          verified: false,
+          success: false,
+          message: 'Invalid or expired OTP',
+        });
+        return;
+      }
+
+      // Check if user exists or create new user with signup details
+      let user = await prisma.user.findUnique({ where: { phone } });
+
       if (!user) {
-        res.status(400).json({ success: false, message: 'Invalid phone or OTP.' });
-        return;
+        const passwordHash = password ? await bcrypt.hash(password, 12) : null;
+        user = await prisma.user.create({
+          data: {
+            phone,
+            name: name ?? null,
+            email: email ?? null,
+            passwordHash,
+            isPhoneVerified: true,
+            provider: 'phone',
+            wallet: { create: { balance: 0 } },
+          },
+        });
+      } else {
+        const updateData: any = { isPhoneVerified: true };
+        if (name && !user.name) updateData.name = name;
+        if (email && !user.email) updateData.email = email;
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+        });
       }
 
-      if (user.isPhoneVerified) {
-        res.json({ success: true, message: 'Phone already verified.' });
-        return;
-      }
+      // Issue JWT tokens
+      const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
 
-      if (phone.startsWith('+91')) {
-        throw new Error('MSG91 configuration pending.');
-      }
-
-      const result = await verifyTwilioOTP(phone, otp);
-
-      if (result.status !== 'approved') {
-        res.status(400).json({ success: false, message: 'Invalid OTP' });
-        return;
-      }
-
-      // Mark phone as verified in DB
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { isPhoneVerified: true },
+      res.status(200).json({
+        verified: true,
+        success: true,
+        message: 'OTP verified successfully',
+        data: {
+          user: {
+            id: user.id,
+            phone: user.phone,
+            email: user.email,
+            name: user.name,
+            isPhoneVerified: user.isPhoneVerified,
+            isEmailVerified: user.isEmailVerified,
+          },
+          accessToken,
+          refreshToken,
+        },
       });
-
-      res.json({ success: true, message: 'OTP verified' });
-    } catch (err) {
-      console.error('Verify OTP error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+    } catch (err: any) {
+      console.error('❌ /api/auth/verify-otp error:', err?.message || err);
+      const status = err?.statusCode || 500;
+      res.status(status).json({
+        verified: false,
+        success: false,
+        message: status === 400 ? (err?.message || 'Invalid request') : 'Twilio service unavailable',
+      });
     }
   }
 );
@@ -738,10 +769,7 @@ router.post(
       const user = await prisma.user.findUnique({ where: { phone } });
 
       if (user && !user.isPhoneVerified) {
-        if (phone.startsWith('+91')) {
-          throw new Error('MSG91 configuration pending.');
-        }
-        await sendTwilioOTP(phone);
+        await sendOtpSms(phone);
       }
 
       res.json({ success: true, message: 'If this number is registered, a new OTP has been sent.' });

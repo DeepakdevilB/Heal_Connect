@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label';
 import { authApi, tokenStore } from '@/lib/api';
 
 type Role = 'user' | 'expert';
-type Mode = 'login' | 'forgot';
 
 function LoginInner() {
   const router = useRouter();
@@ -23,7 +22,7 @@ function LoginInner() {
   useEffect(() => {
     if (searchParams.get('role') === 'expert') setRole('expert');
   }, [searchParams]);
-  const [mode, setMode] = useState<Mode>('login');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -68,32 +67,8 @@ function LoginInner() {
     finally { setLoading(false); }
   }
 
-  async function handleForgotPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const res = await authApi.forgotPassword(email);
-      setSuccess(res.message || 'Check your email for a reset link.');
-    } catch { setError('Something went wrong. Please try again.'); }
-    finally { setLoading(false); }
-  }
-
-  function handleGoogleSignIn() {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
-    if (!clientId) { setError('Google Sign-In is not configured yet.'); return; }
-    const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
-    const scope = encodeURIComponent('openid email profile');
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&nonce=${Math.random().toString(36)}`;
-  }
-
-  function handleAppleSignIn() {
-    setError('Apple Sign-In requires native SDK configuration.');
-  }
-
   return (
     <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
-
       {/* Left — Branding */}
       <div className="hidden md:flex flex-col justify-between w-1/2 p-12 bg-gradient-to-br from-[#f59e0b] via-[#d97706] to-[#b45309] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
@@ -116,7 +91,7 @@ function LoginInner() {
                 <ShieldCheck className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-white font-semibold">100% Private & Secure</p>
+                <p className="text-[#ffffff] font-semibold">100% Private & Secure</p>
                 <p className="text-sm text-yellow-100">Your data and conversations are encrypted.</p>
               </div>
             </div>
@@ -139,48 +114,36 @@ function LoginInner() {
 
       {/* Right — Form */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-12 relative">
-        <div className="absolute top-6 left-6 md:hidden">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full" />
-            <span className="text-xl font-extrabold text-[#f59e0b]">HealConnect</span>
-          </Link>
-        </div>
-
         <Card className="w-full max-w-md bg-white border border-yellow-100 shadow-xl">
           <CardHeader className="space-y-2 pb-6">
             <CardTitle className="text-2xl font-extrabold text-[#1a1a1a]">
-              {mode === 'login' ? 'Log in to your account' : 'Reset your password'}
+              Log in to your account
             </CardTitle>
             <CardDescription className="text-gray-500 text-base">
-              {mode === 'login' ? 'Welcome back! Enter your credentials to continue.' : 'Enter your email to receive a password reset link.'}
+              Welcome back! Enter your credentials to continue.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-5">
             {/* Role Toggle */}
-            {mode === 'login' && (
-              <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
-                <button type="button" onClick={() => { setRole('user'); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
-                  <User className="w-4 h-4" /> User
-                </button>
-                <button type="button" onClick={() => { setRole('expert'); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
-                  <Sparkles className="w-4 h-4" /> Expert
-                </button>
-              </div>
-            )}
+            <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
+              <button type="button" onClick={() => { setRole('user'); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                <User className="w-4 h-4" /> User
+              </button>
+              <button type="button" onClick={() => { setRole('expert'); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                <Sparkles className="w-4 h-4" /> Expert
+              </button>
+            </div>
 
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
                 <p className="font-semibold">{error}</p>
                 {verifyUrl && (
-                  <a
-                    href={verifyUrl}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white font-bold text-xs shadow-md transition-all"
-                  >
+                  <a href={verifyUrl} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white font-bold text-xs shadow-md transition-all">
                     ✦ Click Here to Verify Email Now →
                   </a>
                 )}
@@ -188,82 +151,39 @@ function LoginInner() {
             )}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-            {mode === 'login' && (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[#1a1a1a]">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                    <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className="pl-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
-                  </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-[#1a1a1a]">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className="pl-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-[#1a1a1a]">Password</Label>
-                    <button type="button" onClick={() => { setMode('forgot'); setError(''); setSuccess(''); }} className="text-sm text-[#f59e0b] hover:underline">Forgot password?</button>
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                    <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" className="pl-10 pr-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600" tabIndex={-1}>
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-                <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Log in as Expert' : 'Log in'} <ArrowRight className="ml-2 h-4 w-4" /></>}
-                </Button>
-              </form>
-            )}
+              </div>
 
-            {mode === 'forgot' && (
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reset-email" className="text-[#1a1a1a]">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                    <Input id="reset-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-[#1a1a1a]">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
-                <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send Reset Link'}
-                </Button>
-                <button type="button" onClick={() => { setMode('login'); setError(''); setSuccess(''); }} className="w-full text-center text-sm text-[#f59e0b] hover:underline">
-                  ← Back to login
-                </button>
-              </form>
-            )}
+              </div>
 
-            {mode === 'login' && (
-              <>
-                <div className="relative flex items-center py-1">
-                  <div className="flex-grow border-t border-yellow-100" />
-                  <span className="flex-shrink-0 mx-4 text-gray-400 text-sm uppercase tracking-wider">Or continue with</span>
-                  <div className="flex-grow border-t border-yellow-100" />
-                </div>
-                <div className="space-y-3">
-                  <Button type="button" variant="outline" onClick={handleGoogleSignIn} className="w-full h-12 bg-white border border-gray-200 hover:bg-gray-50 text-[#1a1a1a] shadow-sm">
-                    <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                    </svg>
-                    Continue with Google
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleAppleSignIn} className="w-full h-12 bg-white border border-gray-200 hover:bg-gray-50 text-[#1a1a1a] shadow-sm">
-                    <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.04 2.26-.79 3.59-.76 1.65.04 2.9.72 3.68 1.9-3.28 1.95-2.73 5.75.52 7.02-.75 1.86-1.74 3.2-2.87 3.99zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.32 2.38-2.07 4.29-3.74 4.25z" />
-                    </svg>
-                    Continue with Apple
-                  </Button>
-                </div>
-                <p className="text-center text-sm text-gray-500 pt-1">
-                  Don&apos;t have an account?{' '}
-                  <Link href="/signup" className="text-[#f59e0b] font-semibold hover:underline">Sign up</Link>
-                </p>
-              </>
-            )}
+              <Button type="submit" disabled={loading} className="w-full h-12 bg-[#f59e0b] hover:bg-[#d97706] text-white font-extrabold rounded-xl shadow-md text-base">
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Log In →'}
+              </Button>
+            </form>
+
+            <div className="text-center pt-3 border-t border-gray-100">
+              <p className="text-xs text-gray-500 font-medium">
+                Don't have an account?{' '}
+                <Link href="/signup" className="font-extrabold text-[#f59e0b] hover:underline">
+                  Sign up for free
+                </Link>
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -273,7 +193,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-[#fffbf0] flex items-center justify-center text-amber-600 font-bold">Loading...</div>}>
       <LoginInner />
     </Suspense>
   );
