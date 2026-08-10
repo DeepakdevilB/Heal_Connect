@@ -108,7 +108,7 @@ router.get('/', async (req: Request, res: Response) => {
       ? { userId: identity.userId }
       : identity.practitionerId
         ? { practitionerId: identity.practitionerId }
-        : { visitorId: identity.visitorId };
+        : { visitorId: identity.visitorId! };
 
     const rows = await prisma.consent.findMany({
       where,
