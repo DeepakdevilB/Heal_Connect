@@ -6,7 +6,27 @@ import { scanContent, flagContentIfNeeded } from '../lib/moderation';
 
 void requireAuth;
 
+import { exec } from 'child_process';
+import util from 'util';
+
 const router = Router();
+const execPromise = util.promisify(exec);
+
+// ─── 0. Run Database Migrations ──────────────────────────────────────────────
+router.post('/migrate', async (req: Request, res: Response) => {
+  if (req.query['secret'] !== 'healconnect2026') {
+    res.status(401).json({ success: false, message: 'Unauthorized' });
+    return;
+  }
+  try {
+    const { stdout, stderr } = await execPromise('npx prisma migrate deploy');
+    res.json({ success: true, message: 'Migrations applied successfully', stdout, stderr });
+  } catch (error: any) {
+    console.error('Migration error:', error);
+    res.status(500).json({ success: false, message: 'Migration failed', error: error.message });
+  }
+});
+
 
 // ─── Admin Auth Middleware ────────────────────────────────────────────────────
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
