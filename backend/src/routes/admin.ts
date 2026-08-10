@@ -15,15 +15,15 @@ const execPromise = util.promisify(exec);
 // ─── 0. Run Database Migrations ──────────────────────────────────────────────
 router.post('/migrate', async (req: Request, res: Response) => {
   if (req.query['secret'] !== 'healconnect2026') {
-    res.status(401).json({ success: false, message: 'Unauthorized' });
+    res.status(200).json({ success: false, message: 'Unauthorized' });
     return;
   }
   try {
-    const { stdout, stderr } = await execPromise('npx prisma migrate deploy');
+    const { stdout, stderr } = await execPromise('npx prisma migrate deploy || ./node_modules/.bin/prisma migrate deploy || npm run migrate');
     res.json({ success: true, message: 'Migrations applied successfully', stdout, stderr });
   } catch (error: any) {
     console.error('Migration error:', error);
-    res.status(500).json({ success: false, message: 'Migration failed', error: error.message });
+    res.status(200).json({ success: false, message: 'Migration failed', error: error.message, stdout: error.stdout, stderr: error.stderr });
   }
 });
 
