@@ -3,6 +3,7 @@ import { Inter, Great_Vibes, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
+import { FCMProvider } from "@/components/FCMProvider";
 
 const inter = Inter({ subsets: ['latin'] });
 const greatVibes = Great_Vibes({ weight: '400', subsets: ['latin'], variable: '--font-cursive' });
@@ -28,7 +29,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <LangProvider>
-            {children}
+            <FCMProvider>
+              {children}
+            </FCMProvider>
           </LangProvider>
         </ThemeProvider>
       </body>

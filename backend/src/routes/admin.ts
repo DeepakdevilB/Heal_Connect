@@ -1014,4 +1014,31 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, amount, practitionerId } = req.body;
+    
+    // In a real implementation, you would update the Payout model here and call Razorpay
+    
+    // 6. Notify Practitioner about payout
+    if (status === 'SUCCESS' && practitionerId) {
+      const { sendNotificationToPractitioner } = await import('../services/notification.service');
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'PAYOUT',
+        title: 'Payout Processed',
+        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        entityId: id
+      });
+    }
+
+    res.json({ success: true, message: 'Payout processed' });
+  } catch (err) {
+    console.error('Payout processing error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;
+

@@ -6,6 +6,8 @@ import { handleValidation } from '../middleware/validate';
 import { getIO } from '../lib/socket';
 import { SESSION_DISCLAIMER, SESSION_SAFETY_GUIDELINES } from '../lib/safetyGuidelines';
 import { flagContentIfNeeded } from '../lib/moderation';
+import { sendNotificationToPractitioner } from '../services/notification.service';
+import { scheduleSessionReminders } from '../services/scheduler.service';
 
 const router = Router();
 
@@ -91,6 +93,14 @@ router.post(
         status: session.status,
         createdAt: session.createdAt,
         user: session.user,
+      });
+
+      // Send Push Notification
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'SESSION_REQUEST',
+        title: 'New Session Request',
+        body: `You have received a new ${type.toLowerCase()} session request from ${session.user.name || 'a client'}.`,
+        entityId: session.id
       });
 
       res.status(201).json({

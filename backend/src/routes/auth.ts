@@ -174,8 +174,19 @@ router.post(
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
-      if (!user || !user.passwordHash) {
+      if (!user) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      if (!user.passwordHash) {
+        if (user.googleId) {
+          res.status(401).json({ success: false, message: 'You signed up using Google. Please click "Sign in with Google" to log in, or use Forgot Password to set a manual password.' });
+        } else if (user.appleId) {
+          res.status(401).json({ success: false, message: 'You signed up using Apple. Please click "Sign in with Apple" to log in.' });
+        } else {
+          res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
         return;
       }
 
@@ -323,7 +334,7 @@ router.post(
   [body('idToken').notEmpty().withMessage('Google ID token required')],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { idToken } = req.body as { idToken: string };
+    const { idToken, role } = req.body as { idToken: string; role?: string };
 
     try {
       const ticket = await googleClient.verifyIdToken({
@@ -338,6 +349,42 @@ router.post(
       }
 
       const { sub: googleId, email, name, email_verified } = gPayload;
+
+      if (role === 'expert') {
+        let practitioner = await prisma.practitioner.findUnique({ where: { email: email ?? '' } });
+        if (!practitioner) {
+           practitioner = await prisma.practitioner.create({
+             data: {
+               name: name ?? 'Unknown',
+               email: email ?? '',
+               passwordHash: '', 
+               isVerified: false,
+             }
+           });
+           if (email && name) sendWelcomeEmail(email, name).catch(() => {});
+        }
+        
+        const payload: any = { userId: practitioner.id, practitionerId: practitioner.id };
+        if (practitioner.email) payload.email = practitioner.email;
+        
+        const accessToken = signAccessToken(payload);
+        const refreshToken = signRefreshToken(payload);
+        await prisma.refreshToken.create({
+          data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+        });
+
+        res.json({
+          success: true,
+          message: 'Signed in with Google as Expert',
+          data: {
+            user: { id: practitioner.id, email: practitioner.email, name: practitioner.name },
+            role: 'practitioner',
+            accessToken,
+            refreshToken
+          }
+        });
+        return;
+      }
 
       let user = await prisma.user.findUnique({ where: { googleId } });
       if (!user && email) user = await prisma.user.findUnique({ where: { email } });
@@ -836,8 +883,14 @@ router.post(
 
     try {
       const practitioner = await prisma.practitioner.findUnique({ where: { email } });
-      if (!practitioner || !practitioner.passwordHash) {
+      if (!practitioner) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      if (!practitioner.passwordHash) {
+        // Since we added Google login for experts
+        res.status(401).json({ success: false, message: 'You signed up using Google. Please click "Sign in with Google" to log in, or use Forgot Password to set a manual password.' });
         return;
       }
 
