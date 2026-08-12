@@ -400,7 +400,10 @@ router.post(
           });
         }
 
-        const { accessToken, refreshToken } = await issueTokens(pract.id, pract.email);
+        const payload: import('../lib/jwt').JwtPayload = { userId: pract.id, practitionerId: pract.id, ...(pract.email ? { email: pract.email } : {}) };
+        const accessToken = signAccessToken(payload);
+        const refreshToken = signRefreshToken(payload);
+
         res.json({
           success: true,
           message: 'Signed in with Google as Expert',
