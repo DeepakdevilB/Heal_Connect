@@ -1,52 +1,33 @@
 import { BlobServiceClient } from '@azure/storage-blob';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
-import path from 'path';
 
-const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING!;
 const containerName = process.env.AZURE_STORAGE_CONTAINER || 'profile-photos';
-const LOCAL_UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-
-function isAzureConfigured(): boolean {
-  return !!connectionString && connectionString.startsWith('DefaultEndpointsProtocol');
-}
 
 function getContainerClient() {
-  const client = BlobServiceClient.fromConnectionString(connectionString!);
+  const client = BlobServiceClient.fromConnectionString(connectionString);
   return client.getContainerClient(containerName);
 }
 
 export async function uploadProfilePhoto(
   buffer: Buffer,
   mimeType: string,
-  folder: 'users' | 'practitioners' | 'astrologer-photos' | 'astrologer-docs'
+  folder: 'users' | 'practitioners'
 ): Promise<string> {
-  const ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
-  const fileName = `${uuidv4()}.${ext}`;
-
-  if (!isAzureConfigured()) {
-    const dir = path.join(LOCAL_UPLOAD_DIR, folder);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, fileName), buffer);
-    return `/uploads/${folder}/${fileName}`;
-  }
-
-  const blobName = `${folder}/${fileName}`;
+  const ext = mimeType.split('/')[1] || 'jpg';
+  const blobName = `${folder}/${uuidv4()}.${ext}`;
   const containerClient = getContainerClient();
   const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
   await blockBlobClient.uploadData(buffer, {
     blobHTTPHeaders: { blobContentType: mimeType },
   });
+
   return blockBlobClient.url;
 }
 
 export async function deleteProfilePhoto(url: string): Promise<void> {
   try {
-    if (!isAzureConfigured()) {
-      const localPath = path.join(process.cwd(), url);
-      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-      return;
-    }
     const containerClient = getContainerClient();
     const blobName = new URL(url).pathname.split(`/${containerName}/`)[1];
     if (blobName) await containerClient.deleteBlob(blobName);

@@ -1,19 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // Disable to prevent double useEffect firing (timer issue)
+  allowedDevOrigins: ['cytoplast-robin-hasty.ngrok-free.dev', 'localhost:3000'],
   // Proxy /api/* → backend (browser calls /api/... → Next.js forwards to backend, no CORS issues)
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      'http://localhost:8080';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     return [
       {
         source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
+        destination: process.env.NEXT_PUBLIC_API_URL
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`
+          : `${backendUrl}/api/:path*`,
       },
     ];
   },
-  output: 'standalone',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {

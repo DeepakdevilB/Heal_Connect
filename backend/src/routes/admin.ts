@@ -3,7 +3,6 @@ import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
 import { scanContent, flagContentIfNeeded } from '../lib/moderation';
-import adminAstrologersRouter from './adminAstrologers';
 
 void requireAuth;
 
@@ -41,9 +40,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
 }
 
 router.use(requireAdmin);
-
-// ─── Astrologer Management (sub-router) ──────────────────────────────────────
-router.use('/astrologers', adminAstrologersRouter);
 
 // ─── Clean Dummy Practitioners Endpoint ───────────────────────────────────────
 router.post('/clean-dummies', async (_req: Request, res: Response) => {
