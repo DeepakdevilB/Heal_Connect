@@ -7,7 +7,6 @@ import Image from 'next/image';
 import {
   ArrowLeft, Camera, Loader2, Check, X,
   User, Mail, Star, IndianRupee, BookOpen, Languages, Award,
-  Download, ShieldAlert, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -51,17 +50,12 @@ export default function ExpertProfilePage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [practitionerId, setPractitionerId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     const token = tokenStore.getAccess();
     const role = localStorage.getItem('hc_role');
-    const pid = localStorage.getItem('hc_practitioner_id') || localStorage.getItem('hc_pid');
-    if (!token || role !== 'practitioner' || !pid) { router.replace('/login?role=expert'); return; }
+    const pid = localStorage.getItem('hc_practitioner_id');
+    if (!token || role !== 'practitioner' || !pid) { router.replace('/expert/login'); return; }
     setPractitionerId(pid);
     practitionersApi.get(pid).then((res) => {
       if (!res.success || !res.data) { router.replace('/expert/login'); return; }
@@ -114,45 +108,6 @@ export default function ExpertProfilePage() {
 
   const toggle = (arr: string[], setArr: (v: string[]) => void, val: string) =>
     setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
-
-  const handleExport = async () => {
-    const token = tokenStore.getAccess();
-    if (!token) return;
-    setExporting(true);
-    try {
-      const res = await practitionersApi.exportData(token);
-      if (res.success && res.data) {
-        const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `healconnect-my-data-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    const token = tokenStore.getAccess();
-    if (!token || !practitionerId) return;
-    setDeleting(true);
-    setDeleteError('');
-    const res = await practitionersApi.delete(token, practitionerId);
-    setDeleting(false);
-    if (res.success) {
-      tokenStore.clear();
-      localStorage.removeItem('hc_role');
-      localStorage.removeItem('hc_practitioner_id');
-      localStorage.removeItem('hc_pid');
-      localStorage.removeItem('hc_practitioner_name');
-      router.replace('/');
-    } else {
-      setDeleteError(res.message || 'Failed to delete account');
-    }
-  };
 
   if (!profile) {
     return (
@@ -332,65 +287,6 @@ export default function ExpertProfilePage() {
                     </button>
                   </span>
                 ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Privacy & Data */}
-        <Card className="bg-white border border-amber-100 shadow-sm rounded-2xl overflow-hidden">
-          <div className="px-6 pt-5 pb-3 border-b border-amber-50">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-500" />
-              <h2 className="text-lg font-bold text-gray-900">Privacy & Data</h2>
-            </div>
-            <p className="text-xs text-gray-400 mt-0.5 ml-7">
-              Download a copy of your data or permanently delete your account. See our{' '}
-              <Link href="/privacy" className="underline hover:text-amber-600">Privacy Policy</Link>.
-            </p>
-          </div>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-gray-900">Download my data</p>
-                <p className="text-xs text-gray-400">A JSON file with your profile, sessions, reviews, and consent history.</p>
-              </div>
-              <Button onClick={handleExport} disabled={exporting} variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50 rounded-full shrink-0">
-                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Download className="h-4 w-4 mr-1.5" /> Export</>}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 pt-4 border-t border-amber-50">
-              <div>
-                <p className="text-sm font-bold text-red-600">Delete my account</p>
-                <p className="text-xs text-gray-400">Removes your personal details permanently. This can't be undone.</p>
-              </div>
-              <Button onClick={() => setDeleteOpen(true)} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 rounded-full shrink-0">
-                <Trash2 className="h-4 w-4 mr-1.5" /> Delete
-              </Button>
-            </div>
-
-            {deleteOpen && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-                <p className="text-xs text-red-700">
-                  This permanently removes your name, email, phone, bio, and other personal details, and erases your
-                  chat and call history content. Type <span className="font-bold">DELETE</span> to confirm.
-                </p>
-                <input
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  placeholder="DELETE"
-                  className="w-full text-sm rounded-lg border border-red-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300"
-                />
-                {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
-                <div className="flex gap-2">
-                  <Button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || deleting} className="bg-red-600 hover:bg-red-700 text-white rounded-full disabled:opacity-50">
-                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Permanently delete'}
-                  </Button>
-                  <Button onClick={() => { setDeleteOpen(false); setDeleteConfirmText(''); setDeleteError(''); }} variant="outline" className="rounded-full">
-                    Cancel
-                  </Button>
-                </div>
               </div>
             )}
           </div>

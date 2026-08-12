@@ -3,14 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
-import { ArrowLeft, MessageSquare, Phone } from 'lucide-react';
 import ChatWindow from '@/components/chat/ChatWindow';
-import { Button } from '@/components/ui/button';
+import AudioCallScreen from '@/components/chat/AudioCallScreen';
 import { tokenStore, agoraApi, sessionsApi, type PractitionerProfile } from '@/lib/api';
-
-// Agora SDK uses `window` at import time — must never be SSR'd
-const AudioCallScreen = dynamic(() => import('@/components/chat/AudioCallScreen'), { ssr: false });
+import { ArrowLeft, MessageSquare, Phone } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 type Tab = 'chat' | 'call';
 
@@ -19,20 +16,16 @@ export default function SessionPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionType, setSessionType] = useState<string | null>(null);
-  const [peer, setPeer] = useState<any>(null); // The other person in the chat
-  const [isExpert, setIsExpert] = useState(false);
-  const [activeSession, setActiveSession] = useState<any>(null);
+  const [practitioner, setPractitioner] = useState<PractitionerProfile | null>(null);
   const [tab, setTab] = useState<Tab>('chat');
 
   useEffect(() => {
     const token = tokenStore.getAccess();
     if (!token) { router.push('/login'); return; }
 
-    let currentJwtUserId = '';
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      currentJwtUserId = payload.userId;
-      setUserId(currentJwtUserId);
+      setUserId(payload.userId);
     } catch {
       router.push('/login');
       return;
@@ -41,40 +34,22 @@ export default function SessionPage() {
     agoraApi.getChannel(token, sessionId).then((res) => {
       if (res.success && res.data) {
         setSessionType(res.data.sessionType);
-        if (res.data.sessionType === 'AUDIO' || res.data.sessionType === 'VIDEO') {
-          setTab('call');
-        }
       }
     });
 
-    // Fetch session to get peer info
+    // Fetch session to get practitioner info
     sessionsApi.get(token, sessionId).then((res) => {
       if (res.success && res.data) {
-        const session = res.data.session;
-        setActiveSession(session);
-        
-        // If our JWT userId matches the session's practitioner's userId, we are the expert.
-        // Wait, sessions API returns practitioner { id, name ... } and user { id, name ... }
-        // The practitioner ID is NOT the user ID. But wait! The JWT payload has userId and practitionerId.
-        // It's safer to just parse practitionerId from JWT, or check if currentJwtUserId === session.userId.
-        const tokenPayload = JSON.parse(atob(token.split('.')[1]));
-        const isPractitioner = tokenPayload.practitionerId === session.practitionerId;
-        setIsExpert(isPractitioner);
-        
-        if (isPractitioner) {
-          setPeer(session.user);
-        } else {
-          setPeer(session.practitioner);
-        }
+        setPractitioner(res.data.session.practitioner);
       }
     });
   }, [router, sessionId]);
 
-  if (!userId || !peer) return null;
+  if (!userId) return null;
 
   const showCallTab = sessionType === 'AUDIO' || sessionType === 'VIDEO';
-  const initials = peer?.name
-    ? peer.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+  const initials = practitioner?.name
+    ? practitioner.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
     : '?';
 
   return (
@@ -86,12 +61,12 @@ export default function SessionPage() {
           <ArrowLeft className="h-5 w-5 text-gray-600" />
         </Button>
 
-        {/* Peer avatar */}
+        {/* Practitioner avatar */}
         <div className="relative shrink-0">
-          {peer?.photoUrl ? (
+          {practitioner?.photoUrl ? (
             <Image
-              src={peer.photoUrl}
-              alt={peer.name || 'User'}
+              src={practitioner.photoUrl}
+              alt={practitioner.name}
               width={38}
               height={38}
               className="rounded-full object-cover"
@@ -101,7 +76,7 @@ export default function SessionPage() {
               {initials}
             </div>
           )}
-          {peer?.isOnline !== undefined && peer.isOnline && (
+          {practitioner?.isOnline && (
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />
           )}
         </div>
@@ -109,10 +84,10 @@ export default function SessionPage() {
         {/* Name + status */}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-[#1a1a1a] truncate">
-            {peer?.name ?? 'Loading...'}
+            {practitioner?.name ?? 'Loading...'}
           </p>
           <p className="text-xs text-gray-400 truncate">
-            {peer?.specialties?.slice(0, 2).join(' · ') ?? sessionId.slice(0, 8) + '...'}
+            {practitioner?.specialties?.slice(0, 2).join(' · ') ?? sessionId.slice(0, 8) + '...'}
           </p>
         </div>
 
@@ -150,13 +125,7 @@ export default function SessionPage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {tab === 'chat' ? (
-          <ChatWindow
-            sessionId={sessionId}
-            currentUserId={isExpert ? activeSession?.practitionerId : userId}
-            isExpert={isExpert}
-            practitionerId={activeSession?.practitionerId ?? ''}
-            practitionerName={isExpert ? '' : (peer?.name ?? 'the expert')}
-          />
+          <ChatWindow sessionId={sessionId} currentUserId={userId} />
         ) : (
           <AudioCallScreen sessionId={sessionId} />
         )}

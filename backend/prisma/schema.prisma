@@ -17,36 +17,16 @@ model User {
   gender                String?
   wellnessInterests     String[]
   photoUrl              String?
-
-  // Email verification
   isEmailVerified       Boolean   @default(false)
-  emailVerifyToken      String?   // stores SHA-256 hash of the raw token
+  emailVerifyToken      String?
   emailVerifyExpiry     DateTime?
-
-  // Phone / OTP verification
-  isPhoneVerified       Boolean   @default(false)
-
-  // Password reset
-  passwordResetToken    String?   // stores SHA-256 hash of the raw token
+  passwordResetToken    String?
   passwordResetExpiry   DateTime?
-
-  // OAuth
   googleId              String?   @unique
   appleId               String?   @unique
   provider              String    @default("email")
-
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-
-  // Moderation: temporary/permanent suspension
-  isBanned              Boolean   @default(false)
-  banReason             String?
-  banUntil              DateTime? // null = permanent (while isBanned is true)
-
-  // GDPR: set when the account has been erased via the right-to-erasure flow.
-  // PII fields are nulled/anonymized at that point; row is kept (not hard-deleted)
-  // because Session/Review/Transaction rows reference it for financial/audit records.
-  erasedAt              DateTime?
 
   wallet                Wallet?
   sessions              Session[]
@@ -55,6 +35,7 @@ model User {
   otps                  Otp[]
   supportTickets        SupportTicket[]
   consents              Consent[]
+  astrologerProfile     AstrologerProfile?
 }
 
 // ─── OTP model for SMS verification ──────────────────────────────────────────
@@ -100,25 +81,11 @@ model Practitioner {
   photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
-  isBusy         Boolean  @default(false)
-  // Denormalized rating stats — updated atomically on each review submission
-  avgRating      Float    @default(0)
-  reviewCount    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Moderation: temporary/permanent suspension
-  isBanned       Boolean   @default(false)
-  banReason      String?
-  banUntil       DateTime? // null = permanent (while isBanned is true)
-
-  // GDPR: see User.erasedAt for the same rationale (anonymize, don't hard-delete).
-  erasedAt       DateTime?
-
   sessions       Session[]
   reviews        Review[]
-  supportTickets SupportTicket[]
-  consents       Consent[]
 }
 
 model Wallet {
@@ -138,9 +105,9 @@ model Transaction {
   walletId    String
   wallet      Wallet   @relation(fields: [walletId], references: [id])
   amount      Float
-  type        String   // "RECHARGE" | "DEBIT" | "REFUND"
-  status      String   // "SUCCESS" | "PENDING" | "FAILED"
-  referenceId String?  @unique  // idempotency: unique when set (partial index in migration)
+  type        String   // e.g., "RECHARGE", "DEBIT", "REFUND"
+  status      String   // e.g., "SUCCESS", "PENDING", "FAILED"
+  referenceId String?  // e.g., Razorpay Payment ID
   createdAt   DateTime @default(now())
 }
 
@@ -150,13 +117,8 @@ model Session {
   user           User     @relation(fields: [userId], references: [id])
   practitionerId String
   practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  type           String   // "CHAT" | "AUDIO" | "VIDEO"
-  status         String   // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
-  channelName    String?
-  agoraUid       Int?
-  perMinuteRate  Float    @default(0)
-  walletDeduction Float   @default(0)
-  duration       Int      @default(0)
+  type           String   // e.g., "CHAT", "AUDIO", "VIDEO"
+  status         String   // e.g., "INITIATED", "ACTIVE", "COMPLETED", "CANCELLED"
   startTime      DateTime?
   endTime        DateTime?
   totalCost      Float    @default(0)
@@ -166,20 +128,6 @@ model Session {
   review         Review?
   messages       ChatMessage[]
   callFeedback   CallFeedback?
-  transcript     CallTranscript?
-}
-
-model Review {
-  id             String   @id @default(uuid())
-  sessionId      String   @unique
-  session        Session  @relation(fields: [sessionId], references: [id])
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  practitionerId String
-  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  rating         Int      // 1-5
-  comment        String?
-  createdAt      DateTime @default(now())
 }
 
 model ChatMessage {
@@ -193,13 +141,21 @@ model ChatMessage {
   readAt       DateTime?
   createdAt    DateTime  @default(now())
 
-  // GDPR: set when `content` has been overwritten by the 90-day retention purge
-  // (or immediate erasure request). Row is kept for session/thread integrity;
-  // only the message text is removed.
-  purgedAt     DateTime?
-
   @@index([sessionId])
   @@index([senderId])
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  rating         Int      // 1 to 5
+  comment        String?
+  createdAt      DateTime @default(now())
 }
 
 model CallFeedback {
@@ -380,4 +336,222 @@ model PrivacyRequestLog {
   createdAt      DateTime @default(now())
 
   @@index([subjectId])
+}
+
+// ─── Astrologer System ────────────────────────────────────────────────────────
+
+model AstrologerProfile {
+  id                              String    @id @default(uuid())
+  userId                          String    @unique
+  user                            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullLegalName                   String
+  displayName                     String
+  dateOfBirth                     DateTime?
+  gender                          String?
+  profilePhotoUrl                 String?
+  country                         String    @default("India")
+  state                           String?
+  city                            String?
+
+  specializations                 String[]  @default([])
+  languages                       String[]  @default([])
+
+  astrologyExperienceYears        Int       @default(0)
+  professionalConsultationYears   Int       @default(0)
+  previousPlatformExperience      String?
+  professionalBio                 String?
+  consultationApproach            String?
+
+  completedAstrologyCourse        Boolean   @default(false)
+  instituteName                   String?
+  courseName                      String?
+  completionYear                  Int?
+
+  chatPricePerMin                 Float     @default(0)
+  callPricePerMin                 Float     @default(0)
+
+  isChatAvailable                 Boolean   @default(false)
+  isCallAvailable                 Boolean   @default(false)
+  isOnline                        Boolean   @default(false)
+
+  avgRating                       Float     @default(0)
+  reviewCount                     Int       @default(0)
+  totalConsultations              Int       @default(0)
+  totalEarnings                   Float     @default(0)
+
+  // Independent verification flags — never a single boolean
+  phoneVerified                   Boolean   @default(false)
+  emailVerified                   Boolean   @default(false)
+  identityVerified                Boolean   @default(false)
+  professionalVerified            Boolean   @default(false)
+  adminVerified                   Boolean   @default(false)
+
+  // DRAFT|PHONE_VERIFIED|PROFILE_INCOMPLETE|PROFILE_COMPLETED|
+  // KYC_PENDING|KYC_SUBMITTED|KYC_VERIFIED|PROFESSIONAL_REVIEW|
+  // INTERVIEW_REQUIRED|ADMIN_REVIEW|APPROVED|REJECTED|SUSPENDED|BLOCKED
+  applicationStatus               String    @default("DRAFT")
+  accountStatus                   String    @default("INACTIVE") // INACTIVE|ACTIVE|SUSPENDED|BLOCKED
+
+  rejectionReason                 String?
+  suspensionReason                String?
+  approvedAt                      DateTime?
+  approvedBy                      String?
+
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  application                     AstrologerApplication?
+  documents                       AstrologerDocument[]
+  kycVerification                 AstrologerKycVerification?
+  professionalVerification        AstrologerProfessionalVerification?
+  interviewVerification           AstrologerInterviewVerification?
+  adminReviews                    AstrologerAdminReview[]
+  auditLogs                       AstrologerAuditLog[]
+
+  @@index([userId])
+  @@index([applicationStatus])
+  @@index([accountStatus])
+  @@index([adminVerified])
+}
+
+model AstrologerApplication {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String    @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  submittedAt         DateTime?
+  lastSavedAt         DateTime  @default(now())
+  step                Int       @default(1)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([astrologerProfileId])
+}
+
+model AstrologerDocument {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  documentType        String    // CERTIFICATE|IDENTITY|PROFILE_PHOTO|WORK_SAMPLE|PLATFORM_PROFILE
+  originalName        String
+  storedName          String
+  blobUrl             String
+  mimeType            String
+  sizeBytes           Int
+  isPrivate           Boolean   @default(true)
+  uploadedAt          DateTime  @default(now())
+
+  @@index([astrologerProfileId])
+  @@index([documentType])
+}
+
+model AstrologerKycVerification {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String    @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  provider            String?   // manual|digilocker|karza
+  verificationRefId   String?
+  verificationStatus  String    @default("PENDING") // PENDING|SUBMITTED|VERIFIED|FAILED
+  verifiedAt          DateTime?
+  failureReason       String?
+  panLast4            String?   // last 4 only — never full PAN
+  idDocType           String?   // PAN|AADHAAR|PASSPORT|DRIVING_LICENSE
+  idDocVerified       Boolean   @default(false)
+  bankAccountVerified Boolean   @default(false)
+  metadata            String?   // JSON for audit
+  submittedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([astrologerProfileId])
+  @@index([verificationStatus])
+}
+
+model AstrologerProfessionalVerification {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String    @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  verificationType    String?   // CERTIFICATE|PLATFORM_PROFILE|WEBSITE|WORK_SAMPLE|EXPERIENCE
+  documentReference   String?
+  platformProfileUrl  String?
+  professionalWebsite String?
+  notes               String?
+  submittedAt         DateTime?
+  reviewedAt          DateTime?
+  reviewerId          String?
+  status              String    @default("PENDING") // PENDING|SUBMITTED|APPROVED|REJECTED
+  rejectionReason     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([astrologerProfileId])
+  @@index([status])
+}
+
+model AstrologerInterviewVerification {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String    @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  requestedAt         DateTime  @default(now())
+  scheduledAt         DateTime?
+  meetingRefId        String?
+  completedAt         DateTime?
+  reviewerId          String?
+  result              String?   // PASSED|FAILED|REQUIRES_REVIEW
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([astrologerProfileId])
+}
+
+model AstrologerAdminReview {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  adminId             String
+  action              String    // APPROVE|REJECT|REQUEST_INFO|SUSPEND|BLOCK|UNBLOCK|NOTE
+  reason              String?
+  notes               String?
+  previousStatus      String?
+  newStatus           String?
+  createdAt           DateTime  @default(now())
+
+  @@index([astrologerProfileId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AstrologerAuditLog {
+  id                  String    @id @default(uuid())
+  astrologerProfileId String?
+  astrologerProfile   AstrologerProfile? @relation(fields: [astrologerProfileId], references: [id], onDelete: SetNull)
+  actorId             String?
+  actorType           String    // ASTROLOGER|ADMIN|SYSTEM
+  action              String
+  targetId            String?
+  ipAddress           String?
+  userAgent           String?
+  previousState       String?
+  newState            String?
+  createdAt           DateTime  @default(now())
+
+  @@index([astrologerProfileId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Standalone OTP for astrologer phone auth — decoupled from User.Otp
+model AstrologerOtp {
+  id          String   @id @default(uuid())
+  phone       String
+  otpHash     String   // SHA-256 — never store plaintext
+  purpose     String   // login|register
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([phone])
 }

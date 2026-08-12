@@ -44,51 +44,6 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// ─── Temp Dev Recharge (Bypass Gateway) ─────────────────────────────────────────
-
-router.post(
-  '/dev-recharge',
-  requireAuth,
-  [body('amount').isNumeric().withMessage('Amount must be a number')],
-  handleValidation,
-  async (req: AuthRequest, res: Response) => {
-    const { amount } = req.body as { amount: number };
-    try {
-      // Tasks 8/9: Wrap balance update in a single atomic $transaction to prevent
-      // concurrent dev-recharge calls from double-crediting the wallet.
-      const updatedWallet = await prisma.$transaction(async (tx) => {
-        const wallet = await tx.wallet.findUnique({ where: { userId: req.user!.userId } });
-        if (!wallet) return null;
-
-        await tx.transaction.create({
-          data: {
-            walletId: wallet.id,
-            amount,
-            type: 'RECHARGE',
-            status: 'SUCCESS',
-            referenceId: `dev_recharge_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          }
-        });
-
-        return tx.wallet.update({
-          where: { id: wallet.id },
-          data: { balance: { increment: amount } },
-        });
-      });
-
-      if (!updatedWallet) {
-        res.status(404).json({ success: false, message: 'Wallet not found' });
-        return;
-      }
-
-      res.json({ success: true, message: 'Dev recharge successful', data: { balance: updatedWallet.balance } });
-    } catch (err) {
-      console.error('Dev recharge error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  }
-);
-
 // ─── Initialize Recharge (Create Razorpay Order) ──────────────────────────────
 
 router.post(
@@ -175,35 +130,26 @@ router.post('/webhook', async (req: Request, res: Response) => {
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
       const orderId = payment.order_id; // e.g., order_Jg1...
-
-      // Tasks 8/9: Idempotency — wrap in $transaction and guard on status=PENDING.
-      // If the webhook fires twice for the same orderId, the second call finds
-      // status='SUCCESS' and exits cleanly without a second credit.
-      await prisma.$transaction(async (tx) => {
-        // Look up the pending transaction by orderId — re-read inside tx for consistency
-        const transaction = await tx.transaction.findFirst({
-          where: { referenceId: orderId, status: 'PENDING', type: 'RECHARGE' },
-        });
-
-        if (!transaction) {
-          // Either already processed (idempotent) or unknown orderId — safe to ignore
-          return;
-        }
-
-        // Mark transaction SUCCESS first
-        await tx.transaction.update({
-          where: { id: transaction.id },
-          data: { status: 'SUCCESS' },
-        });
-
-        // Then credit the wallet
-        await tx.wallet.update({
-          where: { id: transaction.walletId },
-          data: { balance: { increment: transaction.amount } },
-        });
-
-        console.log(`Successfully recharged wallet ${transaction.walletId} by ₹${transaction.amount}`);
+      
+      // Look up the pending transaction by orderId
+      const transaction = await prisma.transaction.findFirst({
+        where: { referenceId: orderId, status: 'PENDING', type: 'RECHARGE' },
       });
+
+      if (transaction) {
+        // Perform an atomic update: mark transaction SUCCESS and add to balance
+        await prisma.$transaction([
+          prisma.transaction.update({
+            where: { id: transaction.id },
+            data: { status: 'SUCCESS' },
+          }),
+          prisma.wallet.update({
+            where: { id: transaction.walletId },
+            data: { balance: { increment: transaction.amount } },
+          }),
+        ]);
+        console.log(`Successfully recharged wallet ${transaction.walletId} by ₹${transaction.amount}`);
+      }
     }
 
     res.status(200).send('Webhook processed');

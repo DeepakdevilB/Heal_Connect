@@ -8,10 +8,10 @@ import {
   Wallet, MessageCircle, Phone, Star, Bell, LogOut,
   Search, ChevronRight, Zap, TrendingUp, Clock, Shield, User,
   HeartHandshake, Headphones, Sparkles, ArrowRight,
-  Waves, Check, FileText, LifeBuoy
+  Waves, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { authApi, practitionersApi, walletApi, sessionsApi, tokenStore, type PractitionerProfile } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
@@ -42,8 +42,6 @@ export default function DashboardPage() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const [sessionsDone, setSessionsDone] = useState(0);
-  const [minutesUsed, setMinutesUsed] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Close dropdowns when clicking outside
@@ -77,20 +75,6 @@ export default function DashboardPage() {
       router.push(`/session/${res.data.session.id}`);
     } else {
       alert(res.message || 'Could not start session. Please recharge your wallet.');
-    }
-  };
-
-  const startCallSession = async (practitionerId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    const token = tokenStore.getAccess();
-    if (!token) { router.push('/login'); return; }
-    setStartingSession(practitionerId);
-    const res = await sessionsApi.create(token, practitionerId, 'AUDIO');
-    setStartingSession(null);
-    if (res.success && res.data) {
-      router.push(`/session/${res.data.session.id}`);
-    } else {
-      alert(res.message || 'Could not start call. Please recharge your wallet.');
     }
   };
 
@@ -128,18 +112,16 @@ export default function DashboardPage() {
 
     fetchWallet();
 
-    sessionsApi.userHistory(token).then((res) => {
-      if (res.success && res.data) {
-        setSessionsDone(res.data.sessions.length);
-        setMinutesUsed(res.data.totalMinutes || 0);
-      }
-    });
-
     // Real-time expert online/offline updates
     const socket = getSocket(token);
-    socket.on('practitioner_status', ({ practitionerId, isOnline, isBusy }: { practitionerId: string; isOnline: boolean; isBusy?: boolean }) => {
+    socket.on('practitioner_status', ({ practitionerId, isOnline }: { practitionerId: string; isOnline: boolean }) => {
+      setExperts((prev) => prev.map((e) => e.id === practitionerId ? { ...e, isOnline } : e));
+      setOnlineCount((prev) => {
+        // recalculate from updated list
+        return prev; // will be recalculated below
+      });
       setExperts((prev) => {
-        const updated = prev.map((e) => e.id === practitionerId ? { ...e, isOnline, isBusy } : e);
+        const updated = prev.map((e) => e.id === practitionerId ? { ...e, isOnline } : e);
         setOnlineCount(updated.filter((e) => e.isOnline).length);
         return updated;
       });
@@ -231,18 +213,6 @@ export default function DashboardPage() {
                       <span className="text-sm font-medium text-gray-900">My Profile</span>
                     </div>
                   </Link>
-                  <Link href="/dashboard/transcripts" onClick={() => setShowProfileMenu(false)}>
-                    <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
-                      <FileText className="w-4 h-4 text-amber-500" />
-                      <span className="text-sm font-medium text-gray-900">Call Transcripts</span>
-                    </div>
-                  </Link>
-                  <Link href="/dashboard/support" onClick={() => setShowProfileMenu(false)}>
-                    <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
-                      <LifeBuoy className="w-4 h-4 text-amber-500" />
-                      <span className="text-sm font-medium text-gray-900">Support</span>
-                    </div>
-                  </Link>
                   <button onClick={() => { tokenStore.clear(); router.push('/login'); }} className="w-full px-4 py-3 hover:bg-red-50 transition-colors flex items-center gap-3">
                     <LogOut className="w-4 h-4 text-red-500" />
                     <span className="text-sm font-medium text-red-600">Sign out</span>
@@ -290,8 +260,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: 'Wallet Balance', value: walletBalance !== null ? `₹${walletBalance.toFixed(2)}` : '...', icon: Wallet, color: 'text-amber-500', bg: 'bg-amber-50', shadow: 'shadow-amber-200/30' },
-            { label: 'Sessions Done', value: String(sessionsDone), icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', shadow: 'shadow-emerald-200/30' },
-            { label: 'Minutes Used', value: `${minutesUsed} min`, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', shadow: 'shadow-orange-200/30' },
+            { label: 'Sessions Done', value: '0', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', shadow: 'shadow-emerald-200/30' },
+            { label: 'Minutes Used', value: '0 min', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50', shadow: 'shadow-orange-200/30' },
             { label: 'Experts Online', value: onlineCount > 0 ? String(onlineCount) : '—', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-50', shadow: 'shadow-blue-200/30' },
           ].map((stat) => (
             <Card key={stat.label} className="bg-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 rounded-2xl overflow-hidden">
@@ -375,14 +345,10 @@ export default function DashboardPage() {
                           </div>
                           <div className="absolute top-3 right-4">
                             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
-                              expert.isBusy ? 'bg-orange-100 text-orange-700' : 
                               expert.isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                expert.isBusy ? 'bg-orange-500' : 
-                                expert.isOnline ? 'bg-emerald-500' : 'bg-gray-400'
-                              }`} />
-                              {expert.isBusy ? 'Busy' : expert.isOnline ? 'Online' : 'Offline'}
+                              <span className={`w-1.5 h-1.5 rounded-full ${expert.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                              {expert.isOnline ? 'Online' : 'Offline'}
                             </span>
                           </div>
                         </div>
@@ -414,10 +380,10 @@ export default function DashboardPage() {
                               <span className="text-xs text-gray-400">/min</span>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.preventDefault(); startChatSession(expert.id, e); }} disabled={!expert.isOnline || expert.isBusy || startingSession === expert.id}>
+                              <Button size="sm" variant="outline" className="h-8 px-3 border-gray-200 hover:border-amber-300 hover:text-amber-700 text-xs gap-1" onClick={(e) => { e.preventDefault(); startChatSession(expert.id, e); }} disabled={startingSession === expert.id}>
                                 <MessageCircle className="h-3.5 w-3.5" /> Chat
                               </Button>
-                              <Button size="sm" disabled={!expert.isOnline || expert.isBusy || startingSession === expert.id} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => { e.preventDefault(); startCallSession(expert.id, e); }}>
+                              <Button size="sm" disabled={!expert.isOnline} className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white border-0 text-xs gap-1 disabled:opacity-40" onClick={(e) => e.preventDefault()}>
                                 <Phone className="h-3.5 w-3.5" /> Call
                               </Button>
                             </div>

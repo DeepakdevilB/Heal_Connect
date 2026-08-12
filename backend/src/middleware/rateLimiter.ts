@@ -2,17 +2,7 @@ import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
 
 const extractIp = (req: Request): string => {
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) {
-    const ips = Array.isArray(xff) ? (xff[0] || '') : xff.toString();
-    if (ips) {
-      const parts = ips.split(',');
-      if (parts && parts[0]) {
-        return parts[0].trim();
-      }
-    }
-  }
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
   const match = ip.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
   if (match && match[1]) return match[1];
   return ip;
@@ -27,19 +17,19 @@ const base = {
   legacyHeaders: false,
 };
 
-// General API rate limiter — 100 requests per 15 min (10000 in dev)
+// General API rate limiter — 100 requests per 15 min
 export const generalLimiter = rateLimit({
   ...base,
   windowMs: 15 * 60 * 1000,
-  max: IS_DEV ? 10000 : 100,
+  max: 100,
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 
-// Auth routes — 10 requests per 15 min (1000 in dev)
+// Auth routes — 10 requests per 15 min (100 in dev)
 export const authLimiter = rateLimit({
   ...base,
   windowMs: 15 * 60 * 1000,
-  max: IS_DEV ? 1000 : 10,
+  max: IS_DEV ? 100 : 10,
   message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
 });
 
