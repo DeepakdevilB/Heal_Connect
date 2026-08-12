@@ -11,11 +11,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi, tokenStore } from '@/lib/api';
 
-type Role = 'user' | 'expert';
+type Role = 'user';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>('user');
+  const searchParams = useSearchParams();
+  const [role] = useState<Role>('user');
+
+  useEffect(() => {
+    if (searchParams.get('role') === 'expert') router.replace('/astrologer/login');
+  }, [searchParams, router]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,29 +37,18 @@ export default function SignupPage() {
     const pwdOk = /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
     if (!pwdOk) { setError('Password must be min. 8 chars, 1 uppercase, 1 number.'); setLoading(false); return; }
     try {
-      if (role === 'expert') {
-        const res = await authApi.practitionerRegister(name, email, password);
-        if (!res.success || !res.data) {
-          setError(res.message || 'Registration failed');
-          return;
-        }
-        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-        localStorage.setItem('hc_role', 'practitioner');
-        localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
-        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
-        setSuccess('Expert account created!');
-        setTimeout(() => router.push('/expert/dashboard'), 1500);
-      } else {
-        const res = await authApi.register({ name, email, password });
-        if (!res.success || !res.data) {
-          setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
-          return;
-        }
-        tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-        localStorage.removeItem('hc_role');
-        setSuccess('Account created!');
-        setTimeout(() => router.push('/dashboard'), 1500);
+      const res = await authApi.register({ name, email, password });
+      if (!res.success || !res.data) {
+        setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
+        return;
       }
+      tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+      localStorage.removeItem('hc_role');
+      localStorage.removeItem('hc_practitioner_id');
+      localStorage.removeItem('hc_pid');
+      localStorage.removeItem('hc_practitioner_name');
+      setSuccess('Account created!');
+      setTimeout(() => router.push(`/verify-email/pending?email=${encodeURIComponent(email)}`), 1200);
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
   }
@@ -139,9 +134,8 @@ export default function SignupPage() {
                   role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
                 <User className="w-4 h-4" /> User
               </button>
-              <button type="button" onClick={() => { setRole('expert'); setError(''); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+              <button type="button" onClick={() => router.push('/astrologer/login')}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-[#f59e0b]">
                 <Sparkles className="w-4 h-4" /> Expert
               </button>
             </div>
@@ -150,7 +144,7 @@ export default function SignupPage() {
             {success && (
               <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
                 <p className="font-semibold">✓ {success}</p>
-                <p className="text-green-600 mt-0.5">Please verify your email. Redirecting...</p>
+                <p className="text-green-600 mt-0.5">A verification email has been sent. Please verify before logging in.</p>
               </div>
             )}
 
@@ -183,7 +177,7 @@ export default function SignupPage() {
                 )}
               </div>
               <Button type="submit" disabled={loading || !!success} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Join as Expert' : 'Create Account'} <ArrowRight className="ml-2 h-4 w-4" /></>}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Create Account <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
             </form>
 

@@ -1,8 +1,12 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'healconnect_access_secret_change_in_prod';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'healconnect_refresh_secret_change_in_prod';
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (!ACCESS_SECRET || !REFRESH_SECRET) {
+  throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set in environment variables.');
+}
 const ACCESS_EXPIRY = '15m';
 const REFRESH_EXPIRY = '7d';
 const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -11,6 +15,8 @@ export interface JwtPayload {
   userId: string;
   email?: string;
   practitionerId?: string;
+  astrologerId?: string;
+  role?: 'USER' | 'ASTROLOGER' | 'ADMIN';
 }
 
 export function signAccessToken(payload: JwtPayload): string {

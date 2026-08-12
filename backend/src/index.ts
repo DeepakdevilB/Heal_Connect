@@ -4,6 +4,7 @@ dotenv.config();
 import express from 'express';
 import { initSocketServer } from './lib/socket';
 import cors from 'cors';
+import path from 'path';
 import helmet from 'helmet';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
@@ -12,7 +13,15 @@ import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
+import reviewsRouter from './routes/reviews';
+import migrateRouter from './routes/migrate';
+import adminRouter from './routes/admin';
+import contactRouter from './routes/contact';
+import ticketsRouter from './routes/tickets';
+import consentRouter from './routes/consent';
 import sessionsRouter from './routes/sessions';
+import astrologerAuthRouter from './routes/astrologerAuth';
+import astrologersRouter from './routes/astrologers';
 import { startBillingEngine } from './workers/billingEngine';
 
 const app = express();
@@ -95,6 +104,73 @@ app.use('/api/wallet', walletRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
+app.use('/api/migrate', migrateRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/contact', contactRouter);
+app.use('/api/tickets', ticketsRouter);
+app.use('/api/consent', consentRouter);
+app.use('/api/auth/astrologer', astrologerAuthRouter);
+app.use('/api/astrologers', astrologersRouter);
+
+// Serve local uploads when Azure Storage is not configured
+if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+}
+
+// ─── Public Content Endpoints ────────────────────────────────────────────────
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const blogs = await prisma.blog.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { blogs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/blogs/:id', async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { prisma } = require('./lib/prisma');
+    const blog = await prisma.blog.findUnique({
+      where: { id }
+    });
+    if (!blog || !blog.published) {
+      res.status(404).json({ success: false, message: 'Blog not found' });
+      return;
+    }
+    res.json({ success: true, data: { blog } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/faqs', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'asc' } });
+    res.json({ success: true, data: { faqs } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+app.get('/api/banners', async (req, res) => {
+  try {
+    const { prisma } = require('./lib/prisma');
+    const banners = await prisma.banner.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: { banners } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 

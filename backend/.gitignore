@@ -1,5 +1,23 @@
-node_modules
-# Keep environment variables out of version control
-.env
+node_modules/
 
+# Environment variables — NEVER commit real secrets
+.env
+.env.*
+!.env.example
+
+# TypeScript compiled output
+dist/
+*.tsbuildinfo
+
+# Prisma generated client
 /generated/prisma
+
+# Local file uploads (dev fallback — never commit user documents/photos)
+uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
