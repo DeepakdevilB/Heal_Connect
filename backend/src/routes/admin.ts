@@ -19,11 +19,62 @@ router.post('/migrate', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const { stdout, stderr } = await execPromise('npx prisma migrate deploy || ./node_modules/.bin/prisma migrate deploy || npm run migrate');
-    res.json({ success: true, message: 'Migrations applied successfully', stdout, stderr });
+    // Adding SupportTicket tables
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SupportTicket" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "subject" TEXT NOT NULL,
+          "category" TEXT NOT NULL DEFAULT 'OTHER',
+          "status" TEXT NOT NULL DEFAULT 'OPEN',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL,
+          CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TicketMessage" (
+          "id" TEXT NOT NULL,
+          "ticketId" TEXT NOT NULL,
+          "senderType" TEXT NOT NULL,
+          "message" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "TicketMessage_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Ban fields
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
+
+    // GDPR fields
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CallTranscript" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Consent" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "visitorId" TEXT,
+          "category" TEXT NOT NULL,
+          "granted" BOOLEAN NOT NULL,
+          "source" TEXT NOT NULL DEFAULT 'BANNER',
+          "ipAddress" TEXT,
+          "userAgent" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "Consent_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    res.status(200).json({ success: true, message: 'Migrations applied successfully' });
   } catch (error: any) {
     console.error('Migration error:', error);
-    res.status(200).json({ success: false, message: 'Migration failed', error: error.message, stdout: error.stdout, stderr: error.stderr });
+    res.status(200).json({ success: false, message: 'Migration failed', error: error.message });
   }
 });
 
