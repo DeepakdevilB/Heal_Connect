@@ -79,6 +79,23 @@ router.post('/migrate', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/fix-email', async (req: Request, res: Response) => {
+  try {
+    // Delete the mistakenly created new empty account if it exists
+    await prisma.practitioner.deleteMany({
+      where: { email: 'deep.pgl.work@gmail.com', reviewCount: 0, experienceYrs: 0 }
+    });
+    // Update the old account to have the correct dotted email
+    const updated = await prisma.practitioner.updateMany({
+      where: { email: 'deeppglwork@gmail.com' },
+      data: { email: 'deep.pgl.work@gmail.com' }
+    });
+    res.json({ success: true, updated: updated.count });
+  } catch (e: any) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 
 // ─── Admin Auth Middleware ────────────────────────────────────────────────────
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
