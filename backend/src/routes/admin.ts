@@ -48,6 +48,7 @@ router.post('/migrate', async (req: Request, res: Response) => {
     // Ban fields
     await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
     await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "googleId" TEXT UNIQUE;`);
 
     // GDPR fields
     await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);

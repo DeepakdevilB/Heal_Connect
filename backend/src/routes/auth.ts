@@ -363,7 +363,7 @@ router.post(
   [body('idToken').notEmpty().withMessage('Google ID token required')],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { idToken } = req.body as { idToken: string };
+    const { idToken, role } = req.body as { idToken: string; role?: string };
 
     try {
       const ticket = await googleClient.verifyIdToken({
@@ -378,6 +378,42 @@ router.post(
       }
 
       const { sub: googleId, email, name, email_verified } = gPayload;
+
+      if (role === 'expert') {
+        let pract = await prisma.practitioner.findUnique({ where: { googleId } });
+        if (!pract && email) pract = await prisma.practitioner.findUnique({ where: { email } });
+
+        if (!pract) {
+          pract = await prisma.practitioner.create({
+            data: {
+              googleId,
+              email: email ?? null,
+              name: name || 'Expert',
+              isVerified: false, // Must be verified by admin
+            },
+          });
+          if (email && name) sendWelcomeEmail(email, name).catch(() => {});
+        } else if (!pract.googleId) {
+          pract = await prisma.practitioner.update({
+            where: { id: pract.id },
+            data: { googleId },
+          });
+        }
+
+        const { accessToken, refreshToken } = await issueTokens(pract.id, pract.email);
+        res.json({
+          success: true,
+          message: 'Signed in with Google as Expert',
+          data: {
+            user: {
+              id: pract.id, email: pract.email, name: pract.name, role: 'practitioner'
+            },
+            accessToken,
+            refreshToken,
+          },
+        });
+        return;
+      }
 
       let user = await prisma.user.findUnique({ where: { googleId } });
       if (!user && email) user = await prisma.user.findUnique({ where: { email } });

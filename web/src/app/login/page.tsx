@@ -82,9 +82,11 @@ function LoginInner() {
   function handleGoogleSignIn() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     if (!clientId) { setError('Google Sign-In is not configured yet.'); return; }
+    const role = searchParams.get('role');
     const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
     const scope = encodeURIComponent('openid email profile');
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&nonce=${Math.random().toString(36)}`;
+    const state = role === 'expert' ? 'expert' : 'user';
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&state=${state}&nonce=${Math.random().toString(36)}`;
   }
 
   function handleAppleSignIn() {

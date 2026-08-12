@@ -132,8 +132,8 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
-  googleSignIn: (idToken: string) =>
-    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+  googleSignIn: (idToken: string, role?: string) =>
+    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, role }) }),
 
   appleSignIn: (body: { appleId: string; email?: string; name?: string }) =>
     request<AuthData>('/api/auth/apple', { method: 'POST', body: JSON.stringify(body) }),
