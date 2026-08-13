@@ -41,12 +41,12 @@ async function audit(profileId: string, actorId: string, action: string, req: Re
 router.use(requireAuth, requireAstrologer);
 
 // ─── GET /api/astrologers/application/me ─────────────────────────────────────
-router.get('/application/me', async (req: AuthRequest, res: Response) => {
+router.get('/application/me', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const profile = await prisma.astrologerProfile.findUnique({
       where: { id: aid },
-      include: { application: true, kycVerification: true, professionalVerification: true, interviewVerification: true },
+      include: { application: true, kycVerification: true, professionalVerification: true },
     });
     if (!profile) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }
     res.json({ success: true, data: { profile } });
@@ -92,7 +92,7 @@ router.post(
 );
 
 // ─── PUT /api/astrologers/application/me ─────────────────────────────────────
-router.put('/application/me', async (req: AuthRequest, res: Response) => {
+router.put('/application/me', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const current = await prisma.astrologerProfile.findUnique({ where: { id: aid } });
@@ -154,7 +154,7 @@ router.put('/application/me', async (req: AuthRequest, res: Response) => {
 });
 
 // ─── GET /api/astrologers/me ──────────────────────────────────────────────────
-router.get('/me', async (req: AuthRequest, res: Response) => {
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const profile = await prisma.astrologerProfile.findUnique({
@@ -163,7 +163,6 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
         application: true,
         kycVerification: { select: { verificationStatus: true, submittedAt: true, verifiedAt: true } },
         professionalVerification: { select: { status: true, submittedAt: true, reviewedAt: true } },
-        interviewVerification: { select: { result: true, scheduledAt: true, completedAt: true } },
       },
     });
     if (!profile) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }
@@ -172,7 +171,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
 });
 
 // ─── PUT /api/astrologers/me/profile ─────────────────────────────────────────
-router.put('/me/profile', async (req: AuthRequest, res: Response) => {
+router.put('/me/profile', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const { displayName, professionalBio, consultationApproach, specializations, languages } = req.body;
@@ -191,6 +190,7 @@ router.put('/me/profile', async (req: AuthRequest, res: Response) => {
 // ─── POST /api/astrologers/me/documents ──────────────────────────────────────
 router.post(
   '/me/documents',
+  requireAuth,
   upload.single('document'),
   [body('documentType').isIn(['CERTIFICATE', 'IDENTITY', 'PROFILE_PHOTO', 'WORK_SAMPLE', 'PLATFORM_PROFILE']).withMessage('Invalid document type')],
   handleValidation,
@@ -238,7 +238,7 @@ router.post(
 );
 
 // ─── GET /api/astrologers/me/documents ───────────────────────────────────────
-router.get('/me/documents', async (req: AuthRequest, res: Response) => {
+router.get('/me/documents', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const docs = await prisma.astrologerDocument.findMany({
@@ -251,7 +251,7 @@ router.get('/me/documents', async (req: AuthRequest, res: Response) => {
 });
 
 // ─── DELETE /api/astrologers/me/documents/:id ─────────────────────────────────
-router.delete('/me/documents/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/me/documents/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const { id } = req.params as { id: string };
@@ -265,7 +265,7 @@ router.delete('/me/documents/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // ─── POST /api/astrologers/me/verification/submit ────────────────────────────
-router.post('/me/verification/submit', async (req: AuthRequest, res: Response) => {
+router.post('/me/verification/submit', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const profile = await prisma.astrologerProfile.findUnique({ where: { id: aid }, include: { application: true } });
@@ -330,7 +330,7 @@ router.post('/me/verification/submit', async (req: AuthRequest, res: Response) =
 });
 
 // ─── GET /api/astrologers/me/verification/status ─────────────────────────────
-router.get('/me/verification/status', async (req: AuthRequest, res: Response) => {
+router.get('/me/verification/status', requireAuth, async (req: AuthRequest, res: Response) => {
   const aid = req.user!.astrologerId as string;
   try {
     const profile = await prisma.astrologerProfile.findUnique({
@@ -342,7 +342,6 @@ router.get('/me/verification/status', async (req: AuthRequest, res: Response) =>
         rejectionReason: true, approvedAt: true,
         kycVerification: { select: { verificationStatus: true, submittedAt: true, verifiedAt: true, failureReason: true } },
         professionalVerification: { select: { status: true, submittedAt: true, reviewedAt: true, rejectionReason: true } },
-        interviewVerification: { select: { result: true, scheduledAt: true, completedAt: true } },
       },
     });
     if (!profile) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }

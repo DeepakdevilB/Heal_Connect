@@ -8,6 +8,9 @@ import path from 'path';
 import helmet from 'helmet';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
+import astrologerAuthRouter from './routes/astrologerAuth';
+import astrologersRouter from './routes/astrologers';
+import adminAstrologersRouter from './routes/adminAstrologers';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
@@ -98,6 +101,9 @@ app.get('/api/run-prisma-migrate', async (_req, res) => {
 app.use(generalLimiter);
 
 app.use('/api/auth', authRouter);
+app.use('/api/auth/astrologer', astrologerAuthRouter);
+app.use('/api/astrologers', astrologersRouter);
+app.use('/api/admin/astrologers', adminAstrologersRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 app.use('/api/wallet', walletRouter);

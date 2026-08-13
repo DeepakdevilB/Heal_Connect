@@ -5,11 +5,8 @@ import path from 'path';
 
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const containerName = process.env.AZURE_STORAGE_CONTAINER || 'profile-photos';
+const isDev = !connectionString;
 const LOCAL_UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-
-function isAzureConfigured(): boolean {
-  return !!connectionString && connectionString.startsWith('DefaultEndpointsProtocol');
-}
 
 function getContainerClient() {
   const client = BlobServiceClient.fromConnectionString(connectionString!);
@@ -21,10 +18,10 @@ export async function uploadProfilePhoto(
   mimeType: string,
   folder: 'users' | 'practitioners' | 'astrologer-photos' | 'astrologer-docs'
 ): Promise<string> {
-  const ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
+  const ext = mimeType.split('/')[1] || 'jpg';
   const fileName = `${uuidv4()}.${ext}`;
 
-  if (!isAzureConfigured()) {
+  if (isDev) {
     const dir = path.join(LOCAL_UPLOAD_DIR, folder);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, fileName), buffer);
@@ -41,12 +38,8 @@ export async function uploadProfilePhoto(
 }
 
 export async function deleteProfilePhoto(url: string): Promise<void> {
+  if (isDev) return;
   try {
-    if (!isAzureConfigured()) {
-      const localPath = path.join(process.cwd(), url);
-      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
-      return;
-    }
     const containerClient = getContainerClient();
     const blobName = new URL(url).pathname.split(`/${containerName}/`)[1];
     if (blobName) await containerClient.deleteBlob(blobName);
