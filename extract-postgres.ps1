@@ -15,4 +15,4 @@ if (-not (Test-Path $ZIP)) {
 Write-Host "📦 Extracting PostgreSQL 16 to $DEST ..." -ForegroundColor Cyan
 Write-Host "   (This may take ~1 minute)" -ForegroundColor Gray
 Expand-Archive -Path $ZIP -DestinationPath "C:\" -Force
-Write-Host "✅ Extraction complete! PostgreSQL is at $DEST\bin\" -ForegroundColor Green
+Write-Host "✅ Extraction complete! PostgreSQL is at $DEST\bin" -ForegroundColor Green

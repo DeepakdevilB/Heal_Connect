@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { body, query } from 'express-validator';
 import multer from 'multer';
 import { prisma } from '../lib/prisma';
-import { requireAuth, type AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { uploadProfilePhoto, deleteProfilePhoto } from '../lib/azure';
 
@@ -26,7 +26,7 @@ function getQuery(req: Request, key: string): string | undefined {
 }
 
 // POST /api/practitioners/dev/verify (Temporary)
-router.post('/dev/verify', async (req: Request, res: Response) => {
+router.post('/dev/verify', requireAdmin, async (req: Request, res: Response) => {
   try {
     const result = await prisma.practitioner.updateMany({
       data: { isVerified: true }
@@ -428,19 +428,32 @@ router.post(
 // ─── GDPR: Erasure (Right to be Forgotten) ────────────────────────────────────
 // /me/export was moved before /:id above. Only the DELETE erasure handler lives here.
 
-// DELETE /api/practitioners/:id
-// GDPR erasure for practitioners. Restricted to the practitioner's own account —
-// previously this route had NO ownership check at all (any authenticated user or
-// practitioner could delete any practitioner by ID), which is a separate, serious
-// pre-existing bug fixed here as part of tightening this same handler. Admins use
-// the dedicated DELETE /api/admin/practitioners/:id route, which is unaffected.
+// DELETE /api/practitioners/me & DELETE /api/practitioners/:id
+// GDPR erasure for practitioners. Restricted to the practitioner's own account.
+// Handles both /me (self-service) and /:id (matching caller's practitionerId).
+router.delete('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  const practitionerId = req.user!.practitionerId;
+  if (!practitionerId) {
+    res.status(403).json({ success: false, message: 'This endpoint is for practitioner accounts' });
+    return;
+  }
+  return handlePractitionerErasure(practitionerId, req, res);
+});
+
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-  const id = getParam(req, 'id');
+  let id = getParam(req, 'id');
+  if (id === 'me') {
+    id = req.user!.practitionerId;
+  }
   if (!id) { res.status(400).json({ success: false, message: 'Missing id' }); return; }
   if (req.user!.practitionerId !== id) {
     res.status(403).json({ success: false, message: 'You can only delete your own account' });
     return;
   }
+  return handlePractitionerErasure(id, req, res);
+});
+
+async function handlePractitionerErasure(id: string, req: AuthRequest, res: Response) {
   try {
     const p = await prisma.practitioner.findUnique({ where: { id }, select: { photoUrl: true, erasedAt: true } });
     if (!p) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
@@ -510,6 +523,6 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     console.error(err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}
 
 export default router;

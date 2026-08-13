@@ -1,23 +1,16 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { requireAuth } from '../middleware/auth';
+import { requireAdmin } from '../middleware/auth';
 import { scanContent, flagContentIfNeeded } from '../lib/moderation';
 
-void requireAuth;
-
-import { exec } from 'child_process';
-import util from 'util';
-
 const router = Router();
-const execPromise = util.promisify(exec);
 
 // ─── 0. Run Database Migrations ──────────────────────────────────────────────
-router.post('/migrate', async (req: Request, res: Response) => {
-  if (req.query['secret'] !== 'healconnect2026') {
-    res.status(200).json({ success: false, message: 'Unauthorized' });
-    return;
-  }
+// Admin-gated (was previously a hardcoded query-string secret, reachable by anyone).
+// This is also the route that needs to be POSTed once to push new schema changes
+// (e.g. the isBanned columns) to the live production database — see README/runbook.
+router.post('/migrate', requireAdmin, async (req: Request, res: Response) => {
   try {
     // Adding SupportTicket tables
     await prisma.$executeRawUnsafe(`
@@ -79,7 +72,7 @@ router.post('/migrate', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/fix-email', async (req: Request, res: Response) => {
+router.post('/fix-email', requireAdmin, async (req: Request, res: Response) => {
   try {
     // Delete the mistakenly created new empty account if it exists
     await prisma.practitioner.deleteMany({
@@ -96,18 +89,7 @@ router.post('/fix-email', async (req: Request, res: Response) => {
   }
 });
 
-
-// ─── Admin Auth Middleware ────────────────────────────────────────────────────
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const key = req.headers['x-admin-key'];
-  const expected = process.env['ADMIN_SECRET_KEY'] ?? 'healconnect-admin-2026';
-  if (key !== expected) {
-    res.status(401).json({ success: false, message: 'Unauthorized: invalid admin key' });
-    return;
-  }
-  next();
-}
-
+// ─── Admin Auth Middleware (applies to every route registered below this line) ─
 router.use(requireAdmin);
 
 // ─── Clean Dummy Practitioners Endpoint ───────────────────────────────────────

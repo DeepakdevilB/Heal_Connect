@@ -260,6 +260,9 @@ export const practitionersApi = {
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 
+  deleteAccount: (token: string) =>
+    request('/api/practitioners/me', { method: 'DELETE', headers: authHeader(token) }),
+
   exportData: (token: string) =>
     request<Record<string, unknown>>('/api/practitioners/me/export', { headers: authHeader(token) }),
 };

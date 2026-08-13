@@ -35,3 +35,17 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 }
+
+// Shared admin gate — used by admin.ts and by any one-off/dev/maintenance routes
+// (migrations, dev-only test helpers, etc.) that must never be reachable without
+// the admin key. Centralized here so those routes can't accidentally be mounted
+// without protection the way several previously were.
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const key = req.headers['x-admin-key'];
+  const expected = process.env['ADMIN_SECRET_KEY'] ?? 'healconnect-admin-2026';
+  if (key !== expected) {
+    res.status(401).json({ success: false, message: 'Unauthorized: invalid admin key' });
+    return;
+  }
+  next();
+}

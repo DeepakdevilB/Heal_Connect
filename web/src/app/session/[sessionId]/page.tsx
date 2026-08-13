@@ -23,6 +23,7 @@ export default function SessionPage() {
   const [isExpert, setIsExpert] = useState(false);
   const [activeSession, setActiveSession] = useState<any>(null);
   const [tab, setTab] = useState<Tab>('chat');
+  const [startingCall, setStartingCall] = useState(false);
 
   useEffect(() => {
     const token = tokenStore.getAccess();
@@ -70,9 +71,29 @@ export default function SessionPage() {
     });
   }, [router, sessionId]);
 
+  const handleSwitchToCall = async () => {
+    const token = tokenStore.getAccess();
+    if (!token || !activeSession?.practitionerId || startingCall) return;
+    setStartingCall(true);
+    try {
+      const res = await sessionsApi.create(token, activeSession.practitionerId, 'AUDIO');
+      if (res.success && res.data?.session) {
+        router.push(`/session/${res.data.session.id}`);
+      } else {
+        alert(res.message || 'Could not start a call. Please recharge your wallet.');
+      }
+    } catch {
+      alert('Unable to start the call. Please try again.');
+    } finally {
+      setStartingCall(false);
+    }
+  };
+
   if (!userId || !peer) return null;
 
   const showCallTab = sessionType === 'AUDIO' || sessionType === 'VIDEO';
+  // Chat-only session, viewed by the consumer — offer a one-tap way to escalate to a call.
+  const showSwitchToCall = sessionType === 'CHAT' && !isExpert;
   const initials = peer?.name
     ? peer.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
     : '?';
@@ -142,6 +163,18 @@ export default function SessionPage() {
             >
               <Phone className="h-3.5 w-3.5" />
               Call
+            </Button>
+          )}
+          {showSwitchToCall && (
+            <Button
+              size="icon"
+              onClick={handleSwitchToCall}
+              disabled={startingCall}
+              aria-label="Start a call with this expert"
+              title="Switch to a call"
+              className="h-8 w-8 rounded-full bg-emerald-500 hover:bg-emerald-600 border-0 text-white disabled:opacity-50 shrink-0"
+            >
+              <Phone className={cn('h-3.5 w-3.5', startingCall ? 'animate-pulse' : '')} />
             </Button>
           )}
         </div>

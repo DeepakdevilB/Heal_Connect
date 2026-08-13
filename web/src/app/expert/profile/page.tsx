@@ -137,10 +137,10 @@ export default function ExpertProfilePage() {
 
   const handleDeleteAccount = async () => {
     const token = tokenStore.getAccess();
-    if (!token || !practitionerId) return;
+    if (!token) return;
     setDeleting(true);
     setDeleteError('');
-    const res = await practitionersApi.delete(token, practitionerId);
+    const res = await practitionersApi.deleteAccount(token);
     setDeleting(false);
     if (res.success) {
       tokenStore.clear();

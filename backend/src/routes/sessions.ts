@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, type AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { getIO } from '../lib/socket';
 import { SESSION_DISCLAIMER, SESSION_SAFETY_GUIDELINES } from '../lib/safetyGuidelines';
@@ -264,7 +264,7 @@ router.get('/practitioner/transcripts', requireAuth, async (req: AuthRequest, re
 });
 
 // DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: any, res: Response) => {
+router.post('/dev-clear', requireAdmin, async (req: any, res: Response) => {
   try {
     const result = await prisma.session.updateMany({
       where: { status: { in: ['ACTIVE', 'INITIATED', 'ACCEPTED'] } },

@@ -4,7 +4,7 @@ import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
-import { requireAuth, type AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 
 const router = Router();
@@ -49,9 +49,14 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.post(
   '/dev-recharge',
   requireAuth,
+  requireAdmin,
   [body('amount').isNumeric().withMessage('Amount must be a number')],
   handleValidation,
   async (req: AuthRequest, res: Response) => {
+    if (process.env['NODE_ENV'] === 'production') {
+      res.status(403).json({ success: false, message: 'Not available in production' });
+      return;
+    }
     const { amount } = req.body as { amount: number };
     try {
       // Tasks 8/9: Wrap balance update in a single atomic $transaction to prevent

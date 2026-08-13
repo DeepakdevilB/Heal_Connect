@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Transaction_referenceId_key" ON "Transaction"
 UPDATE "Practitioner" p SET "avgRating" = COALESCE((SELECT ROUND(AVG(r.rating)::numeric, 1) FROM "Review" r WHERE r."practitionerId" = p.id), 0), "reviewCount" = COALESCE((SELECT COUNT(*) FROM "Review" r WHERE r."practitionerId" = p.id), 0);
 `;
 
-router.get('/run', async (req: Request, res: Response) => {
+router.get('/run', requireAdmin, async (req: Request, res: Response) => {
   try {
     await prisma.$executeRawUnsafe(migrationSql);
     res.json({ success: true, message: 'SQL Migration applied successfully' });
