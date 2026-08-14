@@ -1,10 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Loader2, MessageCircle, Phone, Shield, Sparkles, Star, CheckCircle2, Calendar } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -158,13 +159,13 @@ export default function PractitionerDetailPage() {
       const res = await sessionsApi.requestSession(token, p.id);
 
       if (res.success) {
-        alert('Session request sent! The expert will propose available times shortly.');
-        router.push('/requests'); // Assuming we create this page
+        toast.success('Session request sent! The expert will propose available times shortly.');
+        router.push('/dashboard/schedules');
       } else {
-        alert(res.message || 'Failed to request session.');
+        toast.error(res.message || 'Failed to request session.');
       }
     } catch {
-      alert('Network error while requesting session.');
+      toast.error('Network error while requesting session.');
     } finally {
       setRequesting(false);
     }

@@ -19,6 +19,7 @@ interface SessionRequest {
   id: string;
   status: string;
   createdAt: string;
+  scheduledStartTime?: string;
   user: {
     name: string;
     photoUrl: string | null;
@@ -188,11 +189,29 @@ export default function ExpertRequestsPage() {
                       {req.status === 'TIME_PROPOSED' && (
                         <span className="text-xs font-bold px-3 py-1 bg-blue-100 text-blue-700 rounded-full">WAITING FOR CLIENT</span>
                       )}
+                      {req.status === 'CONFIRMED' && (
+                        <span className="text-xs font-bold px-3 py-1 bg-green-100 text-green-700 rounded-full flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> CONFIRMED</span>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6">
-                  {req.status === 'TIME_PROPOSED' ? (
+                  {req.status === 'CONFIRMED' ? (
+                    <div className="bg-green-50 rounded-xl p-6 border border-green-100 flex flex-col items-center text-center">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                        <CheckCircle2 className="w-6 h-6 text-green-600" />
+                      </div>
+                      <h4 className="font-bold text-gray-900 text-lg mb-1">Session Scheduled</h4>
+                      <p className="text-gray-600 mb-2">
+                        Your session with {req.user.name || 'User'} is confirmed for:
+                      </p>
+                      <p className="font-bold text-green-700 text-xl">
+                        {req.scheduledStartTime ? new Intl.DateTimeFormat('en-US', {
+                          weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                        }).format(new Date(req.scheduledStartTime)) : 'Time not specified'}
+                      </p>
+                    </div>
+                  ) : req.status === 'TIME_PROPOSED' ? (
                     <div className="text-gray-600">
                       You have suggested times for this session. Waiting for {req.user.name || 'the client'} to select one.
                     </div>

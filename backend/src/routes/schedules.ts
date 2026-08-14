@@ -67,8 +67,8 @@ router.get('/requests', requireAuth, async (req: AuthRequest, res: Response) => 
   try {
     const sessions = await prisma.session.findMany({
       where: isPractitioner 
-        ? { practitionerId: req.user!.practitionerId as string, status: { in: ['PENDING', 'TIME_PROPOSED'] } }
-        : { userId, status: { in: ['PENDING', 'TIME_PROPOSED'] } },
+        ? { practitionerId: req.user!.practitionerId as string, status: { in: ['PENDING', 'TIME_PROPOSED', 'CONFIRMED'] } }
+        : { userId, status: { in: ['PENDING', 'TIME_PROPOSED', 'CONFIRMED'] } },
       include: {
         user: { select: { id: true, name: true, photoUrl: true } },
         practitioner: { select: { id: true, name: true, photoUrl: true } },

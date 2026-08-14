@@ -196,6 +196,10 @@ export default function ExpertDashboardPage() {
                     <User className="w-4 h-4 text-amber-500" />
                     <span className="text-sm font-medium text-gray-700">My Profile</span>
                   </Link>
+                  <Link href="/expert/requests" onClick={() => setShowProfileMenu(false)} className="w-full px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3">
+                    <Bell className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm font-medium text-gray-700">Scheduled Sessions</span>
+                  </Link>
                   <Link href="/expert/transcripts" onClick={() => setShowProfileMenu(false)} className="w-full px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3">
                     <FileText className="w-4 h-4 text-amber-500" />
                     <span className="text-sm font-medium text-gray-700">Call Transcripts</span>

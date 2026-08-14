@@ -237,6 +237,12 @@ export default function DashboardPage() {
                       <span className="text-sm font-medium text-gray-900">Call Transcripts</span>
                     </div>
                   </Link>
+                  <Link href="/dashboard/schedules" onClick={() => setShowProfileMenu(false)}>
+                    <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
+                      <Calendar className="w-4 h-4 text-amber-500" />
+                      <span className="text-sm font-medium text-gray-900">Scheduled Sessions</span>
+                    </div>
+                  </Link>
                   <Link href="/dashboard/support" onClick={() => setShowProfileMenu(false)}>
                     <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
                       <LifeBuoy className="w-4 h-4 text-amber-500" />
