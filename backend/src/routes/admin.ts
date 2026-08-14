@@ -72,6 +72,77 @@ router.post('/migrate', async (req: Request, res: Response) => {
       );
     `);
 
+    // Mehak's merged tables
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "scheduledStartTime" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scheduledEndTime" TIMESTAMP(3);`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DeviceToken" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "token" TEXT NOT NULL,
+          "platform" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "DeviceToken_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
+          CONSTRAINT "DeviceToken_practitionerId_fkey" FOREIGN KEY ("practitionerId") REFERENCES "Practitioner"("id") ON DELETE CASCADE
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DeviceToken_token_key" ON "DeviceToken"("token");`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NotificationLog" (
+          "id" TEXT NOT NULL,
+          "recipientId" TEXT NOT NULL,
+          "recipientType" TEXT NOT NULL,
+          "type" TEXT NOT NULL,
+          "title" TEXT NOT NULL,
+          "body" TEXT NOT NULL,
+          "entityId" TEXT,
+          "status" TEXT NOT NULL,
+          "errorMsg" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "NotificationLog_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionTimeProposal" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "proposedBy" TEXT NOT NULL,
+          "startTime" TIMESTAMP(3) NOT NULL,
+          "endTime" TIMESTAMP(3) NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "expiresAt" TIMESTAMP(3),
+          CONSTRAINT "SessionTimeProposal_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionTimeProposal_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionReminder" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "participantId" TEXT NOT NULL,
+          "reminderType" TEXT NOT NULL,
+          "scheduledFor" TIMESTAMP(3) NOT NULL,
+          "enabled" BOOLEAN NOT NULL DEFAULT true,
+          "sent" BOOLEAN NOT NULL DEFAULT false,
+          "sentAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SessionReminder_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionReminder_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+    
+    try {
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SessionReminder_sessionId_participantId_reminderType_key" ON "SessionReminder"("sessionId", "participantId", "reminderType");`);
+    } catch(e) {}
+
     res.status(200).json({ success: true, message: 'Migrations applied successfully' });
   } catch (error: any) {
     console.error('Migration error:', error);
