@@ -13,7 +13,7 @@ const router = Router();
 const execPromise = util.promisify(exec);
 
 // ─── 0. Run Database Migrations ──────────────────────────────────────────────
-router.post('/migrate', async (req: Request, res: Response) => {
+router.all('/migrate', async (req: Request, res: Response) => {
   if (req.query['secret'] !== 'healconnect2026') {
     res.status(200).json({ success: false, message: 'Unauthorized' });
     return;
