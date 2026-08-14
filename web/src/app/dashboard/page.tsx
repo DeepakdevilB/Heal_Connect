@@ -363,7 +363,7 @@ export default function DashboardPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
               {experts.map((expert) => {
-                const avatarSrc = getPractitionerAvatar(expert.photoUrl, expert.id);
+                const avatarSrc = getPractitionerAvatar(expert.photoUrl, expert.name);
                 return (
                   <Link key={expert.id} href={`/practitioners/${expert.id}`} className="h-full">
                     <Card className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer rounded-2xl overflow-hidden group h-full">

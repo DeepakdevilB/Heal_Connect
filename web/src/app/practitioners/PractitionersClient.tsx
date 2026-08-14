@@ -183,7 +183,7 @@ export default function PractitionersPage() {
 
 function PractitionerCard({ practitioner: p }: { practitioner: Practitioner }) {
   const router = useRouter();
-  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.id);
+  const avatarSrc = getPractitionerAvatar(p.photoUrl, p.name);
 
   return (
     <Card onClick={() => router.push(`/practitioners/${p.id}`)} className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all cursor-pointer rounded-2xl overflow-hidden group h-full">

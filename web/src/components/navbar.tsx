@@ -400,7 +400,7 @@ export default function Navbar() {
                   <Link href={userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard'}>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer overflow-hidden border-2 ${isDark ? 'border-white/20 hover:border-amber-400' : 'border-gray-200 hover:border-amber-400'}`}>
                       <img
-                        src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.id) : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
+                        src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.name || 'Expert') : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />
