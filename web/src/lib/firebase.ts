@@ -10,10 +10,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const isConfigured = typeof window !== 'undefined' && !!firebaseConfig.apiKey;
+
+let app: any = null;
+if (isConfigured) {
+  try {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  } catch(e) {
+    console.warn("Failed to initialize Firebase", e);
+  }
+}
 
 export const requestFirebaseNotificationPermission = async () => {
+  if (!app) return null;
   try {
     const supported = await isSupported();
     if (!supported) {
