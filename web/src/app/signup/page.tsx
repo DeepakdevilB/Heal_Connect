@@ -22,14 +22,6 @@ function SignupInner() {
     if (searchParams.get('role') === 'expert') setRole('expert');
   }, [searchParams]);
 
-  // Redirect already-logged-in users
-  useEffect(() => {
-    const token = localStorage.getItem('hc_access');
-    if (!token) return;
-    const isExpert = localStorage.getItem('hc_role') === 'practitioner';
-    router.replace(isExpert ? '/expert/dashboard' : '/dashboard');
-  }, [router]);
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
