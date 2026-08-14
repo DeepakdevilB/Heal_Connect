@@ -5,7 +5,8 @@ const nextConfig = {
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
-      'http://localhost:8080';
+      process.env.BACKEND_URL ||
+      'http://localhost:8082';
     return [
       {
         source: '/api/:path*',

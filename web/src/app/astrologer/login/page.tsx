@@ -8,14 +8,26 @@ import { astrologerAuthApi, astrologerTokenStore } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Phone, ShieldCheck, Star, Sparkles, Users, TrendingUp, ArrowRight } from 'lucide-react';
+import { Loader2, ShieldCheck, Star, Sparkles, Users, TrendingUp, ArrowRight, ChevronDown } from 'lucide-react';
+
+const COUNTRY_CODES = [
+  { code: '+91', name: 'India' },
+  { code: '+1',  name: 'USA' },
+  { code: '+44', name: 'UK' },
+  { code: '+971', name: 'UAE' },
+  { code: '+65', name: 'Singapore' },
+  { code: '+61', name: 'Australia' },
+  { code: '+60', name: 'Malaysia' },
+];
 
 type Step = 'phone' | 'otp';
 
 export default function AstrologerLoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const phone = `${countryCode}${phoneNumber.replace(/\s+/g, '')}`;
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,11 +43,12 @@ export default function AstrologerLoginPage() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim()) { setError('Enter your mobile number.'); return; }
+    if (!phoneNumber.trim()) { setError('Enter your mobile number.'); return; }
+    if (!/^\d{7,15}$/.test(phoneNumber.replace(/\s+/g, ''))) { setError('Enter a valid mobile number.'); return; }
     setError('');
     setLoading(true);
     try {
-      const res = await astrologerAuthApi.sendOtp(phone.replace(/\s+/g, ''), 'login');
+      const res = await astrologerAuthApi.sendOtp(phone, 'login');
       if (!res.success) { setError(res.message || 'Failed to send OTP.'); return; }
       if ((res as any).devOtp) setDevHint(`DEV: Use OTP ${(res as any).devOtp}`);
       setStep('otp');
@@ -50,10 +63,11 @@ export default function AstrologerLoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await astrologerAuthApi.verifyOtp(phone.replace(/\s+/g, ''), otp, 'login');
+      const res = await astrologerAuthApi.verifyOtp(phone, otp, 'login');
       if (!res.success || !res.data) { setError(res.message || 'Invalid OTP.'); return; }
       astrologerTokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
       astrologerTokenStore.setProfile(res.data.astrologer);
+      if (typeof window !== 'undefined') localStorage.setItem('hca_phone', phone);
       router.push(res.data.redirect);
     } catch { setError('Network error. Please try again.'); }
     finally { setLoading(false); }
@@ -159,16 +173,28 @@ export default function AstrologerLoginPage() {
             {step === 'phone' ? (
               <form onSubmit={handleSendOtp} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-[#1a1a1a] font-medium">Mobile Number</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Label className="text-[#1a1a1a] font-medium">Mobile Number</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-shrink-0">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="h-12 pl-3 pr-8 rounded-lg border border-yellow-200 bg-[#fffbf0] text-[#1a1a1a] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-400 appearance-none cursor-pointer"
+                      >
+                        {COUNTRY_CODES.map((c, i) => (
+                          <option key={i} value={c.code}>{c.code}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-2 top-4 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
                     <Input
                       id="phone"
                       type="tel"
-                      placeholder="+91 98765 43210"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-10 h-12 border-yellow-200 focus-visible:ring-amber-400 bg-[#fffbf0] text-[#1a1a1a]"
+                      inputMode="numeric"
+                      placeholder="98765 43210"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s]/g, ''))}
+                      className="flex-1 h-12 border-yellow-200 focus-visible:ring-amber-400 bg-[#fffbf0] text-[#1a1a1a]"
                       required
                     />
                   </div>
@@ -214,16 +240,7 @@ export default function AstrologerLoginPage() {
               </form>
             )}
 
-            {step === 'phone' && (
-              <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-                <p className="text-sm text-gray-500">
-                  New astrologer?{' '}
-                  <Link href="/astrologer/onboarding" className="text-amber-600 font-semibold hover:text-amber-700">
-                    Apply to join →
-                  </Link>
-                </p>
-              </div>
-            )}
+
           </div>
 
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">

@@ -16,15 +16,8 @@ import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
-import reviewsRouter from './routes/reviews';
-import migrateRouter from './routes/migrate';
 import adminRouter from './routes/admin';
-import contactRouter from './routes/contact';
-import ticketsRouter from './routes/tickets';
-import consentRouter from './routes/consent';
 import sessionsRouter from './routes/sessions';
-import astrologerAuthRouter from './routes/astrologerAuth';
-import astrologersRouter from './routes/astrologers';
 import { startBillingEngine } from './workers/billingEngine';
 
 const app = express();
@@ -73,9 +66,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'healthy', service: 'healconnect-api' });
 });
 
-import fs from 'fs';
-import path from 'path';
-import { Client } from 'pg';
 import { exec } from 'child_process';
 import util from 'util';
 const execPromise = util.promisify(exec);
@@ -110,14 +100,7 @@ app.use('/api/wallet', walletRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api/sessions', sessionsRouter);
-app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
-app.use('/api/migrate', migrateRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/contact', contactRouter);
-app.use('/api/tickets', ticketsRouter);
-app.use('/api/consent', consentRouter);
-app.use('/api/auth/astrologer', astrologerAuthRouter);
-app.use('/api/astrologers', astrologersRouter);
 
 // Serve local uploads when Azure Storage is not configured
 if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
