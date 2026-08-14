@@ -11,6 +11,7 @@ import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
 import sessionsRouter from './routes/sessions';
+import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
@@ -198,6 +199,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 app.use('/api/wallet', walletRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*

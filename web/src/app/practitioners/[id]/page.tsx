@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageCircle, Phone, Shield, Sparkles, Star, CheckCircle2, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { practitionersApi, sessionsApi, tokenStore } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { tokenStore, usersApi, practitionersApi, sessionsApi } from '@/lib/api';
 import { getAvatarUrl } from '@/lib/utils';
 
 interface Review {
@@ -45,6 +45,7 @@ export default function PractitionerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState(false);
   const [chatting, setChatting] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -139,6 +140,33 @@ export default function PractitionerDetailPage() {
       alert('Unable to connect to consultation service. Please try again.');
     } finally {
       setChatting(false);
+    }
+  };
+
+  const handleRequestSession = async () => {
+    if (!p) return;
+    const token = tokenStore.getAccess();
+
+    if (!token) {
+      router.push(`/login?returnUrl=/practitioners/${p.id}`);
+      return;
+    }
+
+    setRequesting(true);
+
+    try {
+      const res = await sessionsApi.requestSession(token, p.id);
+
+      if (res.success) {
+        alert('Session request sent! The expert will propose available times shortly.');
+        router.push('/requests'); // Assuming we create this page
+      } else {
+        alert(res.message || 'Failed to request session.');
+      }
+    } catch {
+      alert('Network error while requesting session.');
+    } finally {
+      setRequesting(false);
     }
   };
 
@@ -249,7 +277,16 @@ export default function PractitionerDetailPage() {
                 <span className="text-3xl font-extrabold text-[#1a1a1a]">₹{p.perMinuteRate}</span>
                 <span className="text-sm text-gray-400 font-medium"> / minute</span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3 justify-end mt-4 sm:mt-0">
+                <Button 
+                  onClick={handleRequestSession} 
+                  disabled={requesting}
+                  variant="outline" 
+                  className="border-emerald-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40 w-full sm:w-auto"
+                >
+                  {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                  Request Session
+                </Button>
                 <Button 
                   onClick={handleStartChat} 
                   disabled={!p.isOnline || p.isBusy || chatting}

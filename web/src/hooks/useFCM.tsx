@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getMessaging, onMessage } from 'firebase/messaging';
 import { app, requestFirebaseNotificationPermission } from '@/lib/firebase';
-// Assuming you have a toast library, you can import it here. Or use console.log
-// import { toast } from 'react-hot-toast'; 
+import { toast } from 'react-hot-toast';
+import { getSocket } from '@/lib/socket';
 
 export const useFCM = () => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export const useFCM = () => {
         const authToken = localStorage.getItem('hc_access');
         if (authToken) {
           try {
-            await fetch('http://localhost:8082/api/notifications/tokens', {
+            await fetch('/api/notifications/tokens', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -57,7 +57,12 @@ export const useFCM = () => {
         if (Notification.permission === 'granted') {
           new Notification(title, { body, icon: '/favicon.ico' });
         } else {
-          alert(`${title}\n${body}`); // Fallback
+          toast.success(
+            <div className="flex flex-col gap-1">
+              <span className="font-bold text-gray-900">{title}</span>
+              <span className="text-sm text-gray-600">{body}</span>
+            </div>
+          );
         }
       });
 
@@ -65,6 +70,39 @@ export const useFCM = () => {
         unsubscribe();
       };
     }
+  }, []);
+
+  // Socket-based real-time fallback for notifications (bypasses Firebase completely for instant in-app toasts)
+  useEffect(() => {
+    const token = localStorage.getItem('hc_access');
+    if (!token) return;
+
+    const socket = getSocket(token);
+
+    const handleSocketNotification = (data: { title: string; body: string }) => {
+      toast(
+        <div className="flex flex-col gap-1">
+          <span className="font-bold text-gray-900">{data.title}</span>
+          <span className="text-sm text-gray-600">{data.body}</span>
+        </div>,
+        {
+          icon: '🔔',
+          duration: 5000,
+          position: 'top-right',
+          style: {
+            background: '#fffbf0',
+            border: '1px solid #fcd34d',
+            color: '#1f2937',
+          },
+        }
+      );
+    };
+
+    socket.on('notification', handleSocketNotification);
+
+    return () => {
+      socket.off('notification', handleSocketNotification);
+    };
   }, []);
 
   return { fcmToken };

@@ -1,6 +1,7 @@
 import * as NotificationHubs from '@azure/notification-hubs';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { getIO } from '../lib/socket';
 
 const connectionString = process.env.AZURE_NOTIFICATION_HUB_CONNECTION_STRING || '';
 const hubName = process.env.AZURE_NOTIFICATION_HUB_NAME || '';
@@ -139,6 +140,9 @@ async function sendToToken(token: string, platform: string, payload: { title: st
  */
 export async function sendNotificationToUser(userId: string, payload: { type: string; title: string; body: string; entityId?: string }) {
   try {
+    // 0. Emit real-time socket event
+    getIO()?.to(`user_${userId}`).emit('notification', { title: payload.title, body: payload.body });
+
     const tokens = await prisma.deviceToken.findMany({ where: { userId } });
     if (!tokens.length) {
       await logNotification({
@@ -149,8 +153,9 @@ export async function sendNotificationToUser(userId: string, payload: { type: st
         body: payload.body,
         entityId: payload.entityId,
         status: 'FAILED',
-        errorMsg: 'No device tokens found for user'
+        errorMsg: 'No device tokens found'
       });
+      console.log(`[SIMULATE PUSH] (No tokens) To User ${userId} -> Title: ${payload.title} | Body: ${payload.body}`);
       return;
     }
 
@@ -190,6 +195,9 @@ export async function sendNotificationToUser(userId: string, payload: { type: st
  */
 export async function sendNotificationToPractitioner(practitionerId: string, payload: { type: string; title: string; body: string; entityId?: string }) {
   try {
+    // 0. Emit real-time socket event
+    getIO()?.to(`practitioner_${practitionerId}`).emit('notification', { title: payload.title, body: payload.body });
+
     const tokens = await prisma.deviceToken.findMany({ where: { practitionerId } });
     if (!tokens.length) {
       await logNotification({

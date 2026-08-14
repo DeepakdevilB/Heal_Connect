@@ -139,14 +139,18 @@ model Session {
   duration        Int          @default(0)
   startTime       DateTime?
   endTime         DateTime?
+  scheduledStartTime DateTime?
+  scheduledEndTime   DateTime?
   totalCost       Float        @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  review       Review?
-  messages     ChatMessage[]
-  callFeedback CallFeedback?
-  transcript   CallTranscript?
+  review         Review?
+  messages       ChatMessage[]
+  callFeedback   CallFeedback?
+  transcript     CallTranscript?
+  timeProposals  SessionTimeProposal[]
+  reminders      SessionReminder[]
 }
 
 model Review {
@@ -302,4 +306,38 @@ model NotificationLog {
   status        String // "SENT" | "FAILED"
   errorMsg      String?
   createdAt     DateTime @default(now())
+}
+
+// ─── Phase 7: Session Scheduling ──────────────────────────────────────────────
+
+model SessionTimeProposal {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  proposedBy     String // "PRACTITIONER" | "USER"
+  startTime      DateTime
+  endTime        DateTime
+  status         String   @default("PENDING") // "PENDING", "SELECTED", "EXPIRED", "CANCELLED"
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+
+  @@index([sessionId])
+}
+
+model SessionReminder {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId  String // userId or practitionerId
+  reminderType   String // "24_HOURS", "30_MINUTES"
+  scheduledFor   DateTime
+  enabled        Boolean  @default(true)
+  sent           Boolean  @default(false)
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([sessionId, participantId, reminderType])
+  @@index([sessionId])
+  @@index([participantId])
 }
