@@ -781,6 +781,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
           duration: true,
           startTime: true,
           endTime: true,
+          scheduledStartTime: true,
+          scheduledEndTime: true,
           totalCost: true,
           perMinuteRate: true,
           createdAt: true,
@@ -809,6 +811,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
         status: s.status,
         durationMinutes: calculatedDuration,
         startTime: s.startTime ? s.startTime.toISOString() : s.createdAt.toISOString(),
+        scheduledStartTime: s.scheduledStartTime ? s.scheduledStartTime.toISOString() : null,
+        scheduledEndTime: s.scheduledEndTime ? s.scheduledEndTime.toISOString() : null,
         endTime: s.endTime ? s.endTime.toISOString() : null,
         totalCost: Math.round(s.totalCost * 100) / 100,
         paymentStatus: s.totalCost > 0 ? 'Paid' : 'Free / Pending',
@@ -1263,4 +1267,31 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, amount, practitionerId } = req.body;
+    
+    // In a real implementation, you would update the Payout model here and call Razorpay
+    
+    // 6. Notify Practitioner about payout
+    if (status === 'SUCCESS' && practitionerId) {
+      const { sendNotificationToPractitioner } = await import('../services/notification.service');
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'PAYOUT',
+        title: 'Payout Processed',
+        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        entityId: id
+      });
+    }
+
+    res.json({ success: true, message: 'Payout processed' });
+  } catch (err) {
+    console.error('Payout processing error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;
+

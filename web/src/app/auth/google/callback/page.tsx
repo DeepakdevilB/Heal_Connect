@@ -30,9 +30,14 @@ export default function GoogleCallbackPage() {
         return;
       }
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-      if (state === 'expert') {
+      if (state === 'expert' || (res.data as any).role === 'practitioner' || (res.data.user as any).role === 'practitioner') {
+        localStorage.setItem('hc_role', 'practitioner');
+        localStorage.setItem('hc_practitioner_id', res.data.user.id);
+        localStorage.setItem('hc_pid', res.data.user.id);
+        localStorage.setItem('hc_practitioner_name', res.data.user.name || '');
         router.replace('/expert/dashboard');
       } else {
+        localStorage.removeItem('hc_role');
         router.replace('/dashboard');
       }
     }).catch((err) => {

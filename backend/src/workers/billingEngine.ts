@@ -1,6 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { getIO } from '../lib/socket';
+import { sendNotificationToUser } from '../services/notification.service';
+
 
 const BILLING_INTERVAL_MS = 10000; // Check every 10 seconds
 const BILLING_CYCLE_MS = 60000; // Bill every 60 seconds
@@ -193,7 +195,31 @@ async function processSessionBilling(session: any) {
       }),
     ]);
 
-    console.log(`Billed ₹${ratePerMinute} for session ${session.id}. Remaining balance: ₹${wallet.balance - ratePerMinute}`);
+    const remainingBalance = wallet.balance - ratePerMinute;
+    console.log(`Billed ₹${ratePerMinute} for session ${session.id}. Remaining balance: ₹${remainingBalance}`);
+    
+    // Check Low Balance Threshold (e.g. INR 50) and notify once per session
+    if (remainingBalance < 50) {
+      const lowBalanceKey = `low_balance_notified:${session.id}`;
+      let alreadyNotified = false;
+      if (redis) {
+        const res = await redis.set(lowBalanceKey, 'true', 'EX', 3600, 'NX'); // debounced for 1 hour
+        alreadyNotified = res === null;
+      } else {
+        alreadyNotified = memoryState.has(lowBalanceKey);
+        memoryState.set(lowBalanceKey, 'true');
+      }
+
+      if (!alreadyNotified) {
+        await sendNotificationToUser(session.userId, {
+          type: 'WALLET_LOW',
+          title: 'Wallet Balance Low',
+          body: `Your wallet balance is below ₹50. Please recharge soon to avoid session disconnection.`,
+          entityId: wallet.id
+        });
+      }
+    }
+
     
     // Update state
     state.lastBilledAt = now;

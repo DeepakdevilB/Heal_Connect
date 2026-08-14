@@ -11,6 +11,7 @@ import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
 import sessionsRouter from './routes/sessions';
+import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
@@ -19,6 +20,7 @@ import adminRouter from './routes/admin';
 import contactRouter from './routes/contact';
 import ticketsRouter from './routes/tickets';
 import consentRouter from './routes/consent';
+import notificationRoutes from './routes/notifications';
 import { startBillingEngine } from './workers/billingEngine';
 import { startGdprPurgeWorker } from './workers/gdprPurge';
 import { initSocketServer } from './lib/socket';
@@ -85,6 +87,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 app.use('/api/wallet', walletRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
@@ -93,6 +96,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/consent', consentRouter);
+app.use('/api/notifications', notificationRoutes);
 
 // ─── Public Content Endpoints ────────────────────────────────────────────────
 app.get('/api/blogs', async (req, res) => {

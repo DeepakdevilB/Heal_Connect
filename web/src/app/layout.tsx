@@ -5,6 +5,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
 import ConsentBanner from "@/components/ConsentBanner";
 import { SITE_NAME, SITE_URL, DEFAULT_TITLE, DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE } from "@/lib/seo";
+import { FCMProvider } from "@/components/FCMProvider";
+import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ['latin'] });
 const greatVibes = Great_Vibes({ weight: '400', subsets: ['latin'], variable: '--font-cursive' });
@@ -65,10 +67,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <LangProvider>
-            {children}
-            <ConsentBanner />
+            <FCMProvider>
+              {children}
+              <ConsentBanner />
+            </FCMProvider>
           </LangProvider>
         </ThemeProvider>
+        <Toaster position="top-right" />
       </body>
     </html>
   );

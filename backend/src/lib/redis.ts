@@ -1,25 +1,27 @@
 import Redis from 'ioredis';
 
-let redis: Redis | null = null;
+let redis: any = null;
 
 if (process.env.REDIS_URL) {
   const REDIS_URL = process.env.REDIS_URL;
   const isAzure = REDIS_URL.includes('azure.net') || REDIS_URL.startsWith('rediss://');
 
-  redis = new Redis(REDIS_URL, {
+  const options = {
     tls: isAzure ? { rejectUnauthorized: false } : undefined,
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null,
     enableAutoPipelining: false,
-    retryStrategy(times) {
+    retryStrategy(times: number) {
       if (times > 5) return null; // stop retrying after 5 attempts
       return Math.min(times * 50, 3000);
-    },
-    reconnectOnError(err) {
-      return err.message.includes('MOVED') || err.message.includes('ASK');
-    },
-  });
+    }
+  };
 
-  redis.on('error', (err) => {
+  // Azure Redis Enterprise uses a proxy that handles clustering internally.
+  // We MUST use the standalone Redis client, otherwise ioredis tries to run CLUSTER SLOTS,
+  // which causes infinite reconnect loops because internal node IPs aren't directly routable.
+  redis = new Redis(REDIS_URL, options);
+
+  redis.on('error', (err: any) => {
     console.error('Redis Client Error:', err.message);
   });
 

@@ -1,14 +1,14 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, CheckCircle2, Share2, Check, Calendar } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageCircle, Phone, Shield, Sparkles, Star, CheckCircle2, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { practitionersApi, sessionsApi, tokenStore } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { tokenStore, usersApi, practitionersApi, sessionsApi } from '@/lib/api';
 import { getAvatarUrl } from '@/lib/utils';
 
 interface Review {
@@ -46,7 +46,6 @@ export default function PractitionerDetailPage() {
   const [calling, setCalling] = useState(false);
   const [chatting, setChatting] = useState(false);
   const [requesting, setRequesting] = useState(false);
-  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -81,35 +80,6 @@ export default function PractitionerDetailPage() {
     };
   }, [id]);
 
-  const handleShare = async () => {
-    if (!p) return;
-    const url = `${window.location.origin}/practitioners/${p.id}`;
-    const shareData = {
-      title: `${p.name} on HealConnect`,
-      text: `Check out ${p.name}'s profile on HealConnect${p.specialties[0] ? ` — ${p.specialties[0]} expert` : ''}.`,
-      url,
-    };
-
-    // Prefer the native share sheet on supported devices (mobile browsers)
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch {
-        // User cancelled the share sheet, or it failed — fall through to clipboard copy
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(url);
-      setShared(true);
-      setTimeout(() => setShared(false), 2000);
-    } catch {
-      // Clipboard API unavailable (very old browser / non-secure context) — last resort
-      window.prompt('Copy this link to share:', url);
-    }
-  };
-
   const handleStartCall = async () => {
     if (!p) return;
     const token = tokenStore.getAccess();
@@ -131,7 +101,7 @@ export default function PractitionerDetailPage() {
         router.push(`/login?returnUrl=/practitioners/${p.id}`);
       } else {
         const errorDetail = res.errors?.length
-          ? res.errors.map((e) => e.message).join(' · ')
+          ? res.errors.map((e) => e.message).join(' ┬╖ ')
           : res.message || 'Failed to start call. Please try again.';
         alert(errorDetail);
       }
@@ -162,7 +132,7 @@ export default function PractitionerDetailPage() {
         router.push(`/login?returnUrl=/practitioners/${p.id}`);
       } else {
         const errorDetail = res.errors?.length
-          ? res.errors.map((e) => e.message).join(' · ')
+          ? res.errors.map((e) => e.message).join(' ┬╖ ')
           : res.message || 'Failed to start chat. Please try again.';
         alert(errorDetail);
       }
@@ -233,23 +203,6 @@ export default function PractitionerDetailPage() {
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full shadow-sm" />
             <span className="font-extrabold text-[#f59e0b] tracking-tight">HealConnect</span>
           </button>
-          <button
-            onClick={handleShare}
-            aria-label="Share this profile"
-            className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-[#f59e0b] transition-colors bg-transparent border border-yellow-200 hover:border-yellow-400 rounded-full px-3.5 py-1.5 cursor-pointer"
-          >
-            {shared ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-emerald-600">Link copied</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="h-3.5 w-3.5" />
-                <span>Share</span>
-              </>
-            )}
-          </button>
         </div>
       </header>
 
@@ -287,7 +240,7 @@ export default function PractitionerDetailPage() {
                       {p.name}
                       <Sparkles className="w-5 h-5 text-amber-400" />
                     </h1>
-                    <p className="text-[#f59e0b] font-semibold text-sm mt-0.5">{p.specialties.join(' · ')}</p>
+                    <p className="text-[#f59e0b] font-semibold text-sm mt-0.5">{p.specialties.join(' ┬╖ ')}</p>
                   </div>
                   {p.isVerified && (
                     <Badge variant="outline" className="border-amber-300 text-[#d97706] bg-amber-50/80 gap-1.5 px-3 py-1 rounded-full shrink-0 shadow-sm mx-auto sm:mx-0">
@@ -302,12 +255,12 @@ export default function PractitionerDetailPage() {
                     <span className="font-extrabold text-gray-900">{p.avgRating || '5.0'}</span>
                     <span className="text-gray-400 text-xs">({p.reviewCount || 12} reviews)</span>
                   </div>
-                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-300">┬╖</span>
                   <span className="text-gray-600 font-medium">{p.experienceYrs} Years Experience</span>
                 </div>
 
                 {p.languages.length > 0 && (
-                  <p className="text-xs text-gray-500 pt-0.5">🌐 Spoken Languages: <span className="font-semibold text-gray-700">{p.languages.join(', ')}</span></p>
+                  <p className="text-xs text-gray-500 pt-0.5">≡ƒîÉ Spoken Languages: <span className="font-semibold text-gray-700">{p.languages.join(', ')}</span></p>
                 )}
               </div>
             </div>
@@ -321,22 +274,18 @@ export default function PractitionerDetailPage() {
             {/* Price & Call Buttons */}
             <div className="flex items-center justify-between mt-6 pt-5 border-t border-yellow-100">
               <div>
-                <span className="text-3xl font-extrabold text-[#1a1a1a]">₹{p.perMinuteRate}</span>
+                <span className="text-3xl font-extrabold text-[#1a1a1a]">Γé╣{p.perMinuteRate}</span>
                 <span className="text-sm text-gray-400 font-medium"> / minute</span>
               </div>
-              <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
+              <div className="flex flex-wrap gap-3 justify-end mt-4 sm:mt-0">
                 <Button 
                   onClick={handleRequestSession} 
                   disabled={requesting}
                   variant="outline" 
-                  className="border-indigo-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
+                  className="border-emerald-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40 w-full sm:w-auto"
                 >
-                  {requesting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Calendar className="h-4 w-4" />
-                  )}
-                  Schedule
+                  {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                  Request Session
                 </Button>
                 <Button 
                   onClick={handleStartChat} 

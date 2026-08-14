@@ -155,6 +155,13 @@ export default function ExpertDashboardPage() {
           </Link>
 
           <div className="flex items-center gap-3">
+            {/* Session Requests Link */}
+            <Link href="/expert/requests" className="relative p-2 text-amber-600 hover:bg-amber-50 rounded-full transition-colors">
+              <Bell className="w-5 h-5" />
+              {/* Optional: You could add a red dot here if there are pending requests */}
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            </Link>
+
             {/* Online toggle */}
             <button
               onClick={toggleOnline}
