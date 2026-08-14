@@ -34,6 +34,13 @@ export function useDeepgramTranscription({
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Shared across startTranscription() and the "attach newly-joined remote track"
+  // effect below — both MUST feed the same destination node, since that's the node
+  // whose .stream is actually wired into the MediaRecorder. Previously the effect
+  // created its own separate destination that was never connected to the recorder,
+  // so any remote participant whose track published after transcription had already
+  // started was silently missing from the transcript.
+  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const audioSourcesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
   const transcriptEntriesRef = useRef<string[]>([]);
   const isStartedRef = useRef(false);
@@ -63,6 +70,7 @@ export function useDeepgramTranscription({
       }
     } catch {}
     audioContextRef.current = null;
+    destinationRef.current = null;
 
     try {
       if (socketRef.current) {
@@ -151,6 +159,7 @@ export function useDeepgramTranscription({
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
       const destination = audioCtx.createMediaStreamDestination();
+      destinationRef.current = destination;
 
       // Connect local mic track
       if (localTrack) {
@@ -180,18 +189,26 @@ export function useDeepgramTranscription({
         }
       });
 
-      // 3. Connect to Deepgram WebSocket with Hindi+English multi-lingual + diarization support
-      // Subprotocol authentication: ['token', apiKey]
+      // 3. Connect to Deepgram WebSocket with true multilingual code-switching, so a
+      // single conversation that mixes Hindi and English mid-sentence ("Hinglish")
+      // is transcribed correctly, plus diarization to separate the two speakers.
+      // NOTE: language=multi is Deepgram's actual code-switching mode (Nova-2/Nova-3).
+      // `detect_language=true` is a DIFFERENT feature — it picks one dominant language
+      // for the whole session and would override/ignore a fixed `language` value — it
+      // does not support switching languages within the same conversation, which is
+      // what we actually need here. endpointing=100 is Deepgram's recommended value
+      // for code-switching streams. See:
+      // https://developers.deepgram.com/docs/multilingual-code-switching
       const deepgramWsUrl =
         'wss://api.deepgram.com/v1/listen?' +
         new URLSearchParams({
           model: 'nova-2',
-          language: 'hi',
-          detect_language: 'true',
+          language: 'multi',
           diarize: 'true',
           smart_format: 'true',
           punctuate: 'true',
           interim_results: 'true',
+          endpointing: '100',
         }).toString();
 
       const ws = new WebSocket(deepgramWsUrl, ['token', apiKey]);
@@ -274,11 +291,15 @@ export function useDeepgramTranscription({
     }
   }, [sessionId, localTrack, remoteUsers]);
 
-  // Dynamically attach any new remote audio tracks as users publish
+  // Dynamically attach any new remote audio tracks as users publish (e.g. the other
+  // participant's Agora track finishes subscribing a moment after transcription
+  // already started). Must reuse the SAME destination node that feeds the
+  // MediaRecorder — see destinationRef comment above — otherwise this audio is
+  // connected to a dead-end node and silently never reaches the transcript.
   useEffect(() => {
-    if (transcriptStatus !== 'transcribing' || !audioContextRef.current) return;
+    if (transcriptStatus !== 'transcribing' || !audioContextRef.current || !destinationRef.current) return;
     const audioCtx = audioContextRef.current;
-    const destination = audioCtx.createMediaStreamDestination();
+    const destination = destinationRef.current;
 
     remoteUsers.forEach((u) => {
       const key = String(u.uid);

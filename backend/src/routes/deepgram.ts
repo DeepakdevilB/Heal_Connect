@@ -46,7 +46,12 @@ router.post(
       const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
       const deepgramProjectId = process.env.DEEPGRAM_PROJECT_ID;
 
-      if (!deepgramApiKey) {
+      // Fail closed, never leak the master key to the browser. Both env vars are
+      // required to issue a short-lived scoped credential; if either is missing,
+      // report "not configured" rather than falling back to the raw master key —
+      // that master key would otherwise get sent straight to the client and used
+      // in a browser-side WebSocket (visible in devtools Network tab to anyone).
+      if (!deepgramApiKey || !deepgramProjectId) {
         res.json({
           success: true,
           data: {
@@ -57,51 +62,50 @@ router.post(
         return;
       }
 
-      // If a project ID is configured, create a short-lived ephemeral key (TTL: 1 hour)
-      if (deepgramProjectId) {
-        try {
-          const keyRes = await fetch(
-            `https://api.deepgram.com/v1/projects/${deepgramProjectId}/keys`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Token ${deepgramApiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                comment: `Session-${sessionId}-${Date.now()}`,
-                time_to_live_in_seconds: 3600,
-                scopes: ['usage:write'],
-              }),
-            }
-          );
-
-          if (keyRes.ok) {
-            const keyData = (await keyRes.json()) as { key: string };
-            res.json({
-              success: true,
-              data: {
-                apiKey: keyData.key,
-                isConfigured: true,
-                isEphemeral: true,
-              },
-            });
-            return;
+      // Create a short-lived ephemeral key (TTL: 1 hour), scoped to this session only.
+      try {
+        const keyRes = await fetch(
+          `https://api.deepgram.com/v1/projects/${deepgramProjectId}/keys`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Token ${deepgramApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              comment: `Session-${sessionId}-${Date.now()}`,
+              time_to_live_in_seconds: 3600,
+              scopes: ['usage:write'],
+            }),
           }
-        } catch (keyErr) {
-          console.warn('[Deepgram] Ephemeral key creation failed, falling back to direct key:', keyErr);
-        }
-      }
+        );
 
-      // Fallback: Return the configured API key with write-only usage recommendation
-      res.json({
-        success: true,
-        data: {
-          apiKey: deepgramApiKey,
-          isConfigured: true,
-          isEphemeral: false,
-        },
-      });
+        if (!keyRes.ok) {
+          throw new Error(`Deepgram key creation failed with status ${keyRes.status}`);
+        }
+
+        const keyData = (await keyRes.json()) as { key: string };
+        res.json({
+          success: true,
+          data: {
+            apiKey: keyData.key,
+            isConfigured: true,
+            isEphemeral: true,
+          },
+        });
+      } catch (keyErr) {
+        // Do NOT fall back to the master key here — report unconfigured/unavailable
+        // instead so the frontend degrades gracefully (same path it already uses
+        // when DEEPGRAM_API_KEY itself is unset).
+        console.error('[Deepgram] Ephemeral key creation failed, refusing to fall back to master key:', keyErr);
+        res.json({
+          success: true,
+          data: {
+            isConfigured: false,
+            message: 'Deepgram STT temporarily unavailable',
+          },
+        });
+      }
     } catch (err) {
       console.error('[Deepgram] Error generating STT token:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
