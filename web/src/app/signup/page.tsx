@@ -22,6 +22,14 @@ function SignupInner() {
     if (searchParams.get('role') === 'expert') setRole('expert');
   }, [searchParams]);
 
+  // Redirect already-logged-in users
+  useEffect(() => {
+    const token = localStorage.getItem('hc_access');
+    if (!token) return;
+    const isExpert = localStorage.getItem('hc_role') === 'practitioner';
+    router.replace(isExpert ? '/expert/dashboard' : '/dashboard');
+  }, [router]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -149,7 +157,7 @@ function SignupInner() {
                   role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
                 <User className="w-4 h-4" /> User
               </button>
-              <button type="button" onClick={() => router.push('/astrologer/onboarding')}
+              <button type="button" onClick={() => { setRole('expert'); setError(''); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
                 <Sparkles className="w-4 h-4" /> Expert

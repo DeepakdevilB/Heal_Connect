@@ -59,9 +59,17 @@ export default function Navbar() {
   const [activeSection, setActiveSection] = useState<string>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [profileHref, setProfileHref] = useState('/login');
   const langRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { lang, setLang } = useLang();
+
+  useEffect(() => {
+    const token = localStorage.getItem('hc_access');
+    if (token) {
+      setProfileHref(localStorage.getItem('hc_role') === 'practitioner' ? '/expert/dashboard' : '/dashboard');
+    }
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -174,7 +182,7 @@ export default function Navbar() {
 
           {/* Sign in CTA */}
           <Link
-            href="/login"
+            href={profileHref}
             onClick={() => setDrawerOpen(false)}
             className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
           >
@@ -338,7 +346,7 @@ export default function Navbar() {
             </div>
 
             {/* Profile icon */}
-            <Link href="/login">
+            <Link href={profileHref}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}>
                 <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
                   <circle cx="12" cy="8" r="4" />
