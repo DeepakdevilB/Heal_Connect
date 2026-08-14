@@ -155,21 +155,43 @@ router.post(
 // ─── Razorpay Webhook (Payment Captured) ──────────────────────────────────────
 
 router.post('/webhook', async (req: Request, res: Response) => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'dummy_webhook_secret';
-  
-  // Verify Webhook Signature
-  const signature = req.headers['x-razorpay-signature'] as string;
-  if (!signature) {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) {
+    // Fail closed: no hardcoded fallback. A missing secret used to silently fall
+    // back to a known string ('dummy_webhook_secret') that's sitting in this
+    // public repo, which would let anyone forge a valid payment.captured event
+    // and credit any wallet. Refuse instead.
+    console.error('RAZORPAY_WEBHOOK_SECRET is not set — rejecting webhook (see .env.example)');
+    res.status(500).send('Webhook not configured');
+    return;
+  }
+
+  // Verify Webhook Signature — must be computed over the exact raw bytes Razorpay
+  // sent, not a re-serialized JSON.stringify(req.body). The two can differ (key
+  // order, number formatting, escaping) after Express has parsed the body, which
+  // was silently failing signature checks for otherwise-legitimate webhooks and
+  // leaving paid-for wallet recharges stuck at PENDING. req.rawBody is captured
+  // globally in index.ts's express.json({ verify }) — same mechanism the Stripe
+  // webhook below already uses correctly.
+  const signature = req.headers['x-razorpay-signature'] as string | undefined;
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  if (!signature || !rawBody) {
     res.status(400).send('Invalid signature');
     return;
   }
 
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex');
 
-  if (expectedSignature !== signature) {
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+  const signatureBuffer = Buffer.from(signature, 'utf8');
+  const signatureValid =
+    expectedBuffer.length === signatureBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+
+  if (!signatureValid) {
     res.status(400).send('Invalid signature');
     return;
   }
@@ -299,14 +321,16 @@ router.post(
 
 router.post('/stripe-webhook', async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'dummy_webhook_secret';
-  
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
   // Notice we use req.rawBody which we set in index.ts
   const rawBody = (req as any).rawBody;
 
   let event;
 
   try {
+    // Fail closed instead of falling back to a hardcoded, publicly-visible secret.
+    if (!webhookSecret) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
     if (!sig || !rawBody) throw new Error('Missing stripe signature or raw body');
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err: any) {

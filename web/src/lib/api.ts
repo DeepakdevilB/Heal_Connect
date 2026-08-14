@@ -430,6 +430,15 @@ export const agoraApi = {
     }),
 };
 
+export const deepgramApi = {
+  getToken: (token: string, sessionId: string) =>
+    request<{ apiKey?: string; isConfigured: boolean; isEphemeral?: boolean }>('/api/deepgram/token', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ sessionId }),
+    }),
+};
+
 export const walletApi = {
   getBalance: (token: string) =>
     request<{ wallet: { id: string; balance: number; currency: string; transactions: { id: string; type: string; status: string; amount: number; createdAt: string }[] } }>('/api/wallet', {

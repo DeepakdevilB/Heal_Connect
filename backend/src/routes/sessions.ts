@@ -456,10 +456,17 @@ router.post(
     const { transcriptText } = req.body as { transcriptText: string };
 
     try {
-      // Verify the session belongs to this user and is completed
+      // Verify the session belongs to this user/practitioner and is completed
       const session = await prisma.session.findFirst({
-        where: { id: sessionId, userId, status: 'COMPLETED' },
-        select: { id: true, practitionerId: true, type: true },
+        where: {
+          id: sessionId,
+          OR: [
+            { userId },
+            ...(req.user!.practitionerId ? [{ practitionerId: req.user!.practitionerId }] : [{ practitionerId: userId }]),
+          ],
+          status: 'COMPLETED',
+        },
+        select: { id: true, userId: true, practitionerId: true, type: true },
       });
 
       if (!session) {
@@ -476,7 +483,7 @@ router.post(
         data: {
           sessionId,
           transcriptText,
-          userId,
+          userId: session.userId,
           practitionerId: session.practitionerId,
         },
       });
@@ -484,7 +491,7 @@ router.post(
       // Task 3: scan transcript for policy violations (async, non-blocking)
       flagContentIfNeeded(transcriptText, 'CALL_TRANSCRIPT', {
         sessionId,
-        userId,
+        userId: session.userId,
         practitionerId: session.practitionerId,
         transcriptId: transcript.id,
       }).catch((err) => console.error('[moderation] transcript scan error:', err));

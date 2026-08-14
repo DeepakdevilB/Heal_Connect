@@ -19,6 +19,7 @@ import adminRouter from './routes/admin';
 import contactRouter from './routes/contact';
 import ticketsRouter from './routes/tickets';
 import consentRouter from './routes/consent';
+import deepgramRouter from './routes/deepgram';
 import { startBillingEngine } from './workers/billingEngine';
 import { startGdprPurgeWorker } from './workers/gdprPurge';
 import { initSocketServer } from './lib/socket';
@@ -93,6 +94,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/consent', consentRouter);
+app.use('/api/deepgram', deepgramRouter);
 
 // ─── Public Content Endpoints ────────────────────────────────────────────────
 app.get('/api/blogs', async (req, res) => {
