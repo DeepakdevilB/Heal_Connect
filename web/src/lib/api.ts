@@ -269,6 +269,30 @@ export const practitionersApi = {
 
 
 export const sessionsApi = {
+  getRequests: (token: string) =>
+    request<{ sessions: any[] }>('/api/schedules/requests', { headers: authHeader(token) }),
+
+  proposeTimes: (token: string, sessionId: string, slots: { startTime: string; endTime: string }[]) =>
+    request(`/api/schedules/${sessionId}/propose`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ slots }),
+    }),
+
+  selectTime: (token: string, sessionId: string, proposalId: string) =>
+    request(`/api/schedules/${sessionId}/select`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ proposalId }),
+    }),
+
+  requestSession: (token: string, practitionerId: string) =>
+    request<{ session: { id: string; status: string; type: string } }>('/api/schedules/request', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ practitionerId }),
+    }),
+
   create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
     request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
       method: 'POST',

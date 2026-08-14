@@ -24,6 +24,8 @@ type SessionRecord = {
   status: string;
   durationMinutes: number;
   startTime: string;
+  scheduledStartTime: string | null;
+  scheduledEndTime: string | null;
   endTime: string | null;
   totalCost: number;
   paymentStatus: string;
@@ -171,7 +173,7 @@ export default function AdminSessionsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/10">
                 <tr>
-                  {['Session ID', 'User', 'Practitioner', 'Type', 'Duration (Min)', 'Cost', 'Status', 'Start Time', 'Actions'].map((h) => (
+                  {['Session ID', 'User', 'Practitioner', 'Type', 'Duration (Min)', 'Cost', 'Status', 'Scheduled For', 'Started At', 'Actions'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-extrabold text-gray-500 dark:text-white/50 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -193,11 +195,16 @@ export default function AdminSessionsPage() {
                         {s.type === 'VIDEO' ? '📹 Video' : s.type === 'AUDIO' ? '📞 Voice' : '💬 Chat'}
                       </td>
                       <td className="px-4 py-3 text-xs font-extrabold text-gray-900 dark:text-white text-center">
-                        {s.durationMinutes > 0 ? `${s.durationMinutes} min` : 'In progress'}
+                        {s.durationMinutes > 0 ? `${s.durationMinutes} min` : 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-xs font-bold text-emerald-600">₹{s.totalCost}</td>
                       <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {s.scheduledStartTime ? new Date(s.scheduledStartTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {s.status === 'PENDING' || s.status === 'TIME_PROPOSED' || s.status === 'CONFIRMED' ? 'Not started' : new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
                       <td className="px-4 py-3">
                         <button onClick={() => setSelectedSession(s)} title="View Session Details" className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500">
                           <Eye className="w-3.5 h-3.5" />
@@ -231,6 +238,12 @@ export default function AdminSessionsPage() {
                 <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
                   <span className="text-gray-400 font-bold block">Practitioner</span>
                   <span className="font-extrabold text-purple-600">{selectedSession.practitioner}</span>
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+                  <span className="text-gray-400 font-bold block">Scheduled For</span>
+                  <span className="font-extrabold text-blue-600">
+                    {selectedSession.scheduledStartTime ? new Date(selectedSession.scheduledStartTime).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' }) : 'Instant Session'}
+                  </span>
                 </div>
                 <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
                   <span className="text-gray-400 font-bold block">Calculated Duration</span>

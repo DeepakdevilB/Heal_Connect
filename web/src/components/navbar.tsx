@@ -205,31 +205,50 @@ export default function Navbar() {
             </div>
             <span className="text-white/70 text-[11px] ml-1">Astrologer</span>
           </div>
-
-          {/* Sign in CTA */}
-          <Link
-            href="/login"
-            onClick={() => setDrawerOpen(false)}
-            className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-                  <circle cx="12" cy="8" r="4" />
-                  <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+          {/* Sign in CTA or Dashboard Link */}
+          {!userProfile ? (
+            <Link
+              href="/login"
+              onClick={() => setDrawerOpen(false)}
+              className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                    <circle cx="12" cy="8" r="4" />
+                    <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gray-900">Sign In / Sign Up</p>
+                  <p className="text-[11px] text-gray-700">
+                    Your 1st Chat is <strong className="text-amber-600">100% Free</strong>
+                  </p>
+                </div>
+                <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-bold text-gray-900">Sign In / Sign Up</p>
-                <p className="text-[11px] text-gray-700">
-                  Your 1st Chat is <strong className="text-amber-600">100% Free</strong>
-                </p>
+            </Link>
+          ) : (
+            <Link
+              href={userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard'}
+              onClick={() => setDrawerOpen(false)}
+              className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold text-gray-800">Go to Dashboard</p>
+                  <p className="text-[11px] text-gray-500 font-medium">View your profile and sessions</p>
+                </div>
               </div>
-              <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
+            </Link>
+          )}
         </div>
 
         {/* Menu body */}
@@ -374,22 +393,29 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Profile icon */}
-            <Link href={userProfile ? (userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard') : '/login'}>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer overflow-hidden border-2 ${isDark ? 'border-white/20 hover:border-amber-400' : 'border-gray-200 hover:border-amber-400'}`}>
-                {userProfile ? (
-                  <img
-                    src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.id) : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                )}
-              </div>
-            </Link>
+            {/* Profile icon or Login button */}
+            <div className="relative group">
+              {userProfile ? (
+                <div className="flex items-center gap-3">
+                  <Link href={userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard'}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer overflow-hidden border-2 ${isDark ? 'border-white/20 hover:border-amber-400' : 'border-gray-200 hover:border-amber-400'}`}>
+                      <img
+                        src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.name || 'Expert') : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </Link>
+                  <button onClick={() => { tokenStore.clear(); localStorage.removeItem('hc_role'); window.location.href = '/login'; }} className="hidden md:flex text-sm font-semibold text-red-500 hover:text-red-700 transition-colors">
+                    Logout
+                  </button>
+                </div>
+              ) : mounted ? (
+                <Link href="/login" className="hidden sm:flex items-center justify-center bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md shadow-amber-500/25 transition-all ml-1 border-0">
+                  Login / Sign Up
+                </Link>
+              ) : null}
+            </div>
           </div>
         </header>
       </div>

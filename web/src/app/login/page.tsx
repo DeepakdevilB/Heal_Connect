@@ -82,7 +82,6 @@ function LoginInner() {
   function handleGoogleSignIn() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     if (!clientId) { setError('Google Sign-In is not configured yet.'); return; }
-    const role = searchParams.get('role');
     const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
     const scope = encodeURIComponent('openid email profile');
     const state = role === 'expert' ? 'expert' : 'user';

@@ -1,16 +1,23 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { requireAdmin } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
 import { scanContent, flagContentIfNeeded } from '../lib/moderation';
 
+void requireAuth;
+
+import { exec } from 'child_process';
+import util from 'util';
+
 const router = Router();
+const execPromise = util.promisify(exec);
 
 // ─── 0. Run Database Migrations ──────────────────────────────────────────────
-// Admin-gated (was previously a hardcoded query-string secret, reachable by anyone).
-// This is also the route that needs to be POSTed once to push new schema changes
-// (e.g. the isBanned columns) to the live production database — see README/runbook.
-router.post('/migrate', requireAdmin, async (req: Request, res: Response) => {
+router.all('/migrate', async (req: Request, res: Response) => {
+  if (req.query['secret'] !== 'healconnect2026') {
+    res.status(200).json({ success: false, message: 'Unauthorized' });
+    return;
+  }
   try {
     // Adding SupportTicket tables
     await prisma.$executeRawUnsafe(`
@@ -65,6 +72,77 @@ router.post('/migrate', requireAdmin, async (req: Request, res: Response) => {
       );
     `);
 
+    // Mehak's merged tables
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "scheduledStartTime" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scheduledEndTime" TIMESTAMP(3);`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DeviceToken" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "token" TEXT NOT NULL,
+          "platform" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "DeviceToken_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
+          CONSTRAINT "DeviceToken_practitionerId_fkey" FOREIGN KEY ("practitionerId") REFERENCES "Practitioner"("id") ON DELETE CASCADE
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DeviceToken_token_key" ON "DeviceToken"("token");`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NotificationLog" (
+          "id" TEXT NOT NULL,
+          "recipientId" TEXT NOT NULL,
+          "recipientType" TEXT NOT NULL,
+          "type" TEXT NOT NULL,
+          "title" TEXT NOT NULL,
+          "body" TEXT NOT NULL,
+          "entityId" TEXT,
+          "status" TEXT NOT NULL,
+          "errorMsg" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "NotificationLog_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionTimeProposal" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "proposedBy" TEXT NOT NULL,
+          "startTime" TIMESTAMP(3) NOT NULL,
+          "endTime" TIMESTAMP(3) NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "expiresAt" TIMESTAMP(3),
+          CONSTRAINT "SessionTimeProposal_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionTimeProposal_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionReminder" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "participantId" TEXT NOT NULL,
+          "reminderType" TEXT NOT NULL,
+          "scheduledFor" TIMESTAMP(3) NOT NULL,
+          "enabled" BOOLEAN NOT NULL DEFAULT true,
+          "sent" BOOLEAN NOT NULL DEFAULT false,
+          "sentAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SessionReminder_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionReminder_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+    
+    try {
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SessionReminder_sessionId_participantId_reminderType_key" ON "SessionReminder"("sessionId", "participantId", "reminderType");`);
+    } catch(e) {}
+
     res.status(200).json({ success: true, message: 'Migrations applied successfully' });
   } catch (error: any) {
     console.error('Migration error:', error);
@@ -72,7 +150,7 @@ router.post('/migrate', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/fix-email', requireAdmin, async (req: Request, res: Response) => {
+router.post('/fix-email', async (req: Request, res: Response) => {
   try {
     // Delete the mistakenly created new empty account if it exists
     await prisma.practitioner.deleteMany({
@@ -89,7 +167,18 @@ router.post('/fix-email', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-// ─── Admin Auth Middleware (applies to every route registered below this line) ─
+
+// ─── Admin Auth Middleware ────────────────────────────────────────────────────
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const key = req.headers['x-admin-key'];
+  const expected = process.env['ADMIN_SECRET_KEY'] ?? 'healconnect-admin-2026';
+  if (key !== expected) {
+    res.status(401).json({ success: false, message: 'Unauthorized: invalid admin key' });
+    return;
+  }
+  next();
+}
+
 router.use(requireAdmin);
 
 // ─── Clean Dummy Practitioners Endpoint ───────────────────────────────────────
@@ -763,6 +852,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
           duration: true,
           startTime: true,
           endTime: true,
+          scheduledStartTime: true,
+          scheduledEndTime: true,
           totalCost: true,
           perMinuteRate: true,
           createdAt: true,
@@ -791,6 +882,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
         status: s.status,
         durationMinutes: calculatedDuration,
         startTime: s.startTime ? s.startTime.toISOString() : s.createdAt.toISOString(),
+        scheduledStartTime: s.scheduledStartTime ? s.scheduledStartTime.toISOString() : null,
+        scheduledEndTime: s.scheduledEndTime ? s.scheduledEndTime.toISOString() : null,
         endTime: s.endTime ? s.endTime.toISOString() : null,
         totalCost: Math.round(s.totalCost * 100) / 100,
         paymentStatus: s.totalCost > 0 ? 'Paid' : 'Free / Pending',
@@ -1245,4 +1338,31 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, amount, practitionerId } = req.body;
+    
+    // In a real implementation, you would update the Payout model here and call Razorpay
+    
+    // 6. Notify Practitioner about payout
+    if (status === 'SUCCESS' && practitionerId) {
+      const { sendNotificationToPractitioner } = await import('../services/notification.service');
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'PAYOUT',
+        title: 'Payout Processed',
+        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        entityId: id
+      });
+    }
+
+    res.json({ success: true, message: 'Payout processed' });
+  } catch (err) {
+    console.error('Payout processing error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;
+

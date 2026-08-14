@@ -14,13 +14,11 @@ export interface JwtPayload {
 }
 
 export function signAccessToken(payload: JwtPayload): string {
-  const uniquePayload = { ...payload, nonce: crypto.randomUUID() };
-  return jwt.sign(uniquePayload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRY });
+  return jwt.sign({ ...payload, jti: crypto.randomUUID() }, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRY });
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
-  const uniquePayload = { ...payload, nonce: crypto.randomUUID() };
-  return jwt.sign(uniquePayload, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
+  return jwt.sign({ ...payload, jti: crypto.randomUUID() }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
 }
 
 export function verifyAccessToken(token: string): JwtPayload {

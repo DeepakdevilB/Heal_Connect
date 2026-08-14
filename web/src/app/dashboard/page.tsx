@@ -244,7 +244,7 @@ export default function DashboardPage() {
                           onClick={() => goToPractitioner(exp.id)}
                           className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition-colors text-left border-b border-gray-50 last:border-b-0"
                         >
-                          <img src={getPractitionerAvatar(exp.photoUrl, exp.id)} alt={exp.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                          <img src={getPractitionerAvatar(exp.photoUrl, exp.name)} alt={exp.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-gray-900 truncate">{exp.name}</p>
                             <p className="text-xs text-gray-500 truncate">{exp.specialties.slice(0, 2).join(' · ') || '—'}</p>
@@ -313,6 +313,12 @@ export default function DashboardPage() {
                     <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
                       <FileText className="w-4 h-4 text-amber-500" />
                       <span className="text-sm font-medium text-gray-900">Call Transcripts</span>
+                    </div>
+                  </Link>
+                  <Link href="/dashboard/schedules" onClick={() => setShowProfileMenu(false)}>
+                    <div className="px-4 py-3 hover:bg-amber-50 transition-colors flex items-center gap-3 border-b border-gray-100">
+                      <Calendar className="w-4 h-4 text-amber-500" />
+                      <span className="text-sm font-medium text-gray-900">Scheduled Sessions</span>
                     </div>
                   </Link>
                   <Link href="/dashboard/support" onClick={() => setShowProfileMenu(false)}>
@@ -441,7 +447,7 @@ export default function DashboardPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
               {experts.map((expert) => {
-                const avatarSrc = getPractitionerAvatar(expert.photoUrl, expert.id);
+                const avatarSrc = getPractitionerAvatar(expert.photoUrl, expert.name);
                 return (
                   <Link key={expert.id} href={`/practitioners/${expert.id}`} className="h-full">
                     <Card className="bg-white border border-gray-100 hover:border-amber-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer rounded-2xl overflow-hidden group h-full">
