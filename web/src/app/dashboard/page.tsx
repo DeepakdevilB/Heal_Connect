@@ -8,7 +8,7 @@ import {
   Wallet, MessageCircle, Phone, Star, Bell, LogOut,
   Search, ChevronRight, Zap, TrendingUp, Clock, Shield, User,
   HeartHandshake, Headphones, Sparkles, ArrowRight,
-  Waves, Check, FileText, LifeBuoy
+  Waves, Check, FileText, LifeBuoy, Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
