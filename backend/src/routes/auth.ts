@@ -68,15 +68,6 @@ router.post(
         phone?: string; verifyMethod?: 'email' | 'sms';
       };
 
-    // SMS + +91 → MSG91 not ready yet, tell the user to use email instead
-    if (verifyMethod === 'sms' && phone?.startsWith('+91')) {
-      res.status(503).json({
-        success: false,
-        message: 'SMS OTP for Indian numbers (+91) is coming soon. Please use Email verification for now.',
-      });
-      return;
-    }
-
     // SMS chosen but provider not configured for this number → fall back to email silently
     const useEmail = verifyMethod === 'email' || (phone ? !isOtpConfigured(phone) : true);
 

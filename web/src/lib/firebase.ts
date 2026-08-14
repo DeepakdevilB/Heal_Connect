@@ -2,12 +2,12 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCDtprrsBQThbv2m_mQGQgHiz9pms5adUc",
-  authDomain: "healconnect-c39d4.firebaseapp.com",
-  projectId: "healconnect-c39d4",
-  storageBucket: "healconnect-c39d4.firebasestorage.app",
-  messagingSenderId: "736067888290",
-  appId: "1:736067888290:web:5f7abc3d97a6ef880263fb",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
@@ -26,7 +26,7 @@ export const requestFirebaseNotificationPermission = async () => {
     
     if (permission === 'granted') {
       const currentToken = await getToken(messaging, { 
-        vapidKey: "BLmHUikYJsC-U6N8NOoOslgFaNzRh_eJeDrfaTXJzWkNL_8R8Db9fCedeZoW_PCxYzaq5QdOsTGSbrxgTEI6VsM" 
+        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY 
       });
       if (currentToken) {
         return currentToken;
