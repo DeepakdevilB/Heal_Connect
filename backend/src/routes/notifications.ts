@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { registerDeviceToken, removeDeviceToken } from '../services/notification.service';
 
@@ -18,13 +18,20 @@ router.post(
   async (req: any, res: any) => {
     try {
       const { token, platform } = req.body;
-      const { id, type } = req.user;
+      // JwtPayload (middleware/auth.ts) is { userId, practitionerId?, email? } —
+      // there is no `id`/`type` field. This previously destructured `id`/`type`
+      // (which don't exist on req.user, so both were always undefined),
+      // meaning every device token was saved with userId AND practitionerId
+      // both null — orphaned, never matched by sendNotificationToUser/
+      // sendNotificationToPractitioner. Push notifications were silently
+      // broken for everyone.
+      const isPractitioner = Boolean(req.user.practitionerId);
 
       await registerDeviceToken({
         token,
         platform,
-        userId: type === 'USER' ? id : undefined,
-        practitionerId: type === 'PRACTITIONER' ? id : undefined
+        userId: isPractitioner ? undefined : req.user.userId,
+        practitionerId: isPractitioner ? req.user.practitionerId : undefined,
       });
 
       res.status(200).json({ success: true, message: 'Device token registered' });
@@ -51,9 +58,15 @@ router.delete(
   }
 );
 
-// DEV ENDPOINT: Test push notification (No auth required for testing)
+// DEV ENDPOINT: Test push notification. Was completely unauthenticated
+// ("No auth required for testing") and let any caller send arbitrary
+// title/body push content to any userId/practitionerId by ID — the same
+// "dev helper left open in production" pattern already found and fixed in
+// wallet.ts /dev-recharge, practitioners.ts /dev/verify, sessions.ts
+// /dev-clear, and admin.ts /migrate. Gated behind requireAdmin now.
 router.post(
   '/test',
+  requireAdmin,
   async (req: any, res: any) => {
     try {
       const { practitionerId, userId, message } = req.body;

@@ -153,12 +153,17 @@ router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: R
     }),
     prisma.session.aggregate({
       where: { practitionerId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
+      _sum: { totalCost: true },
+      _count: { _all: true },
     })
   ]);
 
   const totalEarnings = aggregations._sum.totalCost || 0;
-  res.json({ success: true, data: { sessions, totalEarnings } });
+  // Real lifetime count, not sessions.length — that list is capped at the
+  // last 20 (take: 20 above), so the expert dashboard's "Sessions Done" stat
+  // was silently stuck at a max of 20 for any practitioner past that point.
+  const totalSessionsCompleted = aggregations._count._all;
+  res.json({ success: true, data: { sessions, totalEarnings, totalSessionsCompleted } });
 });
 
 // ─── GET /api/sessions/user/history — user session history ───────────────────
@@ -187,8 +192,13 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
     if (!s.startTime || !s.endTime) return sum;
     return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
   }, 0);
+  // Real lifetime count — allUserSessions is the unlimited query above (used
+  // for totalMinutes), unlike `sessions` which is capped at the last 20.
+  // The frontend previously used sessions.length for its "sessions done"
+  // stat, so it was silently stuck at a max of 20.
+  const totalSessionsCompleted = allUserSessions.length;
 
-  res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
+  res.json({ success: true, data: { sessions, totalSpent, totalMinutes, totalSessionsCompleted } });
 });
 
 // ─── GET /api/sessions/user/transcripts — user's own call transcripts ────────

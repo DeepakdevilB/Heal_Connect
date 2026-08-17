@@ -25,20 +25,48 @@ function SignupInner() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [dob, setDob] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Kept as two separate boxes rather than one bundled "I agree to
+  // everything" checkbox — Terms and Privacy Notice are each their own
+  // consent record (see backend lib/consentPolicy.ts), and marketing is
+  // opt-in and never required to create an account.
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [emailMarketingOptIn, setEmailMarketingOptIn] = useState(false);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!acceptTerms || !acceptPrivacy) {
+      setError('Please accept the Terms of Service and Privacy Notice to continue.');
+      return;
+    }
+    // CHILD-02: client-side age check for instant feedback (server also enforces)
+    if (!dob) {
+      setError('Please enter your date of birth.');
+      return;
+    }
+    const dobDate = new Date(dob);
+    const minBirthDate = new Date();
+    minBirthDate.setFullYear(minBirthDate.getFullYear() - 18);
+    if (isNaN(dobDate.getTime()) || dobDate > minBirthDate) {
+      setError('You must be at least 18 years old to create an account.');
+      return;
+    }
     setLoading(true);
     const pwdOk = /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
     if (!pwdOk) { setError('Password must be min. 8 chars, 1 uppercase, 1 number.'); setLoading(false); return; }
     try {
       if (role === 'expert') {
-        const res = await authApi.practitionerRegister(name, email, password);
+        const res = await authApi.practitionerRegister(name, email, password, dob, {
+          acceptTerms,
+          acceptPrivacy,
+          emailMarketingOptIn,
+        });
         if (!res.success || !res.data) {
           setError(res.message || 'Registration failed');
           return;
@@ -51,7 +79,7 @@ function SignupInner() {
         setSuccess('Expert account created!');
         setTimeout(() => router.push('/expert/dashboard'), 1200);
       } else {
-        const res = await authApi.register({ name, email, password });
+        const res = await authApi.register({ name, email, password, dob, acceptTerms, acceptPrivacy, emailMarketingOptIn });
         if (!res.success || !res.data) {
           setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
           return;
@@ -197,7 +225,66 @@ function SignupInner() {
                   <p className="text-xs text-amber-500 mt-1">Password must be at least 8 characters</p>
                 )}
               </div>
-              <Button type="submit" disabled={loading || !!success} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
+              {/* CHILD-02: DOB — required for 18+ age gate */}
+              <div className="space-y-2">
+                <Label htmlFor="dob" className="text-[#1a1a1a]">Date of Birth <span className="text-gray-400 font-normal">(must be 18+)</span></Label>
+                <Input
+                  id="dob"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  required
+                  max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 18); return d.toISOString().split('T')[0]; })()}
+                  className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]"
+                />
+              </div>
+              <div className="space-y-2 pt-1">
+                <label className="flex items-start gap-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    required
+                    className="mt-0.5 rounded border-yellow-300 text-[#f59e0b] focus:ring-[#f59e0b]"
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <Link href="/terms" target="_blank" className="text-[#f59e0b] font-semibold hover:underline">
+                      Terms of Service
+                    </Link>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={acceptPrivacy}
+                    onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                    required
+                    className="mt-0.5 rounded border-yellow-300 text-[#f59e0b] focus:ring-[#f59e0b]"
+                  />
+                  <span>
+                    I've read and acknowledge the{' '}
+                    <Link href="/privacy" target="_blank" className="text-[#f59e0b] font-semibold hover:underline">
+                      Privacy Notice
+                    </Link>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={emailMarketingOptIn}
+                    onChange={(e) => setEmailMarketingOptIn(e.target.checked)}
+                    className="mt-0.5 rounded border-yellow-300 text-[#f59e0b] focus:ring-[#f59e0b]"
+                  />
+                  <span>Email me updates and offers (optional — you can change this anytime)</span>
+                </label>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading || !!success || !acceptTerms || !acceptPrivacy}
+                className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg disabled:opacity-50"
+              >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Join as Expert' : 'Create Account'} <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
             </form>
@@ -229,11 +316,6 @@ function SignupInner() {
             <p className="text-center text-sm text-gray-500 pt-1">
               Already have an account?{' '}
               <Link href="/login" className="text-[#f59e0b] font-semibold hover:underline">Log in</Link>
-            </p>
-            <p className="text-center text-xs text-gray-400">
-              By continuing, you agree to our{' '}
-              <Link href="#" className="hover:underline">Terms of Service</Link>{' '}and{' '}
-              <Link href="/privacy" className="hover:underline">Privacy Policy</Link>.
             </p>
           </CardContent>
         </Card>

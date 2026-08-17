@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { AdminShell, StatCard, StatusBadge, SkeletonRow } from '@/components/admin-shell';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 type StatsData = {
   totalUsers: number;
@@ -56,7 +55,7 @@ export default function AdminDashboard() {
 
   const fetchRealData = useCallback(async () => {
     try {
-      const headers = { 'x-admin-key': ADMIN_KEY };
+      const headers = {};
       const [statsRes, actRes, chartRes] = await Promise.all([
         fetch('/api/admin/stats', { headers }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/activities', { headers }).then((r) => r.json()).catch(() => null),
@@ -92,7 +91,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetch('/api/admin/clean-dummies', {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
+      headers: {},
     }).catch(() => {});
   }, []);
 

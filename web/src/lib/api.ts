@@ -124,8 +124,9 @@ function authHeader(token: string) {
 
 export const authApi = {
   register: (body: {
-    email: string; password: string; name: string;
+    email: string; password: string; name: string; dob: string;
     phone?: string; verifyMethod?: 'email' | 'sms';
+    acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean;
   }) =>
     request<AuthData>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
 
@@ -162,10 +163,16 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify({ email, password }) }
     ),
 
-  practitionerRegister: (name: string, email: string, password: string) =>
+  practitionerRegister: (
+    name: string,
+    email: string,
+    password: string,
+    dob: string,
+    consent: { acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean }
+  ) =>
     request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
       '/api/auth/practitioner/register',
-      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+      { method: 'POST', body: JSON.stringify({ name, email, password, dob, ...consent }) }
     ),
 
   refresh: (refreshToken: string) =>
@@ -339,13 +346,13 @@ export const sessionsApi = {
     ),
 
   practitionerHistory: (token: string) =>
-    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number }>(
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number; totalSessionsCompleted: number }>(
       '/api/sessions/practitioner/history',
       { headers: authHeader(token) }
     ),
 
   userHistory: (token: string) =>
-    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number }>(
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number; totalSessionsCompleted: number }>(
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
@@ -409,26 +416,11 @@ export const ticketsApi = {
     }),
 };
 
-export const moderationApi = {
-  getFlagged: (token: string, queryParams?: { status?: string; source?: string; page?: number; limit?: number }) => {
-    const q = new URLSearchParams();
-    if (queryParams?.status) q.append('status', queryParams.status);
-    if (queryParams?.source) q.append('source', queryParams.source);
-    if (queryParams?.page) q.append('page', String(queryParams.page));
-    if (queryParams?.limit) q.append('limit', String(queryParams.limit));
-    return request<{ items: any[]; pagination: { total: number; page: number; limit: number; pages: number } }>(
-      `/api/moderation/flagged?${q.toString()}`,
-      { headers: authHeader(token) }
-    );
-  },
-
-  updateFlag: (token: string, flagId: string, status: 'RESOLVED' | 'DISMISSED') =>
-    request(`/api/moderation/flagged/${flagId}`, {
-      method: 'PATCH',
-      headers: authHeader(token),
-      body: JSON.stringify({ status }),
-    }),
-};
+// moderationApi (GET/PATCH /api/moderation/flagged*) removed 2026-08-17 — had
+// zero callers in this app (dead code) and the backend routes it pointed at
+// were insecurely gated (any practitioner token, not just admins). The real,
+// correctly-secured moderation UI (web/src/app/admin/moderation/page.tsx)
+// has always used /api/admin/moderation instead. See backend/src/routes/reviews.ts.
 
 export const agoraApi = {
   getToken: (token: string, sessionId: string) =>
@@ -505,8 +497,17 @@ export const tokenStore = {
 
 // ─── GDPR: Consent ────────────────────────────────────────────────────────────
 
-export type ConsentCategory = 'ANALYTICS' | 'MARKETING';
-export type ConsentState = Partial<Record<ConsentCategory, { granted: boolean; updatedAt: string }>>;
+export type ConsentCategory =
+  | 'TERMS'
+  | 'PRIVACY_NOTICE'
+  | 'SENSITIVE_DATA'
+  | 'ANALYTICS'
+  | 'EMAIL_MARKETING'
+  | 'SMS_MARKETING'
+  | 'PUSH_MARKETING';
+export type ConsentState = Partial<
+  Record<ConsentCategory, { granted: boolean; updatedAt: string; policyVersion: string | null }>
+>;
 
 /** First-party random id used to track consent for visitors who aren't logged in yet. */
 export function getVisitorId(): string {

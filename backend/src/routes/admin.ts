@@ -1,147 +1,59 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { requireAuth } from '../middleware/auth';
+import { requireAdmin, requireAdminAuth, type AdminAuthRequest } from '../middleware/auth';
 import { scanContent, flagContentIfNeeded } from '../lib/moderation';
-
-void requireAuth;
-
-import { exec } from 'child_process';
-import util from 'util';
+import { FULL_MIGRATION_SQL, SESSION_REMINDER_UNIQUE_INDEX_SQL } from '../lib/migrationSql';
+import { randomUUID } from 'crypto';
 
 const router = Router();
-const execPromise = util.promisify(exec);
 
-// ─── 0. Run Database Migrations ──────────────────────────────────────────────
-router.all('/migrate', async (req: Request, res: Response) => {
-  if (req.query['secret'] !== 'healconnect2026') {
-    res.status(200).json({ success: false, message: 'Unauthorized' });
-    return;
-  }
+// SEC-04/05: Admin audit log helper â€” now uses adminLabel from req.adminUser
+// when available (full session), falls back to env var for legacy / bootstrap routes.
+async function writeAuditLog(
+  req: Request | null,
+  action: string,
+  targetType: string,
+  targetId?: string | null,
+  meta?: Record<string, unknown> | null,
+): Promise<void> {
   try {
-    // Adding SupportTicket tables
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SupportTicket" (
-          "id" TEXT NOT NULL,
-          "userId" TEXT,
-          "practitionerId" TEXT,
-          "subject" TEXT NOT NULL,
-          "category" TEXT NOT NULL DEFAULT 'OTHER',
-          "status" TEXT NOT NULL DEFAULT 'OPEN',
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL,
-          CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
-      );
-    `);
-    
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "TicketMessage" (
-          "id" TEXT NOT NULL,
-          "ticketId" TEXT NOT NULL,
-          "senderType" TEXT NOT NULL,
-          "message" TEXT NOT NULL,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "TicketMessage_pkey" PRIMARY KEY ("id")
-      );
-    `);
+    const adminUser = (req as AdminAuthRequest | null)?.adminUser;
+    const adminLabel = adminUser?.email ?? process.env['ADMIN_LOGIN_EMAIL'] ?? 'admin';
+    await prisma.adminAuditLog.create({
+      data: {
+        id: randomUUID(),
+        adminLabel,
+        action,
+        targetType,
+        targetId: targetId ?? null,
+        meta: meta ? JSON.stringify(meta) : null,
+      },
+    });
+  } catch (err) {
+    // Never throw â€” log only
+    console.error('[AuditLog] Failed to write audit row:', err);
+  }
+}
 
-    // Ban fields
-    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "googleId" TEXT UNIQUE;`);
+// SEC-04/05: All admin routes are now guarded by the per-identity cookie session.
+// requireAdminAuth() with no args allows both SUPERADMIN and MODERATOR.
+// Sensitive routes individually add requireAdminAuth(['SUPERADMIN']).
+router.use(requireAdminAuth());
 
-    // GDPR fields
-    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "CallTranscript" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Consent" (
-          "id" TEXT NOT NULL,
-          "userId" TEXT,
-          "practitionerId" TEXT,
-          "visitorId" TEXT,
-          "category" TEXT NOT NULL,
-          "granted" BOOLEAN NOT NULL,
-          "source" TEXT NOT NULL DEFAULT 'BANNER',
-          "ipAddress" TEXT,
-          "userAgent" TEXT,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "Consent_pkey" PRIMARY KEY ("id")
-      );
-    `);
-
-    // Mehak's merged tables
-    await prisma.$executeRawUnsafe(`ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "scheduledStartTime" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scheduledEndTime" TIMESTAMP(3);`);
-    
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "DeviceToken" (
-          "id" TEXT NOT NULL,
-          "userId" TEXT,
-          "practitionerId" TEXT,
-          "token" TEXT NOT NULL,
-          "platform" TEXT NOT NULL,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "DeviceToken_pkey" PRIMARY KEY ("id"),
-          CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
-          CONSTRAINT "DeviceToken_practitionerId_fkey" FOREIGN KEY ("practitionerId") REFERENCES "Practitioner"("id") ON DELETE CASCADE
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DeviceToken_token_key" ON "DeviceToken"("token");`);
-    
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "NotificationLog" (
-          "id" TEXT NOT NULL,
-          "recipientId" TEXT NOT NULL,
-          "recipientType" TEXT NOT NULL,
-          "type" TEXT NOT NULL,
-          "title" TEXT NOT NULL,
-          "body" TEXT NOT NULL,
-          "entityId" TEXT,
-          "status" TEXT NOT NULL,
-          "errorMsg" TEXT,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "NotificationLog_pkey" PRIMARY KEY ("id")
-      );
-    `);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SessionTimeProposal" (
-          "id" TEXT NOT NULL,
-          "sessionId" TEXT NOT NULL,
-          "proposedBy" TEXT NOT NULL,
-          "startTime" TIMESTAMP(3) NOT NULL,
-          "endTime" TIMESTAMP(3) NOT NULL,
-          "status" TEXT NOT NULL DEFAULT 'PENDING',
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "expiresAt" TIMESTAMP(3),
-          CONSTRAINT "SessionTimeProposal_pkey" PRIMARY KEY ("id"),
-          CONSTRAINT "SessionTimeProposal_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
-      );
-    `);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SessionReminder" (
-          "id" TEXT NOT NULL,
-          "sessionId" TEXT NOT NULL,
-          "participantId" TEXT NOT NULL,
-          "reminderType" TEXT NOT NULL,
-          "scheduledFor" TIMESTAMP(3) NOT NULL,
-          "enabled" BOOLEAN NOT NULL DEFAULT true,
-          "sent" BOOLEAN NOT NULL DEFAULT false,
-          "sentAt" TIMESTAMP(3),
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "SessionReminder_pkey" PRIMARY KEY ("id"),
-          CONSTRAINT "SessionReminder_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
-      );
-    `);
-    
+// â”€â”€â”€ 0. Run Database Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+router.all('/migrate', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
+  try {
+    // Single shared migration script — see lib/migrationSql.ts for why this
+    // used to be two different, out-of-sync copies (this route was missing
+    // AdminUser/AdminAuditLog/CallTranscript/FlaggedContent entirely).
+    await prisma.$executeRawUnsafe(FULL_MIGRATION_SQL);
     try {
-      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SessionReminder_sessionId_participantId_reminderType_key" ON "SessionReminder"("sessionId", "participantId", "reminderType");`);
-    } catch(e) {}
+      await prisma.$executeRawUnsafe(SESSION_REMINDER_UNIQUE_INDEX_SQL);
+    } catch (e) { /* pre-existing duplicate rows on some databases — non-fatal */ }
+
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'MIGRATE', 'SYSTEM', null, null);
 
     res.status(200).json({ success: true, message: 'Migrations applied successfully' });
   } catch (error: any) {
@@ -168,20 +80,7 @@ router.post('/fix-email', async (req: Request, res: Response) => {
 });
 
 
-// ─── Admin Auth Middleware ────────────────────────────────────────────────────
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const key = req.headers['x-admin-key'];
-  const expected = process.env['ADMIN_SECRET_KEY'] ?? 'healconnect-admin-2026';
-  if (key !== expected) {
-    res.status(401).json({ success: false, message: 'Unauthorized: invalid admin key' });
-    return;
-  }
-  next();
-}
-
-router.use(requireAdmin);
-
-// ─── Clean Dummy Practitioners Endpoint ───────────────────────────────────────
+// â”€â”€â”€ Clean Dummy Practitioners Endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/clean-dummies', async (_req: Request, res: Response) => {
   try {
     const deleted = await prisma.practitioner.deleteMany({
@@ -200,7 +99,7 @@ router.post('/clean-dummies', async (_req: Request, res: Response) => {
   }
 });
 
-// ─── 1. Comprehensive Real Dashboard Metrics ──────────────────────────────────
+// â”€â”€â”€ 1. Comprehensive Real Dashboard Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
     const now = new Date();
@@ -272,7 +171,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
   }
 });
 
-// ─── 2. Real Database Analytics Charts (Last 30 Days) ─────────────────────────
+// â”€â”€â”€ 2. Real Database Analytics Charts (Last 30 Days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/analytics/charts', async (_req: Request, res: Response) => {
   try {
     const now = new Date();
@@ -371,7 +270,7 @@ router.get('/analytics/charts', async (_req: Request, res: Response) => {
   }
 });
 
-// ─── 3. Real Live Activity Feed ───────────────────────────────────────────────
+// â”€â”€â”€ 3. Real Live Activity Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/activities', async (_req: Request, res: Response) => {
   try {
     const [recentUsers, recentPractitioners, recentSessions, recentReviews] = await Promise.all([
@@ -393,7 +292,7 @@ router.get('/activities', async (_req: Request, res: Response) => {
       events.push({ type: 'session', title: `Session ${s.status}`, description: `${s.user.name || 'User'} with ${s.practitioner.name} (${s.type})`, timestamp: s.createdAt, status: s.status.toLowerCase() });
     }
     for (const r of recentReviews) {
-      events.push({ type: 'review', title: `New ${r.rating}★ Review`, description: `${r.user.name || 'User'}: ${r.comment ? `"${r.comment.slice(0, 40)}..."` : 'No comment'}`, timestamp: r.createdAt, status: 'active' });
+      events.push({ type: 'review', title: `New ${r.rating}â˜… Review`, description: `${r.user.name || 'User'}: ${r.comment ? `"${r.comment.slice(0, 40)}..."` : 'No comment'}`, timestamp: r.createdAt, status: 'active' });
     }
 
     events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -405,7 +304,7 @@ router.get('/activities', async (_req: Request, res: Response) => {
   }
 });
 
-// ─── 4. Real User Management Table ───────────────────────────────────────────
+// â”€â”€â”€ 4. Real User Management Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/users', async (req: Request, res: Response) => {
   try {
     const search = typeof req.query['search'] === 'string' ? req.query['search'] : undefined;
@@ -488,8 +387,8 @@ router.get('/users', async (req: Request, res: Response) => {
   }
 });
 
-// ─── 4.1 Update User Balance ─────────────────────────────────────────────────
-router.patch('/users/:id/balance', async (req: Request, res: Response) => {
+// â”€â”€â”€ 4.1 Update User Balance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+router.patch('/users/:id/balance', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
     const { balance } = req.body;
@@ -535,6 +434,13 @@ router.patch('/users/:id/balance', async (req: Request, res: Response) => {
       },
     });
 
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'ADJUST_WALLET', 'WALLET', id, {
+      previousBalance: currentBalance,
+      newBalance: balance,
+      diff,
+    });
+
     res.json({
       success: true,
       message: 'Balance updated successfully',
@@ -546,7 +452,7 @@ router.patch('/users/:id/balance', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/admin/users/:id/ban — temporary or permanent suspension
+// PATCH /api/admin/users/:id/ban â€” temporary or permanent suspension
 router.patch('/users/:id/ban', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -570,6 +476,15 @@ router.patch('/users/:id/ban', async (req: Request, res: Response) => {
       },
       select: { id: true, name: true, email: true, isBanned: true, banReason: true, banUntil: true },
     });
+
+    // SEC-10: audit trail
+    await writeAuditLog(
+      req,
+      banned ? 'BAN' : 'UNBAN',
+      'USER',
+      id,
+      banned ? { reason: reason ?? null, days: days ?? null, banUntil: banUntil?.toISOString() ?? null } : null,
+    );
 
     res.json({ success: true, data: { user } });
   } catch (err: any) {
@@ -617,7 +532,7 @@ router.get('/users/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/admin/users/:id
-router.delete('/users/:id', async (req: Request, res: Response) => {
+router.delete('/users/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
 
@@ -643,8 +558,18 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
     await prisma.review.deleteMany({ where: { userId: id } });
     await prisma.session.deleteMany({ where: { userId: id } });
 
+    // NotificationLog has no FK to User at all (recipientId is a plain
+    // string, shared across User/Practitioner via recipientType), so unlike
+    // Otp/RefreshToken/SupportTicket/DeviceToken â€” which cascade automatically
+    // when the User row below is deleted â€” this needs an explicit delete or
+    // it's orphaned forever.
+    await prisma.notificationLog.deleteMany({ where: { recipientId: id, recipientType: 'USER' } });
+
     // Finally delete the user
     await prisma.user.delete({ where: { id } });
+
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'DELETE_USER', 'USER', id, null);
 
     res.json({ success: true, message: 'User deleted' });
   } catch (err) {
@@ -653,7 +578,7 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
   }
 });
 
-// ─── 5. Real Practitioner Management Table ───────────────────────────────────
+// â”€â”€â”€ 5. Real Practitioner Management Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/practitioners', async (req: Request, res: Response) => {
   try {
     const search = typeof req.query['search'] === 'string' ? req.query['search'] : undefined;
@@ -750,6 +675,9 @@ router.patch('/practitioners/:id/verify', async (req: Request, res: Response) =>
       select: { id: true, name: true, isVerified: true },
     });
 
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'VERIFY_PRACTITIONER', 'PRACTITIONER', id, { isVerified });
+
     res.json({ success: true, data: { practitioner: updated } });
   } catch (err) {
     console.error(err);
@@ -757,7 +685,7 @@ router.patch('/practitioners/:id/verify', async (req: Request, res: Response) =>
   }
 });
 
-// PATCH /api/admin/practitioners/:id/ban — temporary or permanent suspension
+// PATCH /api/admin/practitioners/:id/ban â€” temporary or permanent suspension
 router.patch('/practitioners/:id/ban', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -782,6 +710,15 @@ router.patch('/practitioners/:id/ban', async (req: Request, res: Response) => {
       select: { id: true, name: true, email: true, isBanned: true, banReason: true, banUntil: true },
     });
 
+    // SEC-10: audit trail
+    await writeAuditLog(
+      req,
+      banned ? 'BAN' : 'UNBAN',
+      'PRACTITIONER',
+      id,
+      banned ? { reason: reason ?? null, days: days ?? null, banUntil: banUntil?.toISOString() ?? null } : null,
+    );
+
     res.json({ success: true, data: { practitioner } });
   } catch (err: any) {
     if (err.code === 'P2025') { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
@@ -791,7 +728,7 @@ router.patch('/practitioners/:id/ban', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/admin/practitioners/:id
-router.delete('/practitioners/:id', async (req: Request, res: Response) => {
+router.delete('/practitioners/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
 
@@ -807,7 +744,14 @@ router.delete('/practitioners/:id', async (req: Request, res: Response) => {
     await prisma.review.deleteMany({ where: { practitionerId: id } });
     await prisma.session.deleteMany({ where: { practitionerId: id } });
 
+    // See the same fix in DELETE /users/:id above â€” NotificationLog has no FK
+    // and doesn't cascade with the rest.
+    await prisma.notificationLog.deleteMany({ where: { recipientId: id, recipientType: 'PRACTITIONER' } });
+
     await prisma.practitioner.delete({ where: { id } });
+
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'DELETE_PRACTITIONER', 'PRACTITIONER', id, null);
 
     res.json({ success: true, message: 'Practitioner deleted' });
   } catch (err) {
@@ -816,7 +760,7 @@ router.delete('/practitioners/:id', async (req: Request, res: Response) => {
   }
 });
 
-// ─── 6. Real Session Management Table ─────────────────────────────────────────
+// â”€â”€â”€ 6. Real Session Management Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/sessions', async (req: Request, res: Response) => {
   try {
     const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
@@ -904,7 +848,7 @@ router.get('/sessions', async (req: Request, res: Response) => {
   }
 });
 
-// ─── 7. Real Chat Analytics ───────────────────────────────────────────────────
+// â”€â”€â”€ 7. Real Chat Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/analytics/chat', async (_req: Request, res: Response) => {
   try {
     const now = new Date();
@@ -958,7 +902,7 @@ router.get('/analytics/chat', async (_req: Request, res: Response) => {
   }
 });
 
-// ─── 8. Chat Session History ──────────────────────────────────────────────────
+// â”€â”€â”€ 8. Chat Session History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -973,7 +917,7 @@ router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Respons
   }
 });
 
-// ─── 8.1 View Call Transcript ────────────────────────────────────────────────
+// â”€â”€â”€ 8.1 View Call Transcript â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/sessions/:id/transcript', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -989,7 +933,7 @@ router.get('/sessions/:id/transcript', requireAdmin, async (req: Request, res: R
   }
 });
 
-// ─── 8.2 Scan Transcript for Flags ───────────────────────────────────────────
+// â”€â”€â”€ 8.2 Scan Transcript for Flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/sessions/:id/transcript/scan', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -1025,7 +969,7 @@ router.post('/sessions/:id/transcript/scan', requireAdmin, async (req: Request, 
   }
 });
 
-// ─── 9. Moderation ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ 9. Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/moderation', requireAdmin, async (req: Request, res: Response) => {
   try {
     const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
@@ -1060,6 +1004,10 @@ router.patch('/moderation/:id', requireAdmin, async (req: Request, res: Response
       where: { id },
       data: { status },
     });
+
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'MODERATE', 'SESSION', id, { status });
+
     res.json({ success: true, data: { flagged: updated } });
   } catch (err) {
     console.error('Moderation update error:', err);
@@ -1067,7 +1015,7 @@ router.patch('/moderation/:id', requireAdmin, async (req: Request, res: Response
   }
 });
 
-// ─── 10. Contact Messages ────────────────────────────────────────────────────
+// â”€â”€â”€ 10. Contact Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/messages', requireAdmin, async (req: Request, res: Response) => {
   try {
     const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
@@ -1101,7 +1049,7 @@ router.patch('/messages/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
-router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/messages/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
     await prisma.contactMessage.delete({ where: { id } });
@@ -1112,7 +1060,7 @@ router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response)
   }
 });
 
-// ─── 10b. Support Tickets ─────────────────────────────────────────────────────
+// â”€â”€â”€ 10b. Support Tickets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/tickets', requireAdmin, async (req: Request, res: Response) => {
   try {
     const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
@@ -1193,6 +1141,9 @@ router.post('/tickets/:id/messages', requireAdmin, async (req: Request, res: Res
       return created;
     });
 
+    // SEC-10: audit trail
+    await writeAuditLog(req, 'TICKET_REPLY', 'SYSTEM', id, { status: nextStatus, replied: Boolean(trimmedMessage) });
+
     res.json({ success: true, data: { message: ticketMessage, status: nextStatus } });
   } catch (err) {
     console.error('Admin ticket reply error:', err);
@@ -1200,13 +1151,29 @@ router.post('/tickets/:id/messages', requireAdmin, async (req: Request, res: Res
   }
 });
 
-// ─── 11. DB Push (Temporary Migration Runner) ────────────────────────────────
+// â”€â”€â”€ 11. DB Push (Temporary Migration Runner) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Runs `prisma db push --accept-data-loss`, which syncs the live DB schema to
+// match schema.prisma and â€” unlike /migrate's additive, idempotent raw SQL â€”
+// is explicitly allowed to DROP columns/tables/data that aren't in the
+// current schema. Correctly `requireAdmin`-gated already, but the admin key
+// alone isn't much friction against a single accidental/misdirected request
+// (a saved script, a copy-pasted curl command, a stray retry) doing
+// unrecoverable damage. Requires an explicit, unambiguous confirmation in the
+// body on top of the admin key, same spirit as AWS/GCP "type the resource
+// name to delete it" confirmations.
 router.post('/db-push', requireAdmin, async (req: Request, res: Response) => {
+  if (req.body?.confirm !== 'I_UNDERSTAND_DATA_LOSS') {
+    res.status(400).json({
+      success: false,
+      message: 'This runs `prisma db push --accept-data-loss` against the live database and can drop columns/tables. Resend with { "confirm": "I_UNDERSTAND_DATA_LOSS" } in the body to proceed.',
+    });
+    return;
+  }
   try {
     const { exec } = await import('child_process');
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
-    
+
     const { stdout, stderr } = await execAsync('npx prisma db push --accept-data-loss');
     res.json({ success: true, stdout, stderr });
   } catch (err: any) {
@@ -1215,7 +1182,7 @@ router.post('/db-push', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-// ─── 12. Content Management (Blogs) ────────────────────────────────────────────
+// â”€â”€â”€ 12. Content Management (Blogs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/blogs', requireAdmin, async (req: Request, res: Response) => {
   try {
     const blogs = await prisma.blog.findMany({ orderBy: { createdAt: 'desc' } });
@@ -1247,7 +1214,7 @@ router.patch('/blogs/:id', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
-router.delete('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/blogs/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     await prisma.blog.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'Blog deleted' });
@@ -1256,7 +1223,7 @@ router.delete('/blogs/:id', requireAdmin, async (req: Request, res: Response) =>
   }
 });
 
-// ─── 13. Content Management (FAQs) ─────────────────────────────────────────────
+// â”€â”€â”€ 13. Content Management (FAQs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/faqs', requireAdmin, async (req: Request, res: Response) => {
   try {
     const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'desc' } });
@@ -1288,7 +1255,7 @@ router.patch('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/faqs/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     await prisma.faq.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'FAQ deleted' });
@@ -1297,7 +1264,7 @@ router.delete('/faqs/:id', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
-// ─── 14. Content Management (Banners) ──────────────────────────────────────────
+// â”€â”€â”€ 14. Content Management (Banners) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/banners', requireAdmin, async (req: Request, res: Response) => {
   try {
     const banners = await prisma.banner.findMany({ orderBy: { createdAt: 'desc' } });
@@ -1329,7 +1296,7 @@ router.patch('/banners/:id', requireAdmin, async (req: Request, res: Response) =
   }
 });
 
-router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/banners/:id', requireAdminAuth(['SUPERADMIN']), async (req: Request, res: Response) => {
   try {
     await prisma.banner.delete({ where: { id: req.params.id as string } });
     res.json({ success: true, message: 'Banner deleted' });
@@ -1338,7 +1305,7 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
-// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+// â”€â”€â”€ 15. Payouts (Stub) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -1352,7 +1319,7 @@ router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Resp
       await sendNotificationToPractitioner(practitionerId, {
         type: 'PAYOUT',
         title: 'Payout Processed',
-        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        body: `Your payout of â‚¹${amount} has been successfully processed to your bank account.`,
         entityId: id
       });
     }
@@ -1361,6 +1328,45 @@ router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Resp
   } catch (err) {
     console.error('Payout processing error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// â”€â”€â”€ 16. Admin Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GET /api/admin/audit-log?action=BAN&targetType=USER&page=1&limit=50
+// Read-only; filtered and paginated. Only the admin can call this (the whole
+// router is behind requireAdmin so no extra guard needed here).
+router.get('/audit-log', async (req: Request, res: Response) => {
+  try {
+    const action     = typeof req.query['action']     === 'string' ? req.query['action']     : undefined;
+    const targetType = typeof req.query['targetType'] === 'string' ? req.query['targetType'] : undefined;
+    const page  = Math.max(1, parseInt(typeof req.query['page']  === 'string' ? req.query['page']  : '1',  10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(typeof req.query['limit'] === 'string' ? req.query['limit'] : '50', 10) || 50));
+    const skip  = (page - 1) * limit;
+
+    const where: { action?: string; targetType?: string } = {};
+    if (action)     where.action     = action;
+    if (targetType) where.targetType = targetType;
+
+    const [rows, total] = await Promise.all([
+      prisma.adminAuditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.adminAuditLog.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        entries: rows,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      },
+    });
+  } catch (err) {
+    console.error('Audit log fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

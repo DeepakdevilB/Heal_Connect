@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Image as ImageIcon, Plus, Edit, Trash2 } from 'lucide-react';
 import { AdminShell, Toast } from '@/components/admin-shell';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 export default function AdminBannersPage() {
   const [banners, setBanners] = useState<any[]>([]);
@@ -21,7 +20,7 @@ export default function AdminBannersPage() {
   const fetchBanners = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/banners', { headers: { 'x-admin-key': ADMIN_KEY } }).then(r => r.json());
+      const res = await fetch('/api/admin/banners', { headers: {} }).then(r => r.json());
       if (res.success) setBanners(res.data.banners);
     } catch (err) {
       console.error(err);
@@ -40,7 +39,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       }).then(r => r.json());
       
@@ -59,7 +58,7 @@ export default function AdminBannersPage() {
     try {
       const res = await fetch(`/api/admin/banners/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-key': ADMIN_KEY }
+        headers: {}
       }).then(r => r.json());
       if (res.success) {
         setToast({ message: 'Banner deleted', type: 'success' });

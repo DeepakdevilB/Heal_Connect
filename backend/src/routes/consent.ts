@@ -1,10 +1,23 @@
 import { Router, type Request, type Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { verifyAccessToken } from '../lib/jwt';
+import { CURRENT_POLICY_VERSION } from '../lib/consentPolicy';
 
 const router = Router();
 
-const CONSENT_CATEGORIES = ['ANALYTICS', 'MARKETING'] as const;
+// TERMS/PRIVACY_NOTICE are normally captured at registration (see
+// lib/consentPolicy.ts, called from routes/auth.ts) rather than through this
+// endpoint, but are still valid categories here so a re-acceptance flow (e.g.
+// "we updated our Terms, please re-confirm") can reuse the same route.
+const CONSENT_CATEGORIES = [
+  'TERMS',
+  'PRIVACY_NOTICE',
+  'SENSITIVE_DATA',
+  'ANALYTICS',
+  'EMAIL_MARKETING',
+  'SMS_MARKETING',
+  'PUSH_MARKETING',
+] as const;
 type ConsentCategory = (typeof CONSENT_CATEGORIES)[number];
 
 interface Identity {
@@ -54,7 +67,11 @@ function resolveIdentity(req: Request): Identity | null {
 // prior row, so the history always shows exactly what the person agreed to and
 // when, per the "immutable consent audit log" requirement).
 router.post('/', async (req: Request, res: Response) => {
-  const { category, granted } = req.body as { category?: string; granted?: boolean };
+  const { category, granted, policyVersion } = req.body as {
+    category?: string;
+    granted?: boolean;
+    policyVersion?: string;
+  };
 
   if (!category || !CONSENT_CATEGORIES.includes(category as ConsentCategory)) {
     res.status(400).json({ success: false, message: `category must be one of: ${CONSENT_CATEGORIES.join(', ')}` });
@@ -80,6 +97,9 @@ router.post('/', async (req: Request, res: Response) => {
         category,
         granted,
         source: 'BANNER',
+        // Caller may pin a specific version it showed the person; otherwise
+        // stamp the currently-live wording.
+        policyVersion: typeof policyVersion === 'string' ? policyVersion : CURRENT_POLICY_VERSION,
         ipAddress: req.ip ?? null,
         userAgent: req.headers['user-agent'] ?? null,
       },
@@ -115,10 +135,10 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    const state: Record<string, { granted: boolean; updatedAt: Date }> = {};
+    const state: Record<string, { granted: boolean; updatedAt: Date; policyVersion: string | null }> = {};
     for (const row of rows) {
       if (!(row.category in state)) {
-        state[row.category] = { granted: row.granted, updatedAt: row.createdAt };
+        state[row.category] = { granted: row.granted, updatedAt: row.createdAt, policyVersion: row.policyVersion };
       }
     }
 

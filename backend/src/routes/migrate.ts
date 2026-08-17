@@ -1,54 +1,56 @@
-import { Router, Request, Response } from 'express';
+﻿import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAdmin } from '../middleware/auth';
+import { FULL_MIGRATION_SQL, SESSION_REMINDER_UNIQUE_INDEX_SQL } from '../lib/migrationSql';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
-const migrationSql = `
-CREATE TABLE IF NOT EXISTS "CallTranscript" (
-  "id"             TEXT NOT NULL,
-  "sessionId"      TEXT NOT NULL,
-  "transcriptText" TEXT NOT NULL,
-  "userId"         TEXT NOT NULL,
-  "practitionerId" TEXT NOT NULL,
-  "submittedAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "CallTranscript_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "CallTranscript_sessionId_key" UNIQUE ("sessionId"),
-  CONSTRAINT "CallTranscript_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS "CallTranscript_sessionId_idx" ON "CallTranscript"("sessionId");
-
-CREATE TABLE IF NOT EXISTS "FlaggedContent" (
-  "id"             TEXT NOT NULL,
-  "source"         TEXT NOT NULL,
-  "contentSnippet" TEXT NOT NULL,
-  "reason"         TEXT NOT NULL,
-  "status"         TEXT NOT NULL DEFAULT 'PENDING',
-  "userId"         TEXT,
-  "practitionerId" TEXT,
-  "sessionId"      TEXT,
-  "chatMessageId"  TEXT,
-  "transcriptId"   TEXT,
-  "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "FlaggedContent_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "FlaggedContent_transcriptId_fkey" FOREIGN KEY ("transcriptId") REFERENCES "CallTranscript"("id") ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS "FlaggedContent_status_idx" ON "FlaggedContent"("status");
-CREATE INDEX IF NOT EXISTS "FlaggedContent_source_idx" ON "FlaggedContent"("source");
-CREATE INDEX IF NOT EXISTS "FlaggedContent_sessionId_idx" ON "FlaggedContent"("sessionId");
-
-ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "avgRating" DOUBLE PRECISION NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "reviewCount" INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "isBusy" BOOLEAN NOT NULL DEFAULT false;
-
-CREATE UNIQUE INDEX IF NOT EXISTS "Transaction_referenceId_key" ON "Transaction"("referenceId") WHERE "referenceId" IS NOT NULL;
-
-UPDATE "Practitioner" p SET "avgRating" = COALESCE((SELECT ROUND(AVG(r.rating)::numeric, 1) FROM "Review" r WHERE r."practitionerId" = p.id), 0), "reviewCount" = COALESCE((SELECT COUNT(*) FROM "Review" r WHERE r."practitionerId" = p.id), 0);
-`;
-
+// SEC-04/05 bootstrap note: this route is intentionally still gated by the
+// OLD shared-key `requireAdmin` (x-admin-key), not the new per-admin
+// `requireAdminAuth`. That's required, not a leftover — on a fresh deploy
+// no AdminUser row exists yet, so nothing could ever obtain a SUPERADMIN
+// session to pass the new gate. This route is the one-time bootstrap path:
+// call it once (with x-admin-key) after first deploy to create every table
+// this app needs, including AdminUser itself, and seed the first SUPERADMIN
+// from ADMIN_LOGIN_EMAIL/ADMIN_LOGIN_PASSWORD. There is no UI button for
+// this — it's meant to be curl'd/Postman'd once. After that, use the
+// "Run Migration" button in the admin panel (ALL /api/admin/migrate) for
+// any future schema additions; it runs this same shared SQL.
 router.get('/run', requireAdmin, async (req: Request, res: Response) => {
   try {
-    await prisma.$executeRawUnsafe(migrationSql);
+    await prisma.$executeRawUnsafe(FULL_MIGRATION_SQL);
+    try {
+      await prisma.$executeRawUnsafe(SESSION_REMINDER_UNIQUE_INDEX_SQL);
+    } catch (e) { /* pre-existing duplicate rows on some databases — non-fatal */ }
+
+    // SEC-04/05: Bootstrap â€” if no AdminUser rows exist yet, auto-seed the
+    // SUPERADMIN from the existing env-var credentials so the admin doesn't
+    // lose access after this deploy. This is a one-time idempotent operation.
+    const adminCount = await prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*)::bigint as count FROM "AdminUser"
+    `;
+    const count = Number(adminCount[0]?.count ?? 0);
+
+    const bootstrapEmail = process.env['ADMIN_LOGIN_EMAIL'];
+    const bootstrapPassword = process.env['ADMIN_LOGIN_PASSWORD'];
+
+    if (count === 0 && bootstrapEmail && bootstrapPassword) {
+      const passwordHash = await bcrypt.hash(bootstrapPassword, 12);
+      const now = new Date().toISOString();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "AdminUser" ("id","email","passwordHash","role","mfaEnabled","createdAt","updatedAt")
+         VALUES ($1, $2, $3, 'SUPERADMIN', false, $4, $4)
+         ON CONFLICT ("email") DO NOTHING`,
+        randomUUID(),
+        bootstrapEmail,
+        passwordHash,
+        now,
+      );
+      console.log(`[migrate] Bootstrap SUPERADMIN seeded for ${bootstrapEmail}`);
+    }
+
     res.json({ success: true, message: 'SQL Migration applied successfully' });
   } catch (error: any) {
     console.error(`Migration error: ${error.message}`);

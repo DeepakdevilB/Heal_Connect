@@ -166,7 +166,10 @@ export default function DashboardPage() {
 
     sessionsApi.userHistory(token).then((res) => {
       if (res.success && res.data) {
-        setSessionsDone(res.data.sessions.length);
+        // Real lifetime total, not res.data.sessions.length — that list is
+        // capped at the last 20 by the backend, which silently stuck this
+        // stat at a max of 20 for anyone past that point.
+        setSessionsDone(res.data.totalSessionsCompleted);
         setMinutesUsed(res.data.totalMinutes || 0);
       }
     });

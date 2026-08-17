@@ -192,6 +192,12 @@ router.get('/:id', async (req: Request, res: Response) => {
         id: true, name: true, bio: true, specialties: true, languages: true,
         certifications: true, experienceYrs: true, perMinuteRate: true,
         photoUrl: true, isVerified: true, isOnline: true, isBusy: true, email: true, phone: true,
+        // Denormalized, transactionally-accurate stats maintained over ALL
+        // reviews (see routes/reviews.ts) — used directly instead of being
+        // recomputed from the capped list below, which previously caused
+        // this page to show a different rating than search results for any
+        // practitioner with more than 10 reviews.
+        avgRating: true, reviewCount: true,
         reviews: {
           select: {
             id: true, rating: true, comment: true, createdAt: true,
@@ -205,12 +211,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     if (!p) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
 
-    const ratings = p.reviews.map((r) => r.rating);
-    const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-
     res.json({
       success: true,
-      data: { practitioner: { ...p, avgRating: Math.round(avgRating * 10) / 10, reviewCount: ratings.length } },
+      data: { practitioner: { ...p, avgRating: Math.round(p.avgRating * 10) / 10 } },
     });
   } catch (err) {
     console.error(err);
@@ -498,6 +501,12 @@ async function handlePractitionerErasure(id: string, req: AuthRequest, res: Resp
     await prisma.review.updateMany({ where: { practitionerId: id }, data: { comment: null } });
     await prisma.supportTicket.deleteMany({ where: { practitionerId: id } });
 
+    // Same rationale as users.ts DELETE /me: DeviceToken's cascade only fires
+    // on a hard delete, which this isn't, and NotificationLog has no FK at
+    // all — both need clearing explicitly rather than relying on the schema.
+    await prisma.deviceToken.deleteMany({ where: { practitionerId: id } });
+    await prisma.notificationLog.deleteMany({ where: { recipientId: id, recipientType: 'PRACTITIONER' } });
+
     await prisma.practitioner.update({
       where: { id },
       data: {
@@ -508,8 +517,13 @@ async function handlePractitionerErasure(id: string, req: AuthRequest, res: Resp
         bio: null,
         specialties: { set: [] },
         certifications: { set: [] },
+        languages: { set: [] },
         photoUrl: null,
         isOnline: false,
+        // Was missing before — a Google-linked practitioner's googleId
+        // survived "erasure" indefinitely (it's also @unique, so it silently
+        // blocked that Google account from ever registering again).
+        googleId: null,
         erasedAt: new Date(),
       },
     });

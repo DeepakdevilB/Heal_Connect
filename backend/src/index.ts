@@ -17,6 +17,7 @@ import agoraRouter from './routes/agora';
 import reviewsRouter from './routes/reviews';
 import migrateRouter from './routes/migrate';
 import adminRouter from './routes/admin';
+import adminAuthRouter from './routes/adminAuth';
 import contactRouter from './routes/contact';
 import ticketsRouter from './routes/tickets';
 import consentRouter from './routes/consent';
@@ -94,6 +95,7 @@ app.use('/api/agora', agoraRouter);
 app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
 app.use('/api/migrate', migrateRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin-auth', adminAuthRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/consent', consentRouter);

@@ -272,6 +272,15 @@ router.delete('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     await prisma.refreshToken.deleteMany({ where: { userId } });
     await prisma.otp.deleteMany({ where: { userId } });
 
+    // Push tokens and notification history. DeviceToken.userId is ON DELETE
+    // CASCADE, but that only fires on a hard delete of the User row — since
+    // erasure anonymizes in place rather than deleting the row, the cascade
+    // never triggers and these need to be cleared explicitly. NotificationLog
+    // has no FK at all (recipientId is a plain string, shared across User and
+    // Practitioner via recipientType) so it always needs an explicit delete.
+    await prisma.deviceToken.deleteMany({ where: { userId } });
+    await prisma.notificationLog.deleteMany({ where: { recipientId: userId, recipientType: 'USER' } });
+
     // Anonymize the account itself. passwordHash is overwritten with a value that
     // cannot be produced by bcrypt.compare against any real password, so the
     // account is permanently unable to authenticate.

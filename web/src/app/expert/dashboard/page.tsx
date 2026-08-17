@@ -94,7 +94,10 @@ export default function ExpertDashboardPage() {
     sessionsApi.practitionerHistory(token).then((res) => {
       if (res.success && res.data) {
         setTotalEarnings(res.data.totalEarnings);
-        setSessionsDone(res.data.sessions.length);
+        // Real lifetime total, not res.data.sessions.length — that list is
+        // capped at the last 20 by the backend, which silently stuck this
+        // stat at a max of 20 for any practitioner past that point.
+        setSessionsDone(res.data.totalSessionsCompleted);
       }
     });
 

@@ -1,9 +1,14 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, type JwtPayload } from '../lib/jwt';
 import { isTokenBlacklisted } from '../lib/redis';
+import { verifyAdminSessionToken, getAdminSessionCookie, type AdminSessionIdentity } from '../lib/adminSession';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
+}
+
+export interface AdminAuthRequest extends Request {
+  adminUser?: AdminSessionIdentity & { exp: number };
 }
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -36,16 +41,48 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
 }
 
-// Shared admin gate — used by admin.ts and by any one-off/dev/maintenance routes
-// (migrations, dev-only test helpers, etc.) that must never be reachable without
-// the admin key. Centralized here so those routes can't accidentally be mounted
-// without protection the way several previously were.
+// requireAdmin — kept for migrate.ts (uses x-admin-key header for bootstrap).
+// All other admin routes should use requireAdminAuth() instead.
+//
+// No hardcoded fallback: an unset ADMIN_SECRET_KEY fails every request closed
+// (500) instead of silently accepting a known default string.
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const expected = process.env['ADMIN_SECRET_KEY'];
+  if (!expected) {
+    console.error('requireAdmin: ADMIN_SECRET_KEY is not set — refusing all admin requests');
+    res.status(500).json({ success: false, message: 'Admin access is misconfigured' });
+    return;
+  }
   const key = req.headers['x-admin-key'];
-  const expected = process.env['ADMIN_SECRET_KEY'] ?? 'healconnect-admin-2026';
   if (key !== expected) {
     res.status(401).json({ success: false, message: 'Unauthorized: invalid admin key' });
     return;
   }
   next();
+}
+
+// SEC-04/05: Per-admin-account session middleware.
+// Reads hc_admin_session cookie, verifies HMAC + expiry, decodes identity.
+// Optional roles array: if provided, 403 if the admin's role is not in the list.
+// Attaches req.adminUser for downstream use (audit log, RBAC guards).
+export function requireAdminAuth(roles?: string[]) {
+  return (req: AdminAuthRequest, res: Response, next: NextFunction): void => {
+    const token = getAdminSessionCookie(req);
+    const identity = verifyAdminSessionToken(token);
+    if (!identity) {
+      res.status(401).json({ success: false, message: 'Admin authentication required' });
+      return;
+    }
+
+    if (roles && !roles.includes(identity.role)) {
+      res.status(403).json({
+        success: false,
+        message: `This action requires one of: ${roles.join(', ')}`,
+      });
+      return;
+    }
+
+    req.adminUser = identity;
+    next();
+  };
 }
