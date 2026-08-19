@@ -23,6 +23,14 @@ function LoginInner() {
   useEffect(() => {
     if (searchParams.get('role') === 'expert') setRole('expert');
   }, [searchParams]);
+
+  // Redirect already-logged-in users
+  useEffect(() => {
+    const token = localStorage.getItem('hc_access');
+    if (!token) return;
+    const isExpert = localStorage.getItem('hc_role') === 'practitioner';
+    router.replace(isExpert ? '/expert/dashboard' : '/dashboard');
+  }, [router]);
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,13 +38,10 @@ function LoginInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    setSuccess('');
-    setVerifyUrl(null);
     setLoading(true);
     try {
       if (role === 'expert') {
@@ -45,22 +50,14 @@ function LoginInner() {
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.setItem('hc_role', 'practitioner');
         localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
-        localStorage.setItem('hc_pid', res.data.practitioner.id);
         localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
         router.push('/expert/dashboard');
       } else {
         const res = await authApi.login({ email, password });
-        if (!res.success || !res.data) {
-          setError(res.message || 'Login failed');
-          if (res.code === 'UNVERIFIED_ACCOUNT' && (res as any).data?.verifyUrl) {
-            setVerifyUrl((res as any).data.verifyUrl);
-          }
-          return;
-        }
+        if (!res.success || !res.data) { setError(res.message || 'Login failed'); return; }
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         localStorage.removeItem('hc_role');
         localStorage.removeItem('hc_practitioner_id');
-        localStorage.removeItem('hc_pid');
         localStorage.removeItem('hc_practitioner_name');
         router.push('/dashboard');
       }
@@ -84,8 +81,7 @@ function LoginInner() {
     if (!clientId) { setError('Google Sign-In is not configured yet.'); return; }
     const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
     const scope = encodeURIComponent('openid email profile');
-    const state = role === 'expert' ? 'expert' : 'user';
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&state=${state}&nonce=${Math.random().toString(36)}`;
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&nonce=${Math.random().toString(36)}`;
   }
 
   function handleAppleSignIn() {
@@ -174,19 +170,7 @@ function LoginInner() {
               </div>
             )}
 
-            {error && (
-              <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
-                <p className="font-semibold">{error}</p>
-                {verifyUrl && (
-                  <a
-                    href={verifyUrl}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white font-bold text-xs shadow-md transition-all"
-                  >
-                    ✦ Click Here to Verify Email Now →
-                  </a>
-                )}
-              </div>
-            )}
+            {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
             {mode === 'login' && (

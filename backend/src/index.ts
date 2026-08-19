@@ -2,39 +2,30 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
+import { initSocketServer } from './lib/socket';
 import cors from 'cors';
+import path from 'path';
 import helmet from 'helmet';
-import { createServer } from 'http';
 import { generalLimiter } from './middleware/rateLimiter';
 import authRouter from './routes/auth';
+import astrologerAuthRouter from './routes/astrologerAuth';
+import astrologersRouter from './routes/astrologers';
+import adminAstrologersRouter from './routes/adminAstrologers';
 import usersRouter from './routes/users';
 import practitionersRouter from './routes/practitioners';
 import walletRouter from './routes/wallet';
-import sessionsRouter from './routes/sessions';
-import schedulesRouter from './routes/schedules';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
-import reviewsRouter from './routes/reviews';
-import migrateRouter from './routes/migrate';
 import adminRouter from './routes/admin';
-import contactRouter from './routes/contact';
-import ticketsRouter from './routes/tickets';
-import consentRouter from './routes/consent';
-import notificationRoutes from './routes/notifications';
+import sessionsRouter from './routes/sessions';
 import { startBillingEngine } from './workers/billingEngine';
-import { startGdprPurgeWorker } from './workers/gdprPurge';
-import { initSocketServer } from './lib/socket';
 
 const app = express();
-const server = createServer(app);
 
 // Trust the Azure App Service reverse proxy to parse X-Forwarded-For correctly
 // This strips the port number from the IP address, fixing express-rate-limit
 app.set('trust proxy', 1);
 const port = process.env.PORT || 8080;
-
-// ─── Initialize Socket.IO ─────────────────────────────────────────────────────
-initSocketServer(server);
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
 
@@ -53,7 +44,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json({
@@ -75,28 +66,46 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'healthy', service: 'healconnect-api' });
 });
 
+import { exec } from 'child_process';
+import util from 'util';
+const execPromise = util.promisify(exec);
 
-
-
+app.get('/api/run-prisma-migrate', async (_req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.write('Starting prisma db push...\n');
+  try {
+    const { stdout, stderr } = await execPromise('npx prisma db push --accept-data-loss');
+    res.write('--- STDOUT ---\n');
+    res.write(stdout);
+    res.write('\n--- STDERR ---\n');
+    res.write(stderr);
+    res.write('\nMigration completely finished!\n');
+    res.end();
+  } catch (error) {
+    res.write('\nFATAL ERROR: ' + String(error) + '\n');
+    res.end();
+  }
+});
 
 // Apply general rate limiter to all routes
 app.use(generalLimiter);
 
 app.use('/api/auth', authRouter);
+app.use('/api/auth/astrologer', astrologerAuthRouter);
+app.use('/api/astrologers', astrologersRouter);
+app.use('/api/admin/astrologers', adminAstrologersRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/practitioners', practitionersRouter);
 app.use('/api/wallet', walletRouter);
-app.use('/api/sessions', sessionsRouter);
-app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
-app.use('/api', reviewsRouter); // /api/sessions/:id/review and /api/moderation/*
-app.use('/api/migrate', migrateRouter);
+app.use('/api/sessions', sessionsRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/contact', contactRouter);
-app.use('/api/tickets', ticketsRouter);
-app.use('/api/consent', consentRouter);
-app.use('/api/notifications', notificationRoutes);
+
+// Serve local uploads when Azure Storage is not configured
+if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+}
 
 // ─── Public Content Endpoints ────────────────────────────────────────────────
 app.get('/api/blogs', async (req, res) => {
@@ -162,24 +171,15 @@ app.use((_req, res) => {
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+  res.status(500).json({ success: false, message: 'Internal server error: ' + (err?.message || String(err)), stack: err?.stack });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-server.listen(port, () => {
+import { createServer } from 'http';
+const httpServer = createServer(app);
+initSocketServer(httpServer);
+httpServer.listen(port, () => {
   console.log(`✦ HealConnect API running on port ${port}`);
-  
-  // Start the background workers
-  if (process.env.DISABLE_BILLING_ENGINE !== 'true') {
-    startBillingEngine();
-  } else {
-    console.log('Billing engine disabled for local development.');
-  }
-
-  if (process.env.DISABLE_GDPR_PURGE !== 'true') {
-    startGdprPurgeWorker();
-  } else {
-    console.log('GDPR retention-purge worker disabled for local development.');
-  }
+  startBillingEngine();
 });

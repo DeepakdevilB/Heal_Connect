@@ -20,8 +20,6 @@ import {
   Gem,
   Users,
 } from 'lucide-react';
-import { tokenStore, authApi, practitionersApi } from '@/lib/api';
-import { getAvatarUrl, getPractitionerAvatar } from '@/lib/utils';
 
 type MenuItem = { label: string; href: string; Icon: ElementType };
 
@@ -61,39 +59,15 @@ export default function Navbar() {
   const [activeSection, setActiveSection] = useState<string>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [profileHref, setProfileHref] = useState('/login');
   const langRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { lang, setLang } = useLang();
-  
-  const [userProfile, setUserProfile] = useState<{ photoUrl: string | null; role: string; id: string; name: string | null } | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const token = tokenStore.getAccess();
-    if (!token) return;
-    const role = localStorage.getItem('hc_role');
-    if (role === 'practitioner') {
-      const pid = localStorage.getItem('hc_pid') || localStorage.getItem('hc_practitioner_id');
-      const pname = localStorage.getItem('hc_practitioner_name') || 'Expert';
-      if (pid) {
-        setUserProfile({ photoUrl: null, role: 'practitioner', id: pid, name: pname });
-        practitionersApi.get(pid).then((res) => {
-          if (res.success && res.data) {
-            setUserProfile({ photoUrl: res.data.practitioner.photoUrl, role: 'practitioner', id: pid, name: res.data.practitioner.name });
-          }
-        }).catch(() => {});
-      }
-    } else {
-      authApi.me(token).then((res) => {
-        if (res.success && res.data) {
-          const u = (res.data as any).user;
-          setUserProfile({ photoUrl: u.photoUrl, role: 'user', id: u.id, name: u.name });
-        }
-      }).catch(() => {});
+    const token = localStorage.getItem('hc_access');
+    if (token) {
+      setProfileHref(localStorage.getItem('hc_role') === 'practitioner' ? '/expert/dashboard' : '/dashboard');
     }
   }, []);
 
@@ -205,50 +179,31 @@ export default function Navbar() {
             </div>
             <span className="text-white/70 text-[11px] ml-1">Astrologer</span>
           </div>
-          {/* Sign in CTA or Dashboard Link */}
-          {!userProfile ? (
-            <Link
-              href="/login"
-              onClick={() => setDrawerOpen(false)}
-              className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-                    <circle cx="12" cy="8" r="4" />
-                    <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-900">Sign In / Sign Up</p>
-                  <p className="text-[11px] text-gray-700">
-                    Your 1st Chat is <strong className="text-amber-600">100% Free</strong>
-                  </p>
-                </div>
-                <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+
+          {/* Sign in CTA */}
+          <Link
+            href={profileHref}
+            onClick={() => setDrawerOpen(false)}
+            className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                  <circle cx="12" cy="8" r="4" />
+                  <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                 </svg>
               </div>
-            </Link>
-          ) : (
-            <Link
-              href={userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard'}
-              onClick={() => setDrawerOpen(false)}
-              className="block bg-white rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-bold text-gray-800">Go to Dashboard</p>
-                  <p className="text-[11px] text-gray-500 font-medium">View your profile and sessions</p>
-                </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-gray-900">Sign In / Sign Up</p>
+                <p className="text-[11px] text-gray-700">
+                  Your 1st Chat is <strong className="text-amber-600">100% Free</strong>
+                </p>
               </div>
-            </Link>
-          )}
+              <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Link>
         </div>
 
         {/* Menu body */}
@@ -282,21 +237,18 @@ export default function Navbar() {
           <div className="mx-4 mt-4 border-t border-gray-100 pt-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Theme</p>
             <div className="flex gap-2">
-              {([{ Icon: RefreshCw, val: 'system' }, { Icon: Sun, val: 'light' }, { Icon: Moon, val: 'dark' }]).map(({ Icon, val }) => {
-                const isActive = mounted && theme === val;
-                return (
-                  <button
-                    key={val}
-                    onClick={() => setTheme(val)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1 ${
-                      isActive ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {val === 'system' ? 'Auto' : val === 'light' ? 'Day' : 'Night'}
-                  </button>
-                );
-              })}
+              {([{ Icon: RefreshCw, val: 'system' }, { Icon: Sun, val: 'light' }, { Icon: Moon, val: 'dark' }]).map(({ Icon, val }) => (
+                <button
+                  key={val}
+                  onClick={() => setTheme(val)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1 ${
+                    theme === val ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-amber-300 hover:bg-amber-50'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {val === 'system' ? 'Auto' : val === 'light' ? 'Day' : 'Night'}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -393,29 +345,15 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Profile icon or Login button */}
-            <div className="relative group">
-              {userProfile ? (
-                <div className="flex items-center gap-3">
-                  <Link href={userProfile.role === 'practitioner' ? '/expert/dashboard' : '/dashboard'}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer overflow-hidden border-2 ${isDark ? 'border-white/20 hover:border-amber-400' : 'border-gray-200 hover:border-amber-400'}`}>
-                      <img
-                        src={userProfile.role === 'practitioner' ? getPractitionerAvatar(userProfile.photoUrl, userProfile.name || 'Expert') : getAvatarUrl(userProfile.name, userProfile.photoUrl)}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </Link>
-                  <button onClick={() => { tokenStore.clear(); localStorage.removeItem('hc_role'); window.location.href = '/login'; }} className="hidden md:flex text-sm font-semibold text-red-500 hover:text-red-700 transition-colors">
-                    Logout
-                  </button>
-                </div>
-              ) : mounted ? (
-                <Link href="/login" className="hidden sm:flex items-center justify-center bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md shadow-amber-500/25 transition-all ml-1 border-0">
-                  Login / Sign Up
-                </Link>
-              ) : null}
-            </div>
+            {/* Profile icon */}
+            <Link href={profileHref}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}>
+                <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                  <circle cx="12" cy="8" r="4" />
+                  <path strokeLinecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+              </div>
+            </Link>
           </div>
         </header>
       </div>

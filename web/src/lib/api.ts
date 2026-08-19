@@ -6,8 +6,6 @@ interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
-  code?: string;
-  isSufficient?: boolean;
   errors?: { field: string; message: string }[];
 }
 
@@ -41,7 +39,6 @@ export interface UserProfile {
 export interface PractitionerProfile {
   id: string;
   name: string;
-  email?: string | null;
   bio: string | null;
   specialties: string[];
   certifications: string[];
@@ -51,70 +48,18 @@ export interface PractitionerProfile {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
-  isBusy?: boolean;
   avgRating?: number;
   reviewCount?: number;
 }
 
-export interface Pagination {
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
-}
-
-export interface TranscriptEntry {
-  id: string;
-  transcriptText: string;
-  submittedAt: string;
-  session: {
-    id: string;
-    type: string;
-    startTime: string | null;
-    endTime: string | null;
-    practitioner?: { id: string; name: string; photoUrl: string | null };
-    user?: { id: string; name: string | null; photoUrl: string | null };
-  };
-}
-
-async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<ApiResponse<T>> {
-  const mergedHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
+async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  // Extract headers from options so they don't overwrite the merged headers
+  const { headers, ...restOptions } = options;
   const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: mergedHeaders,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    ...restOptions,
   });
-
-  const data = (await res.json()) as ApiResponse<T>;
-
-  // Handle auto-token refresh on 401 or token expired error
-  if (!res.ok && (res.status === 401 || data.message === 'Invalid or expired token') && !isRetry) {
-    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('hc_refresh') : null;
-    if (refreshToken) {
-      try {
-        const refreshRes = await fetch(`${API_URL}/api/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
-        const refreshData = (await refreshRes.json()) as ApiResponse<{ accessToken: string; refreshToken: string }>;
-        if (refreshData.success && refreshData.data) {
-          localStorage.setItem('hc_access', refreshData.data.accessToken);
-          localStorage.setItem('hc_refresh', refreshData.data.refreshToken);
-
-          mergedHeaders['Authorization'] = `Bearer ${refreshData.data.accessToken}`;
-          return request<T>(path, { ...options, headers: mergedHeaders }, true);
-        }
-      } catch {
-        localStorage.removeItem('hc_access');
-        localStorage.removeItem('hc_refresh');
-      }
-    }
-  }
-
+  const data = await res.json() as ApiResponse<T>;
   return data;
 }
 
@@ -132,8 +77,8 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
-  googleSignIn: (idToken: string, role?: string) =>
-    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, role }) }),
+  googleSignIn: (idToken: string) =>
+    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
 
   appleSignIn: (body: { appleId: string; email?: string; name?: string }) =>
     request<AuthData>('/api/auth/apple', { method: 'POST', body: JSON.stringify(body) }),
@@ -204,9 +149,6 @@ export const usersApi = {
 
   deleteAccount: (token: string) =>
     request('/api/users/me', { method: 'DELETE', headers: authHeader(token) }),
-
-  exportData: (token: string) =>
-    request<Record<string, unknown>>('/api/users/me/export', { headers: authHeader(token) }),
 };
 
 export const practitionersApi = {
@@ -259,37 +201,9 @@ export const practitionersApi = {
 
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
-
-  exportData: (token: string) =>
-    request<Record<string, unknown>>('/api/practitioners/me/export', { headers: authHeader(token) }),
 };
 
-
 export const sessionsApi = {
-  getRequests: (token: string) =>
-    request<{ sessions: any[] }>('/api/schedules/requests', { headers: authHeader(token) }),
-
-  proposeTimes: (token: string, sessionId: string, slots: { startTime: string; endTime: string }[]) =>
-    request(`/api/schedules/${sessionId}/propose`, {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ slots }),
-    }),
-
-  selectTime: (token: string, sessionId: string, proposalId: string) =>
-    request(`/api/schedules/${sessionId}/select`, {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ proposalId }),
-    }),
-
-  requestSession: (token: string, practitionerId: string) =>
-    request<{ session: { id: string; status: string; type: string } }>('/api/schedules/request', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ practitionerId }),
-    }),
-
   create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
     request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
       method: 'POST',
@@ -298,36 +212,13 @@ export const sessionsApi = {
     }),
 
   get: (token: string, sessionId: string) =>
-    request<{ session: { id: string; status: string; type: string; practitionerId: string; userId: string; practitioner: PractitionerProfile; user: { id: string; name: string | null; photoUrl: string | null } } }>(
+    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
       `/api/sessions/${sessionId}`,
       { headers: authHeader(token) }
     ),
 
   end: (token: string, sessionId: string) =>
     request(`/api/sessions/${sessionId}/end`, { method: 'POST', headers: authHeader(token) }),
-
-  accept: (token: string, sessionId: string) =>
-    request(`/api/sessions/${sessionId}/accept`, { method: 'POST', headers: authHeader(token) }),
-
-  reject: (token: string, sessionId: string) =>
-    request(`/api/sessions/${sessionId}/reject`, { method: 'POST', headers: authHeader(token) }),
-
-  connect: (token: string, sessionId: string) =>
-    request<{ session: { startTime: string } }>(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
-
-  submitTranscript: (token: string, sessionId: string, transcriptText: string) =>
-    request(`/api/sessions/${sessionId}/transcript`, {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ transcriptText }),
-    }),
-
-  submitReview: (token: string, sessionId: string, rating: number, comment?: string) =>
-    request(`/api/sessions/${sessionId}/review`, {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ rating, comment }),
-    }),
 
   practitionerActive: (token: string) =>
     request<{ sessions: { id: string; type: string; status: string; createdAt: string; user: { id: string; name: string | null; photoUrl: string | null } }[] }>(
@@ -346,85 +237,6 @@ export const sessionsApi = {
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
-
-  myTranscripts: (token: string, page = 1) =>
-    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>(
-      `/api/sessions/user/transcripts?page=${page}`,
-      { headers: authHeader(token) }
-    ),
-
-  practitionerTranscripts: (token: string, page = 1) =>
-    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>(
-      `/api/sessions/practitioner/transcripts?page=${page}`,
-      { headers: authHeader(token) }
-    ),
-};
-
-export interface TicketMessageEntry {
-  id: string;
-  senderType: 'USER' | 'PRACTITIONER' | 'ADMIN';
-  message: string;
-  createdAt: string;
-}
-
-export interface SupportTicketEntry {
-  id: string;
-  subject: string;
-  category: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
-  createdAt: string;
-  updatedAt: string;
-  _count?: { messages: number };
-  messages?: TicketMessageEntry[];
-}
-
-export const ticketsApi = {
-  create: (token: string, subject: string, message: string, category?: string) =>
-    request<{ ticket: SupportTicketEntry }>('/api/tickets', {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ subject, message, category }),
-    }),
-
-  mine: (token: string, page = 1, status?: string) => {
-    const params = new URLSearchParams({ page: String(page) });
-    if (status) params.set('status', status);
-    return request<{ tickets: SupportTicketEntry[]; pagination: Pagination }>(
-      `/api/tickets/mine?${params.toString()}`,
-      { headers: authHeader(token) }
-    );
-  },
-
-  get: (token: string, id: string) =>
-    request<{ ticket: SupportTicketEntry }>(`/api/tickets/${id}`, { headers: authHeader(token) }),
-
-  reply: (token: string, id: string, message: string) =>
-    request<{ message: TicketMessageEntry }>(`/api/tickets/${id}/messages`, {
-      method: 'POST',
-      headers: authHeader(token),
-      body: JSON.stringify({ message }),
-    }),
-};
-
-export const moderationApi = {
-  getFlagged: (token: string, queryParams?: { status?: string; source?: string; page?: number; limit?: number }) => {
-    const q = new URLSearchParams();
-    if (queryParams?.status) q.append('status', queryParams.status);
-    if (queryParams?.source) q.append('source', queryParams.source);
-    if (queryParams?.page) q.append('page', String(queryParams.page));
-    if (queryParams?.limit) q.append('limit', String(queryParams.limit));
-    return request<{ items: any[]; pagination: { total: number; page: number; limit: number; pages: number } }>(
-      `/api/moderation/flagged?${q.toString()}`,
-      { headers: authHeader(token) }
-    );
-  },
-
-  updateFlag: (token: string, flagId: string, status: 'RESOLVED' | 'DISMISSED') =>
-    request(`/api/moderation/flagged/${flagId}`, {
-      method: 'PATCH',
-      headers: authHeader(token),
-      body: JSON.stringify({ status }),
-    }),
 };
 
 export const agoraApi = {
@@ -472,17 +284,255 @@ export const walletApi = {
     }),
 };
 
+// ─── Astrologer Auth API ──────────────────────────────────────────────────────
+
+export interface AstrologerAuthData {
+  accessToken: string;
+  refreshToken: string;
+  astrologer: {
+    id: string;
+    userId: string;
+    phone: string | null;
+    applicationStatus: string;
+    accountStatus: string;
+    phoneVerified: boolean;
+    emailVerified: boolean;
+    identityVerified: boolean;
+    professionalVerified: boolean;
+    adminVerified: boolean;
+    displayName: string | null;
+  };
+  redirect: string;
+}
+
+export const astrologerAuthApi = {
+  sendOtp: (phone: string, purpose: 'login' | 'register' = 'login') =>
+    request('/api/auth/astrologer/send-otp', { method: 'POST', body: JSON.stringify({ phone, purpose }) }),
+
+  verifyOtp: (phone: string, otp: string, purpose: 'login' | 'register' = 'login') =>
+    request<AstrologerAuthData>('/api/auth/astrologer/verify-otp', { method: 'POST', body: JSON.stringify({ phone, otp, purpose }) }),
+
+  logout: (accessToken: string, refreshToken?: string) =>
+    request('/api/auth/astrologer/logout', {
+      method: 'POST',
+      headers: authHeader(accessToken),
+      body: JSON.stringify({ refreshToken }),
+    }),
+};
+
+// ─── Astrologer Profile API ───────────────────────────────────────────────────
+
+export interface AstrologerOnboardingProfile {
+  id: string;
+  userId: string;
+  fullLegalName: string;
+  displayName: string;
+  dateOfBirth: string | null;
+  gender: string | null;
+  profilePhotoUrl: string | null;
+  country: string;
+  state: string | null;
+  city: string | null;
+  specializations: string[];
+  languages: string[];
+  astrologyExperienceYears: number;
+  professionalConsultationYears: number;
+  previousPlatformExperience: string | null;
+  professionalBio: string | null;
+  consultationApproach: string | null;
+  completedAstrologyCourse: boolean;
+  instituteName: string | null;
+  courseName: string | null;
+  completionYear: number | null;
+  chatPricePerMin: number;
+  callPricePerMin: number;
+  applicationStatus: string;
+  accountStatus: string;
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  identityVerified: boolean;
+  professionalVerified: boolean;
+  adminVerified: boolean;
+  application?: { step: number; submittedAt: string | null; lastSavedAt: string };
+}
+
+export const astrologerApi = {
+  getApplication: (token: string) =>
+    request<{ profile: AstrologerOnboardingProfile }>('/api/astrologers/application/me', { headers: authHeader(token) }),
+
+  createApplication: (token: string, body: Partial<AstrologerOnboardingProfile>) =>
+    request<{ profile: AstrologerOnboardingProfile }>('/api/astrologers/application', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  updateApplication: (token: string, body: Partial<AstrologerOnboardingProfile> & { step?: number }) =>
+    request<{ profile: AstrologerOnboardingProfile }>('/api/astrologers/application/me', {
+      method: 'PUT',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  getMe: (token: string) =>
+    request<{ profile: AstrologerOnboardingProfile }>('/api/astrologers/me', { headers: authHeader(token) }),
+
+  updateProfile: (token: string, body: Partial<AstrologerOnboardingProfile>) =>
+    request<{ profile: AstrologerOnboardingProfile }>('/api/astrologers/me/profile', {
+      method: 'PUT',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  uploadDocument: (token: string, file: File, documentType: string) => {
+    const form = new FormData();
+    form.append('document', file);
+    form.append('documentType', documentType);
+    return fetch('/api/astrologers/me/documents', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: form,
+    }).then((r) => r.json() as Promise<ApiResponse<{ document: { id: string; documentType: string; originalName: string; uploadedAt: string; url?: string } }>>);
+  },
+
+  getDocuments: (token: string) =>
+    request<{ documents: { id: string; documentType: string; originalName: string; mimeType: string; sizeBytes: number; isPrivate: boolean; uploadedAt: string }[] }>(
+      '/api/astrologers/me/documents', { headers: authHeader(token) }
+    ),
+
+  deleteDocument: (token: string, id: string) =>
+    request(`/api/astrologers/me/documents/${id}`, { method: 'DELETE', headers: authHeader(token) }),
+
+  submitVerification: (token: string, body: {
+    idDocType?: string; panLast4?: string;
+    verificationType?: string; platformProfileUrl?: string;
+    professionalWebsite?: string; verificationNotes?: string;
+  }) =>
+    request('/api/astrologers/me/verification/submit', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  getVerificationStatus: (token: string) =>
+    request<{ verification: AstrologerOnboardingProfile & { kycVerification: any; professionalVerification: any; interviewVerification: any } }>(
+      '/api/astrologers/me/verification/status', { headers: authHeader(token) }
+    ),
+
+  updatePricing: (token: string, chatPricePerMin: number, callPricePerMin: number) =>
+    request('/api/astrologers/me/pricing', {
+      method: 'PUT',
+      headers: authHeader(token),
+      body: JSON.stringify({ chatPricePerMin, callPricePerMin }),
+    }),
+
+  updateAvailability: (token: string, body: { isOnline?: boolean; isChatAvailable?: boolean; isCallAvailable?: boolean }) =>
+    request('/api/astrologers/me/availability', {
+      method: 'PUT',
+      headers: authHeader(token),
+      body: JSON.stringify(body),
+    }),
+
+  getDashboard: (token: string) =>
+    request<{ dashboard: AstrologerOnboardingProfile }>('/api/astrologers/me/dashboard', { headers: authHeader(token) }),
+
+  listPublic: (params: { search?: string; specialization?: string; language?: string; page?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+    return fetch(`/api/astrologers/public?${q}`).then((r) => r.json() as Promise<ApiResponse<{ astrologers: any[]; pagination: Pagination }>>);
+  },
+
+  getPublic: (id: string) =>
+    request<{ astrologer: any }>(`/api/astrologers/public/${id}`),
+};
+
+// ─── Admin Astrologer API ─────────────────────────────────────────────────────
+
+export const adminAstrologerApi = {
+  list: (adminKey: string, params: { status?: string; search?: string; page?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+    return request<{ astrologers: any[]; pagination: Pagination }>(`/api/admin/astrologers?${q}`, {
+      headers: { 'x-admin-key': adminKey },
+    });
+  },
+
+  get: (adminKey: string, id: string) =>
+    request<{ profile: any; liveEligible: boolean }>(`/api/admin/astrologers/${id}`, {
+      headers: { 'x-admin-key': adminKey },
+    }),
+
+  approve: (adminKey: string, id: string, notes?: string) =>
+    request(`/api/admin/astrologers/${id}/approve`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ notes }),
+    }),
+
+  reject: (adminKey: string, id: string, reason: string, notes?: string) =>
+    request(`/api/admin/astrologers/${id}/reject`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ reason, notes }),
+    }),
+
+  requestInfo: (adminKey: string, id: string, notes: string) =>
+    request(`/api/admin/astrologers/${id}/request-information`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ notes }),
+    }),
+
+  suspend: (adminKey: string, id: string, reason: string, notes?: string) =>
+    request(`/api/admin/astrologers/${id}/suspend`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ reason, notes }),
+    }),
+
+  block: (adminKey: string, id: string, reason: string, notes?: string) =>
+    request(`/api/admin/astrologers/${id}/block`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ reason, notes }),
+    }),
+};
+
+export const astrologerTokenStore = {
+  setTokens(access: string, refresh: string) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hca_access', access);
+      localStorage.setItem('hca_refresh', refresh);
+    }
+  },
+  getAccess: () => (typeof window !== 'undefined' ? localStorage.getItem('hca_access') : null),
+  getRefresh: () => (typeof window !== 'undefined' ? localStorage.getItem('hca_refresh') : null),
+  setProfile(profile: AstrologerAuthData['astrologer']) {
+    if (typeof window !== 'undefined') localStorage.setItem('hca_profile', JSON.stringify(profile));
+  },
+  getProfile(): AstrologerAuthData['astrologer'] | null {
+    if (typeof window === 'undefined') return null;
+    const raw = localStorage.getItem('hca_profile');
+    return raw ? JSON.parse(raw) : null;
+  },
+  clear() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('hca_access');
+      localStorage.removeItem('hca_refresh');
+      localStorage.removeItem('hca_profile');
+    }
+  },
+};
+
 // ─── Token helpers (localStorage) ────────────────────────────────────────────
 
 export const tokenStore = {
   setTokens(access: string, refresh: string) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hc_access', access);
-      localStorage.setItem('hc_refresh', refresh);
-    }
+    localStorage.setItem('hc_access', access);
+    localStorage.setItem('hc_refresh', refresh);
   },
-  getAccess: () => (typeof window !== 'undefined' ? localStorage.getItem('hc_access') : null),
-  getRefresh: () => (typeof window !== 'undefined' ? localStorage.getItem('hc_refresh') : null),
+  getAccess: () => localStorage.getItem('hc_access'),
+  getRefresh: () => localStorage.getItem('hc_refresh'),
   clear() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('hc_access');
@@ -490,6 +540,7 @@ export const tokenStore = {
     }
   },
 };
+
 
 // ─── GDPR: Consent ────────────────────────────────────────────────────────────
 
