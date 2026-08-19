@@ -23,6 +23,15 @@ function LoginInner() {
   useEffect(() => {
     if (searchParams.get('role') === 'expert') setRole('expert');
   }, [searchParams]);
+
+  // Redirect already-logged-in users
+  useEffect(() => {
+    const token = localStorage.getItem('hc_access');
+    if (!token) return;
+    const isExpert = localStorage.getItem('hc_role') === 'practitioner';
+    router.replace(isExpert ? '/expert/dashboard' : '/dashboard');
+  }, [router]);
+
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -158,22 +167,6 @@ function LoginInner() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-            {/* Role Toggle */}
-            {mode === 'login' && (
-              <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
-                <button type="button" onClick={() => { setRole('user'); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
-                  <User className="w-4 h-4" /> User
-                </button>
-                <button type="button" onClick={() => { setRole('expert'); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
-                  <Sparkles className="w-4 h-4" /> Expert
-                </button>
-              </div>
-            )}
-
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
                 <p className="font-semibold">{error}</p>
@@ -212,7 +205,7 @@ function LoginInner() {
                   </div>
                 </div>
                 <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Log in as Expert' : 'Log in'} <ArrowRight className="ml-2 h-4 w-4" /></>}
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Log in <ArrowRight className="ml-2 h-4 w-4" /></>}
                 </Button>
               </form>
             )}
@@ -263,6 +256,13 @@ function LoginInner() {
                   Don&apos;t have an account?{' '}
                   <Link href="/signup" className="text-[#f59e0b] font-semibold hover:underline">Sign up</Link>
                 </p>
+                
+                <div className="mt-4 pt-4 border-t border-yellow-100">
+                  <p className="text-center text-sm font-medium text-gray-600">
+                    Are you a wellness practitioner?{' '}
+                    <Link href="/astrologer/login" className="text-[#f59e0b] font-bold hover:underline">Log in here</Link>
+                  </p>
+                </div>
               </>
             )}
           </CardContent>
