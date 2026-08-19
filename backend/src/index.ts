@@ -70,10 +70,16 @@ import { exec } from 'child_process';
 import util from 'util';
 const execPromise = util.promisify(exec);
 
+import { prisma } from './lib/prisma';
+
 app.get('/api/run-prisma-migrate', async (_req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.write('Starting prisma db push...\n');
   try {
+    res.write('Cleaning up orphaned Consent records to prevent foreign key errors...\n');
+    await prisma.$executeRawUnsafe(`UPDATE "Consent" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT id FROM "User")`);
+    await prisma.$executeRawUnsafe(`UPDATE "Consent" SET "practitionerId" = NULL WHERE "practitionerId" IS NOT NULL AND "practitionerId" NOT IN (SELECT id FROM "Practitioner")`);
+
     const { stdout, stderr } = await execPromise('npx prisma db push --accept-data-loss');
     res.write('--- STDOUT ---\n');
     res.write(stdout);
