@@ -39,22 +39,22 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Moderation: temporary/permanent suspension
-  isBanned              Boolean   @default(false)
-  banReason             String?
-  banUntil              DateTime? // null = permanent (while isBanned is true)
+  isBanned  Boolean   @default(false)
+  banReason String?
+  banUntil  DateTime? // null = permanent (while isBanned is true)
 
   // GDPR: set when the account has been erased via the right-to-erasure flow.
-  erasedAt              DateTime?
+  erasedAt DateTime?
 
-  wallet                Wallet?
-  sessions              Session[]
-  reviews               Review[]
-  refreshTokens         RefreshToken[]
-  otps                  Otp[]
-  supportTickets        SupportTicket[]
-  consents              Consent[]
-  deviceTokens          DeviceToken[]
-  astrologerProfile     AstrologerProfile?
+  wallet            Wallet?
+  sessions          Session[]
+  reviews           Review[]
+  refreshTokens     RefreshToken[]
+  otps              Otp[]
+  supportTickets    SupportTicket[]
+  consents          Consent[]
+  deviceTokens      DeviceToken[]
+  astrologerProfile AstrologerProfile?
 }
 
 // ─── OTP model for SMS verification ──────────────────────────────────────────
@@ -86,35 +86,37 @@ model RefreshToken {
 }
 
 model Practitioner {
-  id             String   @id @default(uuid())
-  phone          String?  @unique
-  email          String?  @unique
-  googleId       String?  @unique
-  passwordHash   String?
-  name           String
-  bio            String?
-  specialties    String[]
-  certifications String[]
-  languages      String[]
-  experienceYrs  Int      @default(0)
-  perMinuteRate  Float    @default(0)
-  photoUrl       String?
-  isVerified     Boolean  @default(false)
-  isOnline       Boolean  @default(false)
-  isBusy         Boolean  @default(false)
+  id              String   @id @default(uuid())
+  phone           String?  @unique
+  email           String?  @unique
+  googleId        String?  @unique
+  passwordHash    String?
+  name            String
+  bio             String?
+  specialties     String[]
+  certifications  String[]
+  languages       String[]
+  experienceYrs   Int      @default(0)
+  perMinuteRate   Float    @default(0)
+  photoUrl        String?
+  kycDocumentUrl  String?
+  certificateUrls String[]
+  isVerified      Boolean  @default(false)
+  isOnline        Boolean  @default(false)
+  isBusy          Boolean  @default(false)
   // Denormalized rating stats — updated atomically on each review submission
-  avgRating      Float    @default(0)
-  reviewCount    Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  avgRating       Float    @default(0)
+  reviewCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Moderation: temporary/permanent suspension
-  isBanned       Boolean   @default(false)
-  banReason      String?
-  banUntil       DateTime? // null = permanent (while isBanned is true)
+  isBanned  Boolean   @default(false)
+  banReason String?
+  banUntil  DateTime? // null = permanent (while isBanned is true)
 
   // GDPR: see User.erasedAt for the same rationale (anonymize, don't hard-delete).
-  erasedAt       DateTime?
+  erasedAt DateTime?
 
   sessions       Session[]
   reviews        Review[]
@@ -147,32 +149,32 @@ model Transaction {
 }
 
 model Session {
-  id              String       @id @default(uuid())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id])
-  practitionerId  String
-  practitioner    Practitioner @relation(fields: [practitionerId], references: [id])
-  type            String // "CHAT" | "AUDIO" | "VIDEO"
-  status          String // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
-  channelName     String?
-  agoraUid        Int?
-  perMinuteRate   Float        @default(0)
-  walletDeduction Float        @default(0)
-  duration        Int          @default(0)
-  startTime       DateTime?
-  endTime         DateTime?
+  id                 String       @id @default(uuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id])
+  practitionerId     String
+  practitioner       Practitioner @relation(fields: [practitionerId], references: [id])
+  type               String // "CHAT" | "AUDIO" | "VIDEO"
+  status             String // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
+  channelName        String?
+  agoraUid           Int?
+  perMinuteRate      Float        @default(0)
+  walletDeduction    Float        @default(0)
+  duration           Int          @default(0)
+  startTime          DateTime?
+  endTime            DateTime?
   scheduledStartTime DateTime?
   scheduledEndTime   DateTime?
-  totalCost       Float        @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  totalCost          Float        @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  review         Review?
-  messages       ChatMessage[]
-  callFeedback   CallFeedback?
-  transcript     CallTranscript?
-  timeProposals  SessionTimeProposal[]
-  reminders      SessionReminder[]
+  review        Review?
+  messages      ChatMessage[]
+  callFeedback  CallFeedback?
+  transcript    CallTranscript?
+  timeProposals SessionTimeProposal[]
+  reminders     SessionReminder[]
 }
 
 model Review {
@@ -202,7 +204,7 @@ model ChatMessage {
   // GDPR: set when `content` has been overwritten by the 90-day retention purge
   // (or immediate erasure request). Row is kept for session/thread integrity;
   // only the message text is removed.
-  purgedAt     DateTime?
+  purgedAt DateTime?
 
   @@index([sessionId])
   @@index([senderId])
@@ -236,7 +238,7 @@ model CallTranscript {
 
   // GDPR: set when `transcriptText` has been overwritten by the 90-day retention
   // purge (or immediate erasure request). See ChatMessage.purgedAt.
-  purgedAt       DateTime?
+  purgedAt DateTime?
 
   flaggedContent FlaggedContent[]
 
@@ -313,18 +315,18 @@ model Banner {
 // public ContactMessage form). One of userId/practitionerId is set, never both.
 
 model SupportTicket {
-  id             String   @id @default(uuid())
+  id             String        @id @default(uuid())
   userId         String?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   practitionerId String?
   practitioner   Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
   subject        String
-  category       String   @default("OTHER") // "BILLING" | "TECHNICAL" | "ACCOUNT" | "SESSION" | "OTHER"
-  status         String   @default("OPEN")  // "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  category       String        @default("OTHER") // "BILLING" | "TECHNICAL" | "ACCOUNT" | "SESSION" | "OTHER"
+  status         String        @default("OPEN") // "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  messages       TicketMessage[]
+  messages TicketMessage[]
 
   @@index([userId])
   @@index([practitionerId])
@@ -335,7 +337,7 @@ model TicketMessage {
   id         String        @id @default(uuid())
   ticketId   String
   ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  senderType String        // "USER" | "PRACTITIONER" | "ADMIN"
+  senderType String // "USER" | "PRACTITIONER" | "ADMIN"
   message    String
   createdAt  DateTime      @default(now())
 
@@ -349,12 +351,12 @@ model TicketMessage {
 // guide requires without a separate log table for this specific right.
 
 model Consent {
-  id             String   @id @default(uuid())
+  id             String        @id @default(uuid())
   userId         String?
   // SetNull (not Cascade): this is an audit log — if an admin hard-deletes a User
   // row via DELETE /api/admin/users/:id, the consent history should still survive
   // as evidence of what was agreed to and when, just detached from the account.
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   practitionerId String?
   practitioner   Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: SetNull)
   // For consent captured before login (banner shown to anonymous visitors), we key
@@ -369,14 +371,14 @@ model Consent {
   // renamed in migration add_consent_categories_and_policy_version.
   category       String
   granted        Boolean
-  source         String   @default("BANNER") // "BANNER" | "SETTINGS" | "REGISTRATION"
+  source         String        @default("BANNER") // "BANNER" | "SETTINGS" | "REGISTRATION"
   // Version stamp of whichever Terms/Privacy Notice wording was in effect when
   // this decision was recorded (see lib/consentPolicy.ts CURRENT_POLICY_VERSION).
   // Nullable because rows recorded before this field existed have no value.
   policyVersion  String?
   ipAddress      String?
   userAgent      String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([userId])
   @@index([practitionerId])
@@ -389,12 +391,12 @@ model Consent {
 // anonymized the User/Practitioner row it refers to.
 
 model PrivacyRequestLog {
-  id             String   @id @default(uuid())
-  subjectType    String   // "USER" | "PRACTITIONER"
-  subjectId      String
-  type           String   // "EXPORT" | "ERASURE"
-  ipAddress      String?
-  createdAt      DateTime @default(now())
+  id          String   @id @default(uuid())
+  subjectType String // "USER" | "PRACTITIONER"
+  subjectId   String
+  type        String // "EXPORT" | "ERASURE"
+  ipAddress   String?
+  createdAt   DateTime @default(now())
 
   @@index([subjectId])
 }
@@ -407,19 +409,19 @@ model PrivacyRequestLog {
 // accounts are added (SEC-04/05 future work) this becomes a real foreign key.
 
 model AdminAuditLog {
-  id          String   @id @default(uuid())
+  id         String   @id @default(uuid())
   // WHO — label from env (ADMIN_LOGIN_EMAIL) until per-admin accounts exist
-  adminLabel  String
+  adminLabel String
   // WHAT — coarse action type for filtering
-  action      String   // "BAN" | "UNBAN" | "DELETE_USER" | "DELETE_PRACTITIONER"
-                       // | "VERIFY_PRACTITIONER" | "ADJUST_WALLET" | "MIGRATE"
-                       // | "MODERATE" | "TICKET_REPLY" | "CUSTOM"
+  action     String // "BAN" | "UNBAN" | "DELETE_USER" | "DELETE_PRACTITIONER"
+  // | "VERIFY_PRACTITIONER" | "ADJUST_WALLET" | "MIGRATE"
+  // | "MODERATE" | "TICKET_REPLY" | "CUSTOM"
   // ON WHAT
-  targetType  String   // "USER" | "PRACTITIONER" | "SESSION" | "WALLET" | "SYSTEM"
-  targetId    String?  // null for system-level actions (MIGRATE, etc.)
+  targetType String // "USER" | "PRACTITIONER" | "SESSION" | "WALLET" | "SYSTEM"
+  targetId   String? // null for system-level actions (MIGRATE, etc.)
   // DETAIL — arbitrary JSON blob (ban reason, amount, old/new value, etc.)
-  meta        String?  // JSON string; keep as String to avoid Prisma Json type issues
-  createdAt   DateTime @default(now())
+  meta       String? // JSON string; keep as String to avoid Prisma Json type issues
+  createdAt  DateTime @default(now())
 
   @@index([action])
   @@index([targetType, targetId])
@@ -460,15 +462,15 @@ model NotificationLog {
 // ─── Phase 7: Session Scheduling ──────────────────────────────────────────────
 
 model SessionTimeProposal {
-  id             String   @id @default(uuid())
-  sessionId      String
-  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  proposedBy     String // "PRACTITIONER" | "USER"
-  startTime      DateTime
-  endTime        DateTime
-  status         String   @default("PENDING") // "PENDING", "SELECTED", "EXPIRED", "CANCELLED"
-  createdAt      DateTime @default(now())
-  expiresAt      DateTime?
+  id         String    @id @default(uuid())
+  sessionId  String
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  proposedBy String // "PRACTITIONER" | "USER"
+  startTime  DateTime
+  endTime    DateTime
+  status     String    @default("PENDING") // "PENDING", "SELECTED", "EXPIRED", "CANCELLED"
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
 
   @@index([sessionId])
 }
@@ -489,50 +491,50 @@ model AstrologerOtp {
 }
 
 model AstrologerProfile {
-  id                            String   @id @default(uuid())
-  userId                        String   @unique
-  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fullLegalName                 String   @default("")
-  displayName                   String   @default("")
+  id                            String    @id @default(uuid())
+  userId                        String    @unique
+  user                          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullLegalName                 String    @default("")
+  displayName                   String    @default("")
   profilePhotoUrl               String?
   dateOfBirth                   DateTime?
   gender                        String?
-  country                       String?  @default("India")
+  country                       String?   @default("India")
   state                         String?
   city                          String?
   specializations               String[]
   languages                     String[]
-  astrologyExperienceYears      Int      @default(0)
-  professionalConsultationYears Int      @default(0)
+  astrologyExperienceYears      Int       @default(0)
+  professionalConsultationYears Int       @default(0)
   previousPlatformExperience    String?
   professionalBio               String?
   consultationApproach          String?
-  completedAstrologyCourse      Boolean  @default(false)
+  completedAstrologyCourse      Boolean   @default(false)
   instituteName                 String?
   courseName                    String?
   completionYear                Int?
-  chatPricePerMin               Float    @default(0)
-  callPricePerMin               Float    @default(0)
-  isOnline                      Boolean  @default(false)
-  isChatAvailable               Boolean  @default(false)
-  isCallAvailable               Boolean  @default(false)
-  avgRating                     Float    @default(0)
-  reviewCount                   Int      @default(0)
-  totalConsultations            Int      @default(0)
-  totalEarnings                 Float    @default(0)
-  phoneVerified                 Boolean  @default(false)
-  emailVerified                 Boolean  @default(false)
-  identityVerified              Boolean  @default(false)
-  professionalVerified          Boolean  @default(false)
-  adminVerified                 Boolean  @default(false)
-  applicationStatus             String   @default("DRAFT")
-  accountStatus                 String   @default("INACTIVE")
+  chatPricePerMin               Float     @default(0)
+  callPricePerMin               Float     @default(0)
+  isOnline                      Boolean   @default(false)
+  isChatAvailable               Boolean   @default(false)
+  isCallAvailable               Boolean   @default(false)
+  avgRating                     Float     @default(0)
+  reviewCount                   Int       @default(0)
+  totalConsultations            Int       @default(0)
+  totalEarnings                 Float     @default(0)
+  phoneVerified                 Boolean   @default(false)
+  emailVerified                 Boolean   @default(false)
+  identityVerified              Boolean   @default(false)
+  professionalVerified          Boolean   @default(false)
+  adminVerified                 Boolean   @default(false)
+  applicationStatus             String    @default("DRAFT")
+  accountStatus                 String    @default("INACTIVE")
   rejectionReason               String?
   approvedAt                    DateTime?
   approvedBy                    String?
   suspensionReason              String?
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
   application              AstrologerApplication?
   auditLogs                AstrologerAuditLog[]
@@ -630,35 +632,35 @@ model AstrologerAdminReview {
 }
 
 model AstrologerAuditLog {
-  id                  String            @id @default(uuid())
+  id                  String             @id @default(uuid())
   astrologerProfileId String?
   astrologerProfile   AstrologerProfile? @relation(fields: [astrologerProfileId], references: [id], onDelete: SetNull)
   actorId             String?
-  actorType           String            @default("ASTROLOGER")
+  actorType           String             @default("ASTROLOGER")
   action              String
   ipAddress           String?
   userAgent           String?
   previousState       String?
   newState            String?
   targetId            String?
-  createdAt           DateTime          @default(now())
+  createdAt           DateTime           @default(now())
 
   @@index([astrologerProfileId])
   @@index([actorId])
 }
 
 model SessionReminder {
-  id             String   @id @default(uuid())
-  sessionId      String
-  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  participantId  String // userId or practitionerId
-  reminderType   String // "24_HOURS", "30_MINUTES"
-  scheduledFor   DateTime
-  enabled        Boolean  @default(true)
-  sent           Boolean  @default(false)
-  sentAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String    @id @default(uuid())
+  sessionId     String
+  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId String // userId or practitionerId
+  reminderType  String // "24_HOURS", "30_MINUTES"
+  scheduledFor  DateTime
+  enabled       Boolean   @default(true)
+  sent          Boolean   @default(false)
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([sessionId, participantId, reminderType])
   @@index([sessionId])
@@ -678,8 +680,8 @@ model AdminUser {
   id            String    @id @default(uuid())
   email         String    @unique
   passwordHash  String
-  role          String    @default("MODERATOR")  // "SUPERADMIN" | "MODERATOR"
-  mfaSecret     String?   // base32 TOTP secret
+  role          String    @default("MODERATOR") // "SUPERADMIN" | "MODERATOR"
+  mfaSecret     String? // base32 TOTP secret
   mfaEnabled    Boolean   @default(false)
   // Short-lived token issued after password auth; consumed by POST /mfa/verify
   loginToken    String?

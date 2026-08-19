@@ -134,10 +134,10 @@ export default function PractitionerDetailPage() {
         const errorDetail = res.errors?.length
           ? res.errors.map((e) => e.message).join(' · ')
           : res.message || 'Failed to start call. Please try again.';
-        alert(errorDetail);
+        toast.error(errorDetail);
       }
     } catch {
-      alert('Unable to connect to consultation service. Please try again.');
+      toast.error('Unable to connect to consultation service. Please try again.');
     } finally {
       setCalling(false);
     }
@@ -165,10 +165,10 @@ export default function PractitionerDetailPage() {
         const errorDetail = res.errors?.length
           ? res.errors.map((e) => e.message).join(' · ')
           : res.message || 'Failed to start chat. Please try again.';
-        alert(errorDetail);
+        toast.error(errorDetail);
       }
     } catch {
-      alert('Unable to connect to consultation service. Please try again.');
+      toast.error('Unable to connect to consultation service. Please try again.');
     } finally {
       setChatting(false);
     }

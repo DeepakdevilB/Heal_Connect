@@ -8,8 +8,9 @@ import {
   Sparkles, Search, BookOpen, Clock, User, Eye, Heart, Share2,
   TrendingUp, Tag, Globe, ArrowRight, Mail, Check, X, ChevronRight,
   Layers, Star, Sun, Flame, MessageSquare, ThumbsUp, Compass,
-  Edit2, Trash2, Plus
+  Edit2, Trash2, Plus, PlayCircle, Headphones, Bookmark, ExternalLink, Filter
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Navbar from '@/components/navbar';
 
 // --- BLOG CATEGORIES ---
@@ -609,7 +610,7 @@ export default function BlogPage() {
                       <span key={t} className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-bold">#{t}</span>
                     ))}
                   </div>
-                  <button onClick={() => alert('Article link copied to clipboard!')} className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-extrabold flex items-center gap-1.5 transition-colors">
+                  <button onClick={() => toast.success('Article link copied to clipboard!')} className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-extrabold flex items-center gap-1.5 transition-colors">
                     <Share2 className="w-3.5 h-3.5" /> Share Article
                   </button>
                 </div>

@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   MessageCircle, LogOut, Wifi, WifiOff, User, Clock,
   IndianRupee, Star, TrendingUp, Bell, ChevronRight,
-  Sparkles, HeartHandshake, Phone, Activity, Loader2, FileText, LifeBuoy
+  Sparkles, HeartHandshake, Phone, Activity, Loader2, FileText, LifeBuoy, Calendar
 } from 'lucide-react';
 
 interface ActiveSession {
@@ -31,6 +31,7 @@ export default function ExpertDashboardPage() {
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [sessionsDone, setSessionsDone] = useState(0);
+  const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,12 @@ export default function ExpertDashboardPage() {
         // capped at the last 20 by the backend, which silently stuck this
         // stat at a max of 20 for any practitioner past that point.
         setSessionsDone(res.data.totalSessionsCompleted);
+      }
+    });
+
+    sessionsApi.getRequests(token).then((res) => {
+      if (res.success && res.data) {
+        setUpcomingSessions(res.data.sessions.filter((s: any) => s.status === 'CONFIRMED'));
       }
     });
 
@@ -375,6 +382,51 @@ export default function ExpertDashboardPage() {
                     </Button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ── Upcoming Sessions ── */}
+            {upcomingSessions.length > 0 && (
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-blue-700 mb-0.5">Scheduled</p>
+                    <h2 className="text-xl font-extrabold text-gray-900">Upcoming Sessions</h2>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {upcomingSessions.map((session) => {
+                    const nextTime = session.timeProposals?.find((t: any) => t.isConfirmed);
+                    return (
+                      <div
+                        key={session.id}
+                        className="bg-white rounded-2xl border border-blue-100 p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                        onClick={() => router.push(`/scheduled-sessions/${session.id}`)}
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shrink-0 overflow-hidden">
+                          {session.user?.photoUrl
+                            ? <img src={session.user.photoUrl} alt={session.user.name ?? ''} className="w-full h-full object-cover" />
+                            : <User className="w-6 h-6" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900">{session.user?.name ?? 'Anonymous User'}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                              <Calendar className="w-3 h-3" />
+                              Scheduled
+                            </span>
+                            <span className="text-gray-300">·</span>
+                            <Clock className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs text-gray-400">
+                              {nextTime ? new Date(nextTime.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Time TBD'}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

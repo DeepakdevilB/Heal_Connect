@@ -16,6 +16,8 @@ import { blacklistToken } from '../lib/redis';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
+import multer from 'multer';
+import { uploadProfilePhoto } from '../lib/azure';
 
 const router = Router();
 
@@ -23,9 +25,12 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000;       // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000;        // 1 minute
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
 // ─── POST /api/auth/astrologer/register ──────────────────────────────────────
 router.post(
   '/register',
+  upload.fields([{ name: 'kycDocument', maxCount: 1 }, { name: 'certificates', maxCount: 5 }]),
   [
     body('email').trim().isEmail().withMessage('Valid email required'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
@@ -55,6 +60,21 @@ router.post(
         },
       });
 
+      let kycDocumentUrl = null;
+      let certificateUrls: string[] = [];
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (files?.kycDocument?.[0]) {
+        const file = files.kycDocument[0];
+        kycDocumentUrl = await uploadProfilePhoto(file.buffer, file.mimetype, 'astrologer-docs');
+      }
+      
+      if (files?.certificates?.length) {
+        certificateUrls = await Promise.all(
+          files.certificates.map(file => uploadProfilePhoto(file.buffer, file.mimetype, 'astrologer-docs'))
+        );
+      }
+
       const profile = await prisma.astrologerProfile.create({
         data: {
           userId: user.id,
@@ -62,6 +82,31 @@ router.post(
           displayName: name,
           applicationStatus: 'DRAFT',
           application: { create: { step: 1 } },
+          documents: {
+            create: [
+              ...(kycDocumentUrl && files.kycDocument?.[0] ? [{
+                documentType: 'KYC',
+                originalName: files.kycDocument[0].originalname,
+                storedName: kycDocumentUrl.split('/').pop() || 'kyc',
+                blobUrl: kycDocumentUrl,
+                mimeType: files.kycDocument[0].mimetype,
+                sizeBytes: files.kycDocument[0].size,
+                isPrivate: true
+              }] : []),
+              ...certificateUrls.map((url, i) => {
+                const certFile = files.certificates![i] as Express.Multer.File;
+                return {
+                  documentType: 'CERTIFICATE',
+                  originalName: certFile.originalname,
+                  storedName: url.split('/').pop() || 'certificate',
+                  blobUrl: url,
+                  mimeType: certFile.mimetype,
+                  sizeBytes: certFile.size,
+                  isPrivate: true
+                };
+              })
+            ]
+          }
         },
       });
 

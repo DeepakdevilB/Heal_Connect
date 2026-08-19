@@ -282,6 +282,13 @@ export const sessionsApi = {
       { headers: authHeader(token) }
     ),
 
+  submitTranscript: (token: string, sessionId: string, transcriptText: string, recordingUrl?: string) =>
+    request(`/api/sessions/${sessionId}/transcript`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ transcriptText, recordingUrl }),
+    }),
+
   myTranscripts: (token: string, page?: number) =>
     request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>('/api/sessions/transcripts' + (page ? `?page=${page}` : ''), { headers: authHeader(token) }),
 

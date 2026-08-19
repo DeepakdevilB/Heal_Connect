@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, LifeBuoy, Plus, X, Send, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ticketsApi, tokenStore } from '@/lib/api';
@@ -62,7 +63,7 @@ export default function ExpertSupportTicketsPage() {
         setCategory('OTHER');
         loadTickets();
       } else {
-        alert(res.message || 'Failed to raise ticket. Please try again.');
+        toast.error(res.message || 'Failed to raise ticket. Please try again.');
       }
     } finally {
       setSubmitting(false);

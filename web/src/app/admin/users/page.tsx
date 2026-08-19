@@ -157,7 +157,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/astrologer-profiles?page=${appPage}&limit=10&search=${encodeURIComponent(searchApp)}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success && res.data) {
         setApps(res.data.profiles || []);
@@ -271,7 +271,7 @@ export default function AdminUsersPage() {
     setViewPractLoading(true);
     try {
       const res = await fetch(`/api/admin/practitioners/${p.id}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success && res.data?.practitioner) {
         setViewPractProfile(res.data.practitioner);
@@ -285,7 +285,7 @@ export default function AdminUsersPage() {
     setViewAppLoading(true);
     try {
       const res = await fetch(`/api/admin/astrologer-profiles/${a.id}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success && res.data?.profile) setViewApp(res.data.profile);
     } catch { /* non-fatal */ }
@@ -296,7 +296,7 @@ export default function AdminUsersPage() {
     try {
       await fetch(`/api/admin/astrologer-profiles/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           applicationStatus,
           accountStatus: applicationStatus === 'APPROVED' ? 'ACTIVE' : 'INACTIVE',

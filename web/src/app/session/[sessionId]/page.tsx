@@ -7,7 +7,9 @@ import dynamic from 'next/dynamic';
 import { ArrowLeft, MessageSquare, Phone } from 'lucide-react';
 import ChatWindow from '@/components/chat/ChatWindow';
 import { Button } from '@/components/ui/button';
+import { toast } from 'react-hot-toast';
 import { tokenStore, agoraApi, sessionsApi, type PractitionerProfile } from '@/lib/api';
+import { useScreenshotProtection } from '@/hooks/useScreenshotProtection';
 
 // Agora SDK uses `window` at import time — must never be SSR'd
 const AudioCallScreen = dynamic(() => import('@/components/chat/AudioCallScreen'), { ssr: false });
@@ -24,6 +26,8 @@ export default function SessionPage() {
   const [activeSession, setActiveSession] = useState<any>(null);
   const [tab, setTab] = useState<Tab>('chat');
   const [startingCall, setStartingCall] = useState(false);
+
+  useScreenshotProtection(true);
 
   useEffect(() => {
     const token = tokenStore.getAccess();
@@ -80,10 +84,10 @@ export default function SessionPage() {
       if (res.success && res.data?.session) {
         router.push(`/session/${res.data.session.id}`);
       } else {
-        alert(res.message || 'Could not start a call. Please recharge your wallet.');
+        toast.error(res.message || 'Could not start a call. Please recharge your wallet.');
       }
     } catch {
-      alert('Unable to start the call. Please try again.');
+      toast.error('Unable to start the call. Please try again.');
     } finally {
       setStartingCall(false);
     }

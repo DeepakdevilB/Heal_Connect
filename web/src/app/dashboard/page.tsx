@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { authApi, practitionersApi, walletApi, sessionsApi, tokenStore, type PractitionerProfile } from '@/lib/api';
+import { toast } from 'react-hot-toast';
 import { getSocket } from '@/lib/socket';
 import { RechargeModal } from '@/components/wallet/RechargeModal';
 import { getPractitionerAvatar } from '@/lib/utils';
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [sessionsDone, setSessionsDone] = useState(0);
   const [minutesUsed, setMinutesUsed] = useState(0);
+  const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PractitionerProfile[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -112,7 +114,7 @@ export default function DashboardPage() {
     if (res.success && res.data) {
       router.push(`/session/${res.data.session.id}`);
     } else {
-      alert(res.message || 'Could not start session. Please recharge your wallet.');
+      toast.error(res.message || 'Could not start session. Please recharge your wallet.');
     }
   };
 
@@ -126,7 +128,7 @@ export default function DashboardPage() {
     if (res.success && res.data) {
       router.push(`/session/${res.data.session.id}`);
     } else {
-      alert(res.message || 'Could not start call. Please recharge your wallet.');
+      toast.error(res.message || 'Could not start call. Please recharge your wallet.');
     }
   };
 
@@ -171,6 +173,12 @@ export default function DashboardPage() {
         // stat at a max of 20 for anyone past that point.
         setSessionsDone(res.data.totalSessionsCompleted);
         setMinutesUsed(res.data.totalMinutes || 0);
+      }
+    });
+
+    sessionsApi.getRequests(token).then((res) => {
+      if (res.success && res.data) {
+        setUpcomingSessions(res.data.sessions.filter((s: any) => s.status === 'CONFIRMED'));
       }
     });
 
@@ -395,8 +403,55 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {/* ═══ UPCOMING SESSIONS ═══ */}
+        {upcomingSessions.length > 0 && (
+          <div className="mt-8 mb-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-blue-700 mb-0.5">Scheduled</p>
+                <h2 className="text-xl font-extrabold text-gray-900">Upcoming Sessions</h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {upcomingSessions.map((session: any) => {
+                const nextTime = session.timeProposals?.find((t: any) => t.isConfirmed);
+                return (
+                  <Card
+                    key={session.id}
+                    className="bg-white border border-blue-100 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-2xl overflow-hidden"
+                    onClick={() => router.push(`/scheduled-sessions/${session.id}`)}
+                  >
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shrink-0 overflow-hidden">
+                        {session.practitioner?.photoUrl
+                          ? <img src={session.practitioner.photoUrl} alt={session.practitioner.name ?? ''} className="w-full h-full object-cover" />
+                          : <User className="w-6 h-6" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{session.practitioner?.name ?? 'Expert'}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                            <Calendar className="w-3 h-3" />
+                            Scheduled
+                          </span>
+                          <span className="text-gray-300">·</span>
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          <span className="text-xs text-gray-400 truncate">
+                            {nextTime ? new Date(nextTime.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Time TBD'}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ═══ QUICK ACTIONS ═══ */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
           {[
             { icon: MessageCircle, label: 'Live Chat', desc: 'Text with an expert now', color: 'text-amber-500', bg: 'bg-amber-50', border: 'hover:border-amber-400', action: () => document.getElementById('experts-section')?.scrollIntoView({ behavior: 'smooth' }) },
             { icon: Headphones, label: 'Audio Call', desc: 'Voice consultation', color: 'text-orange-500', bg: 'bg-orange-50', border: 'hover:border-orange-400', action: () => document.getElementById('experts-section')?.scrollIntoView({ behavior: 'smooth' }) },

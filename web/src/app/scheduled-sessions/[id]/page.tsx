@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Calendar, Clock, Bell, CheckCircle2, AlertCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -93,12 +94,12 @@ export default function ScheduledSessionPage() {
       const res = await resRaw.json();
 
       if (res.success) {
-        alert('Reminder preferences saved.');
+        toast.success('Reminder preferences saved.');
       } else {
-        alert('Failed to save reminders.');
+        toast.error('Failed to save reminders.');
       }
     } catch {
-      alert('Network error.');
+      toast.error('Network error.');
     } finally {
       setSaving(false);
     }
@@ -116,13 +117,13 @@ export default function ScheduledSessionPage() {
       });
       const res = await resRaw.json();
       if (res.success) {
-        alert('Session status changed to PENDING. New times will need to be proposed.');
+        toast.success('Session status changed to PENDING. New times will need to be proposed.');
         router.push(isExpert ? '/expert/requests' : '/requests');
       } else {
-        alert(res.message || 'Failed to reschedule.');
+        toast.error(res.message || 'Failed to reschedule.');
       }
     } catch {
-      alert('Network error.');
+      toast.error('Network error.');
     }
   };
 

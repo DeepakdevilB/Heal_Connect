@@ -10,8 +10,11 @@ import { astrologerTokenStore } from '@/lib/api';
 export default function ExpertSignupPage() {
   const router = useRouter();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [kycDocument, setKycDocument] = useState<File | null>(null);
+  const [certificates, setCertificates] = useState<File[]>([]);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -21,27 +24,53 @@ export default function ExpertSignupPage() {
     setError('');
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (!kycDocument) { setError('KYC Document is required.'); return; }
 
     setLoading(true);
+    setProgress(0);
+
+    const formData = new FormData();
+    formData.append('name', form.name);
+    formData.append('email', form.email);
+    formData.append('password', form.password);
+    formData.append('kycDocument', kycDocument);
+    certificates.forEach(c => formData.append('certificates', c));
+
     try {
-      const res = await fetch('/api/auth/astrologer/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name, email: form.email, password: form.password }),
-      }).then(r => r.json());
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/auth/astrologer/register', true);
 
-      if (!res.success) {
-        setError(res.message || 'Registration failed.');
-        return;
-      }
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          setProgress(Math.round((e.loaded * 100) / e.total));
+        }
+      };
 
-      astrologerTokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-      if (res.data.astrologer) astrologerTokenStore.setProfile(res.data.astrologer);
-      router.push('/astrologer/onboarding');
+      xhr.onload = () => {
+        setLoading(false);
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (!res.success) {
+            setError(res.message || 'Registration failed.');
+            return;
+          }
+          astrologerTokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+          if (res.data.astrologer) astrologerTokenStore.setProfile(res.data.astrologer);
+          router.push('/astrologer/onboarding');
+        } catch {
+          setError('Failed to parse response.');
+        }
+      };
+
+      xhr.onerror = () => {
+        setLoading(false);
+        setError('Upload failed. Please check your network connection.');
+      };
+
+      xhr.send(formData);
     } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
+      setError('Something went wrong. Please try again.');
     }
   };
 
@@ -128,6 +157,38 @@ export default function ExpertSignupPage() {
                   required
                 />
               </div>
+              
+              <div className="pt-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">KYC Document (ID Proof) <span className="text-red-500">*</span></label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={e => setKycDocument(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Certificates <span className="text-gray-400 font-normal">(Optional, max 5)</span></label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  onChange={e => setCertificates(Array.from(e.target.files || []).slice(0, 5))}
+                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                />
+                {certificates.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-2">{certificates.length} file(s) selected.</p>
+                )}
+              </div>
+
+              {loading && progress > 0 && (
+                <div className="w-full bg-amber-100 rounded-full h-2 mt-2">
+                  <div className="bg-amber-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  <p className="text-xs text-center text-amber-600 mt-1">{progress}% Uploaded</p>
+                </div>
+              )}
 
               <button type="submit" disabled={loading}
                 className="mt-3 w-full h-12 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-bold rounded-full text-sm shadow-lg flex items-center justify-center gap-2 transition-colors">
