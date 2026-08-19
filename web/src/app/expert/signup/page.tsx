@@ -24,7 +24,7 @@ export default function ExpertSignupPage() {
     setError('');
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (!kycDocument) { setError('KYC Document is required.'); return; }
+    // if (!kycDocument) { setError('KYC Document is required.'); return; }
 
     setLoading(true);
     setProgress(0);
@@ -158,6 +158,7 @@ export default function ExpertSignupPage() {
                 />
               </div>
               
+              {/* HIDDEN FOR NOW
               <div className="pt-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">KYC Document (ID Proof) <span className="text-red-500">*</span></label>
                 <input
@@ -182,6 +183,7 @@ export default function ExpertSignupPage() {
                   <p className="text-xs text-amber-600 mt-2">{certificates.length} file(s) selected.</p>
                 )}
               </div>
+              */}
 
               {loading && progress > 0 && (
                 <div className="w-full bg-amber-100 rounded-full h-2 mt-2">
