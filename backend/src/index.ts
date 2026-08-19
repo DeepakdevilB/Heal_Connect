@@ -17,6 +17,7 @@ import walletRouter from './routes/wallet';
 import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import adminRouter from './routes/admin';
+import migrateRouter from './routes/migrate';
 import sessionsRouter from './routes/sessions';
 import adminAuthRouter from './routes/adminAuth';
 import contactRouter from './routes/contact';
@@ -88,11 +89,42 @@ app.get('/api/run-prisma-migrate', async (_req, res) => {
 
     const { stdout, stderr } = await execPromise('npx prisma db push --accept-data-loss');
     res.write('--- STDOUT ---\n');
-    res.write(stdout);
-    res.write('\n--- STDERR ---\n');
-    res.write(stderr);
-    res.write('\nMigration completely finished!\n');
-    res.end();
+      res.write(stdout);
+      res.write('\n--- STDERR ---\n');
+      res.write(stderr);
+
+      // Seed the admin user since npx prisma db push doesn't do it automatically
+      res.write('\nSeeding admin user...\n');
+      const adminCount = await prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::bigint as count FROM "AdminUser"
+      `;
+      const count = Number(adminCount[0]?.count ?? 0);
+      
+      // We will hardcode the fallback if env vars are missing so the user isn't locked out
+      const bootstrapEmail = process.env['ADMIN_LOGIN_EMAIL'] || 'admin@healconnect.com';
+      const bootstrapPassword = process.env['ADMIN_LOGIN_PASSWORD'] || 'HealAdmin@2026';
+
+      if (count === 0) {
+        const bcrypt = require('bcryptjs');
+        const { randomUUID } = require('crypto');
+        const passwordHash = await bcrypt.hash(bootstrapPassword, 12);
+        const now = new Date().toISOString();
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "AdminUser" ("id","email","passwordHash","role","mfaEnabled","createdAt","updatedAt")
+           VALUES ($1, $2, $3, 'SUPERADMIN', false, $4, $4)
+           ON CONFLICT ("email") DO NOTHING`,
+          randomUUID(),
+          bootstrapEmail,
+          passwordHash,
+          now
+        );
+        res.write('Admin user seeded successfully with email: ' + bootstrapEmail + '\n');
+      } else {
+        res.write('Admin user already exists, skipping seed.\n');
+      }
+
+      res.write('\nMigration completely finished!\n');
+      res.end();
   } catch (error) {
     res.write('\nFATAL ERROR: ' + String(error) + '\n');
     res.end();
