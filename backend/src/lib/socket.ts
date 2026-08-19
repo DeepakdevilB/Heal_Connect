@@ -80,17 +80,33 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
 
       prisma.session.findUnique({ where: { id: sessionId } }).then((sess) => {
         if (!sess) return;
+        
+        // Timer only starts if the expert has accepted, and both are in the room.
+        if (sess.status === 'INITIATED') return;
+        if (sess.status === 'COMPLETED' || sess.status === 'REJECTED' || sess.status === 'CANCELLED') return;
+        
         if (!sess.startTime) {
-          // First joiner — set startTime and fire session_started to whole room
+          if (roomSize < 2) return; // Wait for both parties
+
+          // Both joined — start timer, set ACTIVE, fire session_started
+          const startTime = new Date();
           prisma.session.update({
             where: { id: sessionId },
-            data: { startTime: new Date() },
-          }).then(() => {
-            io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+            data: { startTime, status: 'ACTIVE' },
+          }).then(async () => {
+            io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime });
+            
+            // Set practitioner to busy
+            await prisma.practitioner.update({
+              where: { id: sess.practitionerId },
+              data: { isBusy: true },
+            });
+            io!.emit('practitioner_status', { practitionerId: sess.practitionerId, isOnline: true, isBusy: true });
+            
           }).catch(console.error);
         } else {
-          // Session already started (second party joining later) — just notify them
-          io!.to(`room:${sessionId}`).emit('session_started', { sessionId });
+          // Session already started (reconnection) — just notify them
+          io!.to(`room:${sessionId}`).emit('session_started', { sessionId, startTime: sess.startTime });
         }
       }).catch(console.error);
     });
@@ -183,15 +199,18 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       }
 
       if (practitionerId) {
-        // Only set offline if no other sockets are connected for this practitioner
-        const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
-        if (roomSize === 0) {
-          prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
-            .then(() => {
-              io!.emit('practitioner_status', { practitionerId, isOnline: false });
-            })
-            .catch(console.error);
-        }
+        // Add a 5 second grace period for page navigations/reloads
+        setTimeout(() => {
+          // Only set offline if no other sockets are connected for this practitioner
+          const roomSize = io!.sockets.adapter.rooms.get(`practitioner_${practitionerId}`)?.size || 0;
+          if (roomSize === 0) {
+            prisma.practitioner.update({ where: { id: practitionerId }, data: { isOnline: false } })
+              .then(() => {
+                io!.emit('practitioner_status', { practitionerId, isOnline: false });
+              })
+              .catch(console.error);
+          }
+        }, 5000);
       }
     });
   });

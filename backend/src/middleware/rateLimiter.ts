@@ -27,11 +27,11 @@ const base = {
   legacyHeaders: false,
 };
 
-// General API rate limiter — 100 requests per 15 min
+// General API rate limiter — 100 requests per 15 min (1000 in dev)
 export const generalLimiter = rateLimit({
   ...base,
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: IS_DEV ? 1000 : 100,
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 

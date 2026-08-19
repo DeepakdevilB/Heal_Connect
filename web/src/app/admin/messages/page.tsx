@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   AdminShell, 
@@ -19,25 +19,40 @@ import {
   X
 } from 'lucide-react';
 
-const MOCK_MESSAGES = [
-  { id: '1', name: 'John Doe', email: 'john@example.com', subject: 'Login Issue', message: 'I cannot log into my account since yesterday.', date: '2026-07-31 10:30 AM', status: 'new' },
-  { id: '2', name: 'Sarah Smith', email: 'sarah@example.com', subject: 'Refund Request', message: 'I was charged twice for the last consultation.', date: '2026-07-30 02:15 PM', status: 'replied' },
-  { id: '3', name: 'Raj Kumar', email: 'raj@example.com', subject: 'Astrologer Not Available', message: 'The astrologer didn\'t show up for the scheduled time.', date: '2026-07-29 11:45 AM', status: 'resolved' },
-  { id: '4', name: 'Anita Desai', email: 'anita@example.com', subject: 'Feedback', message: 'Really loved the new UI of the app. Great work!', date: '2026-07-28 09:20 AM', status: 'resolved' },
-  { id: '5', name: 'Mike Johnson', email: 'mike@example.com', subject: 'Payment Failed', message: 'Tried to pay but it keeps failing with error 500.', date: '2026-07-31 08:00 AM', status: 'new' },
-];
+const ADMIN_KEY = 'healconnect-admin-2026';
 
 export default function AdminMessagesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [loading, setLoading] = useState(true);
   
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
   
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; messageId: string | null; action: 'resolve' | 'delete' | null }>({ open: false, messageId: null, action: null });
+
+  const fetchMessages = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/messages?status=${statusFilter}`, {
+        headers: { 'x-admin-key': ADMIN_KEY },
+      }).then(r => r.json());
+      if (res.success && res.data) {
+        setMessages(res.data.messages);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const perPage = 10;
 
@@ -56,32 +71,66 @@ export default function AdminMessagesPage() {
     setConfirmDialog({ open: true, messageId, action });
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     const { messageId, action } = confirmDialog;
     if (!messageId || !action) return;
 
-    if (action === 'delete') {
-      setMessages(messages.filter(m => m.id !== messageId));
-      setToast({ message: 'Message deleted successfully', type: 'success' });
-      if (selectedMessage?.id === messageId) setSelectedMessage(null);
-    } else if (action === 'resolve') {
-      setMessages(messages.map(m => m.id === messageId ? { ...m, status: 'resolved' } : m));
-      setToast({ message: 'Message marked as resolved', type: 'success' });
-      if (selectedMessage?.id === messageId) {
-        setSelectedMessage({ ...selectedMessage, status: 'resolved' });
+    try {
+      if (action === 'delete') {
+        const res = await fetch(`/api/admin/messages/${messageId}`, {
+          method: 'DELETE',
+          headers: { 'x-admin-key': ADMIN_KEY },
+        }).then(r => r.json());
+        
+        if (res.success) {
+          setMessages(messages.filter(m => m.id !== messageId));
+          setToast({ message: 'Message deleted successfully', type: 'success' });
+          if (selectedMessage?.id === messageId) setSelectedMessage(null);
+        }
+      } else if (action === 'resolve') {
+        const res = await fetch(`/api/admin/messages/${messageId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+          body: JSON.stringify({ status: 'resolved' }),
+        }).then(r => r.json());
+
+        if (res.success) {
+          setMessages(messages.map(m => m.id === messageId ? { ...m, status: 'resolved' } : m));
+          setToast({ message: 'Message marked as resolved', type: 'success' });
+          if (selectedMessage?.id === messageId) {
+            setSelectedMessage({ ...selectedMessage, status: 'resolved' });
+          }
+        }
       }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'An error occurred', type: 'error' });
     }
 
     setConfirmDialog({ open: false, messageId: null, action: null });
   };
 
-  const handleSendReply = () => {
+  const handleSendReply = async () => {
     if (!selectedMessage || !replyText.trim()) return;
     
-    setMessages(messages.map(m => m.id === selectedMessage.id ? { ...m, status: 'replied' } : m));
-    setSelectedMessage({ ...selectedMessage, status: 'replied' });
-    setReplyText('');
-    setToast({ message: 'Reply sent successfully', type: 'success' });
+    // In a real app, you would also send an email here via a backend route
+    try {
+      const res = await fetch(`/api/admin/messages/${selectedMessage.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        body: JSON.stringify({ status: 'replied' }),
+      }).then(r => r.json());
+
+      if (res.success) {
+        setMessages(messages.map(m => m.id === selectedMessage.id ? { ...m, status: 'replied' } : m));
+        setSelectedMessage({ ...selectedMessage, status: 'replied' });
+        setReplyText('');
+        setToast({ message: 'Reply sent successfully', type: 'success' });
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Failed to send reply', type: 'error' });
+    }
   };
 
   return (
@@ -113,34 +162,36 @@ export default function AdminMessagesPage() {
 
             <div className="flex-1 overflow-y-auto">
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {paginatedMessages.map((msg) => (
-                  <div 
-                    key={msg.id}
-                    onClick={() => setSelectedMessage(msg)}
-                    className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors ${selectedMessage?.id === msg.id ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <h4 className={`text-sm font-medium ${msg.status === 'new' ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
-                        {msg.name}
-                      </h4>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{msg.date.split(' ')[0]}</span>
-                    </div>
-                    <div className="text-sm text-gray-800 dark:text-gray-200 font-medium mb-1 truncate">
-                      {msg.subject}
-                    </div>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[70%]">
-                        {msg.message}
-                      </span>
-                      <StatusBadge status={msg.status} />
-                    </div>
-                  </div>
-                ))}
-                
-                {paginatedMessages.length === 0 && (
+                {loading ? (
+                  <div className="p-8 text-center text-gray-500">Loading messages...</div>
+                ) : paginatedMessages.length === 0 ? (
                   <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                     No messages found.
                   </div>
+                ) : (
+                  paginatedMessages.map((msg) => (
+                    <div 
+                      key={msg.id}
+                      onClick={() => setSelectedMessage(msg)}
+                      className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors ${selectedMessage?.id === msg.id ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className={`text-sm font-medium ${msg.status === 'new' ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {msg.name}
+                        </h4>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{new Date(msg.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="text-sm text-gray-800 dark:text-gray-200 font-medium mb-1 truncate">
+                        {msg.subject}
+                      </div>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[70%]">
+                          {msg.message}
+                        </span>
+                        <StatusBadge status={msg.status} />
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
@@ -190,17 +241,10 @@ export default function AdminMessagesPage() {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedMessage.subject}</h2>
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center">
-                          <span className="font-medium text-gray-700 dark:text-gray-300 mr-2">{selectedMessage.name}</span>
-                          &lt;{selectedMessage.email}&gt;
-                        </div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white mt-2">{selectedMessage.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{selectedMessage.email}</div>
                       </div>
                       <StatusBadge status={selectedMessage.status} />
-                    </div>
-                    
-                    <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      <Clock className="h-3.5 w-3.5 mr-1" />
-                      {selectedMessage.date}
                     </div>
                     
                     <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">

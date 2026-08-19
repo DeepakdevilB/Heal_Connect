@@ -44,9 +44,11 @@ export function isMsg91Configured(): boolean {
  * Indian numbers (+91…) use MSG91; everything else uses Twilio Verify.
  */
 function selectProvider(phone: string): 'msg91' | 'twilio' {
+  // If MSG91 is fully configured, use it for +91 numbers
   if (phone.startsWith('+91') && isMsg91Configured()) {
     return 'msg91';
   }
+  // Otherwise default to Twilio for everything
   return 'twilio';
 }
 
@@ -66,11 +68,16 @@ async function sendOtpMsg91(phone: string): Promise<void> {
   // MSG91 expects the number without the leading '+' sign
   const mobile = phone.replace(/^\+/, '');
 
+  // Generate our own OTP to pass to MSG91 so we can log it for easy testing
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  console.log(`\n📲 [MSG91 OTP FOR ${phone}]: ${otp}\n`);
+
   const url = 'https://control.msg91.com/api/v5/otp';
   const params = new URLSearchParams({
     template_id: MSG91_TEMPLATE_ID,
     mobile,
     authkey: MSG91_AUTH_KEY,
+    otp, // MSG91 will use this instead of generating one
   });
 
   const response = await fetch(`${url}?${params.toString()}`, {
@@ -135,6 +142,7 @@ async function sendOtpTwilio(phone: string): Promise<void> {
     to: phone,
     channel: 'sms',
   });
+  console.log(`\n?? [TWILIO] Successfully dispatched OTP to ${phone}\n`);
 }
 
 /**
@@ -147,8 +155,10 @@ async function verifyOtpTwilio(phone: string, code: string): Promise<boolean> {
     const check = await client.verify.v2
       .services(TWILIO_VERIFY_SERVICE_SID)
       .verificationChecks.create({ to: phone, code });
+
     return check.status === 'approved';
-  } catch {
+  } catch (err: any) {
+    console.error(`Twilio OTP verification failed for ${phone}:`, err.message);
     return false;
   }
 }

@@ -1,6 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { getIO } from '../lib/socket';
+import { sendNotificationToUser } from '../services/notification.service';
+
 
 const BILLING_INTERVAL_MS = 10000; // Check every 10 seconds
 const BILLING_CYCLE_MS = 60000; // Bill every 60 seconds
@@ -26,6 +28,34 @@ export function startBillingEngine() {
     }
 
     try {
+      // 0. Clean up stale INITIATED/ACCEPTED sessions that were never properly started
+      const nowTs = new Date();
+      const twoMinutesAgo = new Date(nowTs.getTime() - 2 * 60 * 1000);
+      const fiveMinutesAgo = new Date(nowTs.getTime() - 5 * 60 * 1000);
+
+      const staleSessions = await prisma.session.findMany({
+        where: {
+          OR: [
+            { status: 'INITIATED', createdAt: { lt: twoMinutesAgo } },
+            { status: 'ACCEPTED', createdAt: { lt: fiveMinutesAgo } },
+          ],
+        },
+      });
+
+      for (const stale of staleSessions) {
+        console.log(`[BillingEngine] Cleaning up stale ${stale.status} session ${stale.id}`);
+        await prisma.session.update({
+          where: { id: stale.id },
+          data: { status: 'CANCELLED', endTime: nowTs },
+        });
+        import('../lib/socket').then(({ emitConsultationEvent }) => {
+          emitConsultationEvent('session_terminated', stale.id,
+            { sessionId: stale.id, reason: 'timed_out' },
+            { userId: stale.userId, practitionerId: stale.practitionerId }
+          );
+        }).catch(() => {});
+      }
+
       // 1. Fetch all ACTIVE sessions
       const activeSessions = await prisma.session.findMany({
         where: { status: 'ACTIVE' },
@@ -165,7 +195,31 @@ async function processSessionBilling(session: any) {
       }),
     ]);
 
-    console.log(`Billed ₹${ratePerMinute} for session ${session.id}. Remaining balance: ₹${wallet.balance - ratePerMinute}`);
+    const remainingBalance = wallet.balance - ratePerMinute;
+    console.log(`Billed ₹${ratePerMinute} for session ${session.id}. Remaining balance: ₹${remainingBalance}`);
+    
+    // Check Low Balance Threshold (e.g. INR 50) and notify once per session
+    if (remainingBalance < 50) {
+      const lowBalanceKey = `low_balance_notified:${session.id}`;
+      let alreadyNotified = false;
+      if (redis) {
+        const res = await redis.set(lowBalanceKey, 'true', 'EX', 3600, 'NX'); // debounced for 1 hour
+        alreadyNotified = res === null;
+      } else {
+        alreadyNotified = memoryState.has(lowBalanceKey);
+        memoryState.set(lowBalanceKey, 'true');
+      }
+
+      if (!alreadyNotified) {
+        await sendNotificationToUser(session.userId, {
+          type: 'WALLET_LOW',
+          title: 'Wallet Balance Low',
+          body: `Your wallet balance is below ₹50. Please recharge soon to avoid session disconnection.`,
+          entityId: wallet.id
+        });
+      }
+    }
+
     
     // Update state
     state.lastBilledAt = now;
@@ -216,12 +270,22 @@ async function terminateSession(sessionId: string) {
   try {
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
     if (session) {
-      import('../lib/socket').then(({ emitConsultationEvent }) => {
+      await prisma.practitioner.update({
+        where: { id: session.practitionerId },
+        data: { isBusy: false },
+      });
+      import('../lib/socket').then(({ emitConsultationEvent, getIO }) => {
         emitConsultationEvent('session_terminated', sessionId, { sessionId, reason: 'insufficient_balance' }, {
           userId: session.userId,
           practitionerId: session.practitionerId
         });
+        const io = getIO();
+        if (io) {
+          io.emit('practitioner_status', { practitionerId: session.practitionerId, isOnline: true, isBusy: false });
+        }
       });
     }
-  } catch {}
+  } catch (err) {
+    console.error('Error terminating session:', err);
+  }
 }

@@ -85,7 +85,7 @@ router.get(
           select: {
             id: true, name: true, bio: true, specialties: true, languages: true,
             certifications: true, experienceYrs: true, perMinuteRate: true,
-            photoUrl: true, isVerified: true, isOnline: true,
+            photoUrl: true, isVerified: true, isOnline: true, isBusy: true,
             reviews: { select: { rating: true } },
           },
           orderBy: { createdAt: 'desc' },
@@ -128,7 +128,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       select: {
         id: true, name: true, bio: true, specialties: true, languages: true,
         certifications: true, experienceYrs: true, perMinuteRate: true,
-        photoUrl: true, isVerified: true, isOnline: true, email: true, phone: true,
+        photoUrl: true, isVerified: true, isOnline: true, isBusy: true, email: true, phone: true,
         reviews: {
           select: {
             id: true, rating: true, comment: true, createdAt: true,

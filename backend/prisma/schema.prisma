@@ -7,56 +7,57 @@ datasource db {
 }
 
 model User {
-  id                    String    @id @default(uuid())
-  phone                 String?   @unique
-  email                 String?   @unique
-  passwordHash          String?
-  name                  String?
-  dob                   DateTime?
-  birthPlace            String?
-  gender                String?
-  wellnessInterests     String[]
-  photoUrl              String?
+  id                String    @id @default(uuid())
+  phone             String?   @unique
+  email             String?   @unique
+  passwordHash      String?
+  name              String?
+  dob               DateTime?
+  birthPlace        String?
+  gender            String?
+  wellnessInterests String[]
+  photoUrl          String?
 
   // Email verification
-  isEmailVerified       Boolean   @default(false)
-  emailVerifyToken      String?   // stores SHA-256 hash of the raw token
-  emailVerifyExpiry     DateTime?
+  isEmailVerified   Boolean   @default(false)
+  emailVerifyToken  String? // stores SHA-256 hash of the raw token
+  emailVerifyExpiry DateTime?
 
   // Phone / OTP verification
-  isPhoneVerified       Boolean   @default(false)
+  isPhoneVerified Boolean @default(false)
 
   // Password reset
-  passwordResetToken    String?   // stores SHA-256 hash of the raw token
-  passwordResetExpiry   DateTime?
+  passwordResetToken  String? // stores SHA-256 hash of the raw token
+  passwordResetExpiry DateTime?
 
   // OAuth
-  googleId              String?   @unique
-  appleId               String?   @unique
-  provider              String    @default("email")
+  googleId String? @unique
+  appleId  String? @unique
+  provider String  @default("email")
 
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  wallet                Wallet?
-  sessions              Session[]
-  reviews               Review[]
-  refreshTokens         RefreshToken[]
-  otps                  Otp[]
+  wallet        Wallet?
+  sessions      Session[]
+  reviews       Review[]
+  refreshTokens RefreshToken[]
+  otps          Otp[]
+  deviceTokens  DeviceToken[]
 }
 
 // ─── OTP model for SMS verification ──────────────────────────────────────────
 
 model Otp {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  otpHash     String   // SHA-256 hash of the 6-digit OTP
-  purpose     String   // "phone_verify" | "login" | "password_reset"
-  expiresAt   DateTime
-  attempts    Int      @default(0)
-  isUsed      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash   String // SHA-256 hash of the 6-digit OTP
+  purpose   String // "phone_verify" | "login" | "password_reset"
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
@@ -88,14 +89,16 @@ model Practitioner {
   photoUrl       String?
   isVerified     Boolean  @default(false)
   isOnline       Boolean  @default(false)
+  isBusy         Boolean  @default(false)
   // Denormalized rating stats — updated atomically on each review submission
   avgRating      Float    @default(0)
   reviewCount    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  sessions       Session[]
-  reviews        Review[]
+  sessions     Session[]
+  reviews      Review[]
+  deviceTokens DeviceToken[]
 }
 
 model Wallet {
@@ -115,75 +118,79 @@ model Transaction {
   walletId    String
   wallet      Wallet   @relation(fields: [walletId], references: [id])
   amount      Float
-  type        String   // "RECHARGE" | "DEBIT" | "REFUND"
-  status      String   // "SUCCESS" | "PENDING" | "FAILED"
-  referenceId String?  @unique  // idempotency: unique when set (partial index in migration)
+  type        String // "RECHARGE" | "DEBIT" | "REFUND"
+  status      String // "SUCCESS" | "PENDING" | "FAILED"
+  referenceId String?  @unique // idempotency: unique when set (partial index in migration)
   createdAt   DateTime @default(now())
 }
 
 model Session {
-  id             String   @id @default(uuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  practitionerId String
-  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  type           String   // "CHAT" | "AUDIO" | "VIDEO"
-  status         String   // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
-  channelName    String?
-  agoraUid       Int?
-  perMinuteRate  Float    @default(0)
-  walletDeduction Float   @default(0)
-  duration       Int      @default(0)
-  startTime      DateTime?
-  endTime        DateTime?
-  totalCost      Float    @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  practitionerId  String
+  practitioner    Practitioner @relation(fields: [practitionerId], references: [id])
+  type            String // "CHAT" | "AUDIO" | "VIDEO"
+  status          String // "INITIATED" | "PENDING_ACCEPTANCE" | "ACCEPTED" | "WALLET_VERIFIED" | "JOINING_CHANNEL" | "ACTIVE" | "ENDING" | "ENDED" | "BILLING_GENERATED" | "RATING_PENDING" | "COMPLETED" | "REJECTED" | "CANCELLED" | "DISCONNECTED"
+  channelName     String?
+  agoraUid        Int?
+  perMinuteRate   Float        @default(0)
+  walletDeduction Float        @default(0)
+  duration        Int          @default(0)
+  startTime       DateTime?
+  endTime         DateTime?
+  scheduledStartTime DateTime?
+  scheduledEndTime   DateTime?
+  totalCost       Float        @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   review         Review?
   messages       ChatMessage[]
   callFeedback   CallFeedback?
   transcript     CallTranscript?
+  timeProposals  SessionTimeProposal[]
+  reminders      SessionReminder[]
 }
 
 model Review {
-  id             String   @id @default(uuid())
-  sessionId      String   @unique
-  session        Session  @relation(fields: [sessionId], references: [id])
+  id             String       @id @default(uuid())
+  sessionId      String       @unique
+  session        Session      @relation(fields: [sessionId], references: [id])
   userId         String
-  user           User     @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
   practitionerId String
   practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
-  rating         Int      // 1-5
+  rating         Int // 1-5
   comment        String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 }
 
 model ChatMessage {
-  id           String    @id @default(uuid())
-  sessionId    String
-  session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  senderId     String
-  senderType   String    // "USER" | "PRACTITIONER"
-  content      String
-  isRead       Boolean   @default(false)
-  readAt       DateTime?
-  createdAt    DateTime  @default(now())
+  id         String    @id @default(uuid())
+  sessionId  String
+  session    Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderId   String
+  senderType String // "USER" | "PRACTITIONER"
+  content    String
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([sessionId])
   @@index([senderId])
 }
 
 model CallFeedback {
-  id           String   @id @default(uuid())
-  sessionId    String   @unique
-  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId       String
-  audioQuality Int      // 1-5
-  overallRating Int     // 1-5
-  issues       String[] // e.g. ["echo", "lag", "dropped"]
-  comment      String?
-  createdAt    DateTime @default(now())
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId        String
+  audioQuality  Int // 1-5
+  overallRating Int // 1-5
+  issues        String[] // e.g. ["echo", "lag", "dropped"]
+  comment       String?
+  createdAt     DateTime @default(now())
 
   @@index([userId])
 }
@@ -209,10 +216,10 @@ model CallTranscript {
 
 model FlaggedContent {
   id             String          @id @default(uuid())
-  source         String          // "CHAT" | "CALL_TRANSCRIPT"
+  source         String // "CHAT" | "CALL_TRANSCRIPT"
   contentSnippet String
-  reason         String          // "PHONE_NUMBER" | "HARASSMENT" | "SELF_HARM" | "OFF_PLATFORM_CONTACT"
-  status         String          @default("PENDING")  // "PENDING" | "RESOLVED" | "DISMISSED"
+  reason         String // "PHONE_NUMBER" | "HARASSMENT" | "SELF_HARM" | "OFF_PLATFORM_CONTACT"
+  status         String          @default("PENDING") // "PENDING" | "RESOLVED" | "DISMISSED"
   userId         String?
   practitionerId String?
   sessionId      String?
@@ -225,4 +232,112 @@ model FlaggedContent {
   @@index([status])
   @@index([source])
   @@index([sessionId])
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    String   @default("new") // "new" | "replied" | "resolved"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Phase 4: Content Management ──────────────────────────────────────────────
+
+model Blog {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  author    String
+  imageUrl  String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Banner {
+  id        String   @id @default(uuid())
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Phase 6: Push Notifications ──────────────────────────────────────────────
+
+model DeviceToken {
+  id             String   @id @default(uuid())
+  userId         String?
+  practitionerId String?
+  token          String   @unique
+  platform       String // "android" | "ios" | "web"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  practitioner Practitioner? @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([practitionerId])
+}
+
+model NotificationLog {
+  id            String   @id @default(uuid())
+  recipientId   String // userId or practitionerId
+  recipientType String // "USER" | "PRACTITIONER"
+  type          String // "SESSION_REQUEST", "SESSION_REMINDER_24H", "WALLET_LOW", "PAYOUT"
+  title         String
+  body          String
+  entityId      String? // Reference ID (Session ID, Wallet ID, etc.)
+  status        String // "SENT" | "FAILED"
+  errorMsg      String?
+  createdAt     DateTime @default(now())
+}
+
+// ─── Phase 7: Session Scheduling ──────────────────────────────────────────────
+
+model SessionTimeProposal {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  proposedBy     String // "PRACTITIONER" | "USER"
+  startTime      DateTime
+  endTime        DateTime
+  status         String   @default("PENDING") // "PENDING", "SELECTED", "EXPIRED", "CANCELLED"
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+
+  @@index([sessionId])
+}
+
+model SessionReminder {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId  String // userId or practitionerId
+  reminderType   String // "24_HOURS", "30_MINUTES"
+  scheduledFor   DateTime
+  enabled        Boolean  @default(true)
+  sent           Boolean  @default(false)
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([sessionId, participantId, reminderType])
+  @@index([sessionId])
+  @@index([participantId])
 }

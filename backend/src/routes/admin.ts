@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
+import { scanContent, flagContentIfNeeded } from '../lib/moderation';
 
 void requireAuth;
 
@@ -285,6 +286,7 @@ router.get('/users', async (req: Request, res: Response) => {
           isPhoneVerified: true,
           createdAt: true,
           photoUrl: true,
+          wallet: { select: { balance: true } },
           _count: { select: { sessions: true, reviews: true } },
         },
       }),
@@ -303,6 +305,7 @@ router.get('/users', async (req: Request, res: Response) => {
       photoUrl: u.photoUrl,
       sessionCount: u._count.sessions,
       reviewCount: u._count.reviews,
+      balance: u.wallet?.balance || 0,
       status: u.isEmailVerified || u.isPhoneVerified ? 'active' : 'unverified',
     }));
 
@@ -315,6 +318,64 @@ router.get('/users', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Admin users error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 4.1 Update User Balance ─────────────────────────────────────────────────
+router.patch('/users/:id/balance', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { balance } = req.body;
+
+    if (typeof balance !== 'number') {
+      res.status(400).json({ success: false, message: 'Invalid balance amount' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { wallet: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    const currentBalance = user.wallet?.balance || 0;
+    const diff = balance - currentBalance;
+
+    if (diff === 0) {
+      res.json({ success: true, message: 'Balance is already set to this amount' });
+      return;
+    }
+
+    // Upsert wallet
+    const updatedWallet = await prisma.wallet.upsert({
+      where: { userId: id },
+      create: { userId: id, balance, currency: 'INR' },
+      update: { balance },
+    });
+
+    // Log transaction
+    await prisma.transaction.create({
+      data: {
+        walletId: updatedWallet.id,
+        amount: Math.abs(diff),
+        type: diff > 0 ? 'RECHARGE' : 'DEBIT',
+        status: 'SUCCESS',
+        referenceId: `admin_adj_${Date.now()}`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Balance updated successfully',
+      data: { balance: updatedWallet.balance },
+    });
+  } catch (err) {
+    console.error('Update balance error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
@@ -360,7 +421,32 @@ router.get('/users/:id', async (req: Request, res: Response) => {
 router.delete('/users/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
+
+    // Find sessions
+    const userSessions = await prisma.session.findMany({ where: { userId: id }, select: { id: true } });
+    const sessionIds = userSessions.map((s) => s.id);
+
+    // Delete flagged contents
+    if (sessionIds.length > 0) {
+      await prisma.flaggedContent.deleteMany({ where: { OR: [{ userId: id }, { sessionId: { in: sessionIds } }] } });
+    } else {
+      await prisma.flaggedContent.deleteMany({ where: { userId: id } });
+    }
+
+    // Delete wallet and transactions
+    const wallet = await prisma.wallet.findUnique({ where: { userId: id }, select: { id: true } });
+    if (wallet) {
+      await prisma.transaction.deleteMany({ where: { walletId: wallet.id } });
+      await prisma.wallet.delete({ where: { id: wallet.id } });
+    }
+
+    // Delete reviews and sessions
+    await prisma.review.deleteMany({ where: { userId: id } });
+    await prisma.session.deleteMany({ where: { userId: id } });
+
+    // Finally delete the user
     await prisma.user.delete({ where: { id } });
+
     res.json({ success: true, message: 'User deleted' });
   } catch (err) {
     console.error(err);
@@ -476,7 +562,21 @@ router.patch('/practitioners/:id/verify', async (req: Request, res: Response) =>
 router.delete('/practitioners/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
+
+    const practitionerSessions = await prisma.session.findMany({ where: { practitionerId: id }, select: { id: true } });
+    const sessionIds = practitionerSessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      await prisma.flaggedContent.deleteMany({ where: { OR: [{ practitionerId: id }, { sessionId: { in: sessionIds } }] } });
+    } else {
+      await prisma.flaggedContent.deleteMany({ where: { practitionerId: id } });
+    }
+
+    await prisma.review.deleteMany({ where: { practitionerId: id } });
+    await prisma.session.deleteMany({ where: { practitionerId: id } });
+
     await prisma.practitioner.delete({ where: { id } });
+
     res.json({ success: true, message: 'Practitioner deleted' });
   } catch (err) {
     console.error(err);
@@ -520,6 +620,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
           duration: true,
           startTime: true,
           endTime: true,
+          scheduledStartTime: true,
+          scheduledEndTime: true,
           totalCost: true,
           perMinuteRate: true,
           createdAt: true,
@@ -548,6 +650,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
         status: s.status,
         durationMinutes: calculatedDuration,
         startTime: s.startTime ? s.startTime.toISOString() : s.createdAt.toISOString(),
+        scheduledStartTime: s.scheduledStartTime ? s.scheduledStartTime.toISOString() : null,
+        scheduledEndTime: s.scheduledEndTime ? s.scheduledEndTime.toISOString() : null,
         endTime: s.endTime ? s.endTime.toISOString() : null,
         totalCost: Math.round(s.totalCost * 100) / 100,
         paymentStatus: s.totalCost > 0 ? 'Paid' : 'Free / Pending',
@@ -622,4 +726,323 @@ router.get('/analytics/chat', async (_req: Request, res: Response) => {
   }
 });
 
+// ─── 8. Chat Session History ──────────────────────────────────────────────────
+router.get('/sessions/:id/chat', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ success: true, data: { messages } });
+  } catch (err) {
+    console.error('Chat history error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 8.1 View Call Transcript ────────────────────────────────────────────────
+router.get('/sessions/:id/transcript', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const transcript = await prisma.callTranscript.findUnique({
+      where: { sessionId: id },
+      include: { flaggedContent: true },
+    });
+    
+    res.json({ success: true, data: { transcript } });
+  } catch (err) {
+    console.error('Fetch transcript error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 8.2 Scan Transcript for Flags ───────────────────────────────────────────
+router.post('/sessions/:id/transcript/scan', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    
+    const transcript = await prisma.callTranscript.findUnique({
+      where: { sessionId: id },
+    });
+    
+    if (!transcript) {
+      res.status(404).json({ success: false, message: 'Transcript not found for this session' });
+      return;
+    }
+    
+    const result = scanContent(transcript.transcriptText);
+    
+    if (result.flagged) {
+      await flagContentIfNeeded(
+        transcript.transcriptText,
+        'CALL_TRANSCRIPT',
+        {
+          sessionId: transcript.sessionId,
+          userId: transcript.userId,
+          practitionerId: transcript.practitionerId,
+          transcriptId: transcript.id,
+        }
+      );
+    }
+    
+    res.json({ success: true, data: { scanResult: result } });
+  } catch (err) {
+    console.error('Scan transcript error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 9. Moderation ─────────────────────────────────────────────────────────────
+router.get('/moderation', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const where: Prisma.FlaggedContentWhereInput = {};
+    if (statusParam && statusParam !== 'all') {
+      where.status = statusParam.toUpperCase();
+    }
+    const flagged = await prisma.flaggedContent.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    // We need to fetch the related user/practitioner details manually since they aren't strict relations in the schema
+    const results = await Promise.all(flagged.map(async (flag) => {
+      let user = null;
+      let practitioner = null;
+      if (flag.userId) user = await prisma.user.findUnique({ where: { id: flag.userId }, select: { name: true, email: true } });
+      if (flag.practitionerId) practitioner = await prisma.practitioner.findUnique({ where: { id: flag.practitionerId }, select: { name: true } });
+      return { ...flag, user, practitioner };
+    }));
+    res.json({ success: true, data: { flagged: results } });
+  } catch (err) {
+    console.error('Moderation fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.patch('/moderation/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status } = req.body;
+    const updated = await prisma.flaggedContent.update({
+      where: { id },
+      data: { status },
+    });
+    res.json({ success: true, data: { flagged: updated } });
+  } catch (err) {
+    console.error('Moderation update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 10. Contact Messages ────────────────────────────────────────────────────
+router.get('/messages', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const where: any = {};
+    if (statusParam && statusParam !== 'all') {
+      where.status = statusParam;
+    }
+    const messages = await prisma.contactMessage.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: { messages } });
+  } catch (err) {
+    console.error('Messages fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.patch('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status } = req.body;
+    const updated = await prisma.contactMessage.update({
+      where: { id },
+      data: { status },
+    });
+    res.json({ success: true, data: { message: updated } });
+  } catch (err) {
+    console.error('Message update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.delete('/messages/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    await prisma.contactMessage.delete({ where: { id } });
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (err) {
+    console.error('Message delete error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ─── 11. DB Push (Temporary Migration Runner) ────────────────────────────────
+router.post('/db-push', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    const { stdout, stderr } = await execAsync('npx prisma db push --accept-data-loss');
+    res.json({ success: true, stdout, stderr });
+  } catch (err: any) {
+    console.error('DB push error:', err);
+    res.status(500).json({ success: false, message: err.message, stderr: err.stderr });
+  }
+});
+
+// ─── 12. Content Management (Blogs) ────────────────────────────────────────────
+router.get('/blogs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const blogs = await prisma.blog.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { blogs } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/blogs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { title, content, author, imageUrl, published } = req.body;
+    const blog = await prisma.blog.create({ data: { title, content, author, imageUrl, published } });
+    res.json({ success: true, data: { blog } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const blog = await prisma.blog.update({
+      where: { id: req.params.id as string },
+      data: req.body,
+    });
+    res.json({ success: true, data: { blog } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/blogs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.blog.delete({ where: { id: req.params.id as string } });
+    res.json({ success: true, message: 'Blog deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 13. Content Management (FAQs) ─────────────────────────────────────────────
+router.get('/faqs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const faqs = await prisma.faq.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { faqs } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/faqs', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { question, answer, category } = req.body;
+    const faq = await prisma.faq.create({ data: { question, answer, category } });
+    res.json({ success: true, data: { faq } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const faq = await prisma.faq.update({
+      where: { id: req.params.id as string },
+      data: req.body,
+    });
+    res.json({ success: true, data: { faq } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/faqs/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.faq.delete({ where: { id: req.params.id as string } });
+    res.json({ success: true, message: 'FAQ deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 14. Content Management (Banners) ──────────────────────────────────────────
+router.get('/banners', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const banners = await prisma.banner.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: { banners } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/banners', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { title, imageUrl, linkUrl, isActive } = req.body;
+    const banner = await prisma.banner.create({ data: { title, imageUrl, linkUrl, isActive } });
+    res.json({ success: true, data: { banner } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const banner = await prisma.banner.update({
+      where: { id: req.params.id as string },
+      data: req.body,
+    });
+    res.json({ success: true, data: { banner } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await prisma.banner.delete({ where: { id: req.params.id as string } });
+    res.json({ success: true, message: 'Banner deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, amount, practitionerId } = req.body;
+    
+    // In a real implementation, you would update the Payout model here and call Razorpay
+    
+    // 6. Notify Practitioner about payout
+    if (status === 'SUCCESS' && practitionerId) {
+      const { sendNotificationToPractitioner } = await import('../services/notification.service');
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'PAYOUT',
+        title: 'Payout Processed',
+        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        entityId: id
+      });
+    }
+
+    res.json({ success: true, message: 'Payout processed' });
+  } catch (err) {
+    console.error('Payout processing error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;
+

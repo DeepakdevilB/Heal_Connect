@@ -18,8 +18,7 @@ import {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
 } from '../lib/email';
-import { sendOtpSms, verifyOtpSms, isOtpConfigured } from '../lib/sms';
-import { sendOTP, verifyOTP, isValidE164 } from '../services/twilio.service';
+import { isOtpConfigured, sendOtpSms, verifyOtpSms } from '../lib/sms';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
@@ -48,7 +47,7 @@ router.post(
   '/register',
   authLimiter,
   [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('email').optional().isEmail().normalizeEmail().withMessage('Valid email required'),
     body('password')
       .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
       .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
@@ -64,17 +63,25 @@ router.post(
   async (req: Request, res: Response) => {
     const { email, password, name, phone, verifyMethod = 'email' } =
       req.body as {
-        email: string; password: string; name: string;
+        email?: string; password: string; name: string;
         phone?: string; verifyMethod?: 'email' | 'sms';
       };
 
+    if (!email && !phone) {
+      res.status(400).json({ success: false, message: 'Either email or phone is required' });
+      return;
+    }
+
+    // SMS chosen but provider not configured for this number → fall back to email silently
     const useEmail = verifyMethod === 'email' || (phone ? !isOtpConfigured(phone) : true);
 
     try {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) {
-        res.status(409).json({ success: false, message: 'Email already registered' });
-        return;
+      if (email) {
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (existing) {
+          res.status(409).json({ success: false, message: 'Email already registered' });
+          return;
+        }
       }
 
       if (phone) {
@@ -87,26 +94,29 @@ router.post(
 
       const passwordHash = await bcrypt.hash(password, 12);
 
+      // Generate & hash email verify token
       const rawEmailToken    = generateSecureToken();
       const emailVerifyToken = hashToken(rawEmailToken);
-      const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
       const user = await prisma.user.create({
         data: {
-          email,
-          name,
+          email: email || null,
           passwordHash,
-          phone: phone ?? null,
-          emailVerifyToken,
-          emailVerifyExpiry,
-          provider: 'email',
+          name,
+          phone: phone || null,
+          emailVerifyToken: useEmail ? emailVerifyToken : null,
+          emailVerifyExpiry: useEmail ? emailVerifyExpiry : null,
           wallet: { create: { balance: 0 } },
         },
       });
 
-      void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
+      // Send welcome email (non-blocking — never crash registration)
+      if (email) {
+        void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
+      }
 
-      if (useEmail) {
+      if (useEmail && email) {
         console.log(`\n✉️  [VERIFICATION LINK FOR ${email}]: http://localhost:3000/verify-email?token=${rawEmailToken}\n`);
         void sendVerificationEmail(email, rawEmailToken).catch((e) =>
           console.error('Verification email failed:', e)
@@ -158,8 +168,19 @@ router.post(
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
-      if (!user || !user.passwordHash) {
+      if (!user) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      if (!user.passwordHash) {
+        if (user.googleId) {
+          res.status(401).json({ success: false, message: 'You signed up using Google. Please click "Sign in with Google" to log in, or use Forgot Password to set a manual password.' });
+        } else if (user.appleId) {
+          res.status(401).json({ success: false, message: 'You signed up using Apple. Please click "Sign in with Apple" to log in.' });
+        } else {
+          res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
         return;
       }
 
@@ -220,6 +241,125 @@ router.post(
   }
 );
 
+// ─── OTP Login ───────────────────────────────────────────────────────────────
+
+router.post(
+  '/login-otp/request',
+  authLimiter,
+  [
+    body('phone').notEmpty().withMessage('Phone number required'),
+    body('role').optional().isIn(['user', 'practitioner']).withMessage('Role must be user or practitioner'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { phone, role = 'user' } = req.body as { phone: string; role?: 'user' | 'practitioner' };
+
+    try {
+      if (role === 'practitioner') {
+        const practitioner = await prisma.practitioner.findUnique({ where: { phone } });
+        if (!practitioner) {
+          res.status(404).json({ success: false, message: 'Practitioner not found with this phone number' });
+          return;
+        }
+      } else {
+        const user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) {
+          res.status(404).json({ success: false, message: 'User not found with this phone number' });
+          return;
+        }
+      }
+
+      await sendOtpSms(phone);
+
+      res.json({ success: true, message: 'OTP sent to your phone' });
+    } catch (err: any) {
+      console.error('Login OTP Request Error:', err);
+      res.status(500).json({ success: false, message: 'Failed to send OTP' });
+    }
+  }
+);
+
+router.post(
+  '/login-otp/verify',
+  authLimiter,
+  [
+    body('phone').notEmpty().withMessage('Phone number required'),
+    body('otp').notEmpty().withMessage('OTP required'),
+    body('role').optional().isIn(['user', 'practitioner']).withMessage('Role must be user or practitioner'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { phone, otp, role = 'user' } = req.body as { phone: string; otp: string; role?: 'user' | 'practitioner' };
+
+    try {
+      const isValid = await verifyOtpSms(phone, otp);
+      if (!isValid) {
+        res.status(401).json({ success: false, message: 'Invalid or expired OTP' });
+        return;
+      }
+
+      if (role === 'practitioner') {
+        const practitioner = await prisma.practitioner.findUnique({ where: { phone } });
+        if (!practitioner) {
+          res.status(404).json({ success: false, message: 'Practitioner not found' });
+          return;
+        }
+
+        const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+        const accessToken = signAccessToken(payload);
+        const refreshToken = signRefreshToken(payload);
+
+        res.json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            practitioner,
+            accessToken,
+            refreshToken,
+          },
+        });
+      } else {
+        const user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) {
+          res.status(404).json({ success: false, message: 'User not found' });
+          return;
+        }
+
+        // Mark phone verified just in case it wasn't
+        if (!user.isPhoneVerified) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { isPhoneVerified: true },
+          });
+          user.isPhoneVerified = true;
+        }
+
+        const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
+
+        res.json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              phone: user.phone,
+              isEmailVerified: user.isEmailVerified,
+              isPhoneVerified: user.isPhoneVerified,
+            },
+            accessToken,
+            refreshToken,
+          },
+        });
+      }
+    } catch (err: any) {
+      console.error('Login OTP Verify Error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+);
+
 // ─── Refresh Token Rotation ───────────────────────────────────────────────────
 
 router.post('/refresh', async (req: Request, res: Response) => {
@@ -233,13 +373,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const payload = verifyRefreshToken(refreshToken);
 
-    // Practitioners don't store refresh tokens in DB — just re-sign directly
+    // Bypass DB check for practitioners (we don't store their refresh tokens in the DB yet)
     if (payload.practitionerId) {
-      const newPayload: import('../lib/jwt').JwtPayload = {
-        userId: payload.userId,
-        practitionerId: payload.practitionerId,
+      const newPayload: import('../lib/jwt').JwtPayload = { 
+        userId: payload.userId, 
         ...(payload.email ? { email: payload.email } : {}),
+        practitionerId: payload.practitionerId
       };
+      
       const accessToken = signAccessToken(newPayload);
       const newRefreshToken = signRefreshToken(newPayload);
       res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
@@ -306,7 +447,7 @@ router.post(
   [body('idToken').notEmpty().withMessage('Google ID token required')],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { idToken } = req.body as { idToken: string };
+    const { idToken, role } = req.body as { idToken: string; role?: string };
 
     try {
       const ticket = await googleClient.verifyIdToken({
@@ -321,6 +462,42 @@ router.post(
       }
 
       const { sub: googleId, email, name, email_verified } = gPayload;
+
+      if (role === 'expert') {
+        let practitioner = await prisma.practitioner.findUnique({ where: { email: email ?? '' } });
+        if (!practitioner) {
+           practitioner = await prisma.practitioner.create({
+             data: {
+               name: name ?? 'Unknown',
+               email: email ?? '',
+               passwordHash: '', 
+               isVerified: false,
+             }
+           });
+           if (email && name) sendWelcomeEmail(email, name).catch(() => {});
+        }
+        
+        const payload: any = { userId: practitioner.id, practitionerId: practitioner.id };
+        if (practitioner.email) payload.email = practitioner.email;
+        
+        const accessToken = signAccessToken(payload);
+        const refreshToken = signRefreshToken(payload);
+        await prisma.refreshToken.create({
+          data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+        });
+
+        res.json({
+          success: true,
+          message: 'Signed in with Google as Expert',
+          data: {
+            user: { id: practitioner.id, email: practitioner.email, name: practitioner.name },
+            role: 'practitioner',
+            accessToken,
+            refreshToken
+          }
+        });
+        return;
+      }
 
       let user = await prisma.user.findUnique({ where: { googleId } });
       if (!user && email) user = await prisma.user.findUnique({ where: { email } });
@@ -618,134 +795,81 @@ router.post(
 
 // ─── Send Phone OTP ───────────────────────────────────────────────────────────
 
-// ─── Send Phone OTP (Twilio Verify API) ───────────────────────────────────────
-
 router.post(
   '/send-otp',
-  authLimiter,
+  emailLimiter,
+  [body('phone').isMobilePhone('any').withMessage('Valid phone number required')],
+  handleValidation,
   async (req: Request, res: Response) => {
-    try {
-      const { phone } = (req.body ?? {}) as { phone?: string };
+    const { phone } = req.body as { phone: string };
 
-      if (!phone || typeof phone !== 'string' || !isValidE164(phone)) {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid phone number format. Must be in E.164 format (e.g. +919876543210).',
-        });
+    try {
+      const user = await prisma.user.findUnique({ where: { phone } });
+      if (!user) {
+        // Return success to prevent phone enumeration
+        res.json({ success: true, message: 'If this number is registered, an OTP has been sent.' });
         return;
       }
 
-      await sendOTP(phone);
+      if (user.isPhoneVerified) {
+        res.json({ success: true, message: 'Phone already verified.' });
+        return;
+      }
 
-      res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully',
-      });
-    } catch (err: any) {
-      console.error('❌ /api/auth/send-otp error:', err?.message || err);
-      const status = err?.statusCode || 500;
-      res.status(status).json({
-        success: false,
-        message: err?.message || 'Failed to send OTP via Twilio',
-      });
+      // MSG91 now enabled
+
+      await sendOtpSms(phone);
+
+      res.json({ success: true, message: 'OTP sent successfully.' });
+    } catch (err) {
+      console.error('Send OTP error:', err);
+      res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.' });
     }
   }
 );
 
-// ─── Verify Phone OTP (Twilio Verify API) ─────────────────────────────────────
+// ─── Verify Phone OTP ─────────────────────────────────────────────────────────
 
 router.post(
   '/verify-otp',
   authLimiter,
+  [
+    body('phone').isMobilePhone('any').withMessage('Valid phone number required'),
+    body('otp').isLength({ min: 6, max: 6 }).isNumeric().withMessage('OTP must be 6 digits'),
+  ],
+  handleValidation,
   async (req: Request, res: Response) => {
+    const { phone, otp } = req.body as { phone: string; otp: string };
+
     try {
-      const { phone, otp, name, email, password } = (req.body ?? {}) as {
-        phone?: string; otp?: string; name?: string; email?: string; password?: string;
-      };
-
-      if (!phone || typeof phone !== 'string' || !isValidE164(phone)) {
-        res.status(400).json({
-          verified: false,
-          success: false,
-          message: 'Invalid phone number format. Must be in E.164 format.',
-        });
-        return;
-      }
-
-      if (!otp || typeof otp !== 'string' || !/^\d{4,8}$/.test(otp.trim())) {
-        res.status(400).json({
-          verified: false,
-          success: false,
-          message: 'Invalid OTP format. OTP must be a numeric string.',
-        });
-        return;
-      }
-
-      const check = await verifyOTP(phone, otp);
-
-      if (check.status !== 'approved') {
-        res.status(400).json({
-          verified: false,
-          success: false,
-          message: 'Invalid or expired OTP',
-        });
-        return;
-      }
-
-      // Check if user exists or create new user with signup details
-      let user = await prisma.user.findUnique({ where: { phone } });
-
+      const user = await prisma.user.findUnique({ where: { phone } });
       if (!user) {
-        const passwordHash = password ? await bcrypt.hash(password, 12) : null;
-        user = await prisma.user.create({
-          data: {
-            phone,
-            name: name ?? null,
-            email: email ?? null,
-            passwordHash,
-            isPhoneVerified: true,
-            provider: 'phone',
-            wallet: { create: { balance: 0 } },
-          },
-        });
-      } else {
-        const updateData: any = { isPhoneVerified: true };
-        if (name && !user.name) updateData.name = name;
-        if (email && !user.email) updateData.email = email;
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: updateData,
-        });
+        res.status(400).json({ success: false, message: 'Invalid phone or OTP.' });
+        return;
       }
 
-      // Issue JWT tokens
-      const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
+      if (user.isPhoneVerified) {
+        res.json({ success: true, message: 'Phone already verified.' });
+        return;
+      }
 
-      res.status(200).json({
-        verified: true,
-        success: true,
-        message: 'OTP verified successfully',
-        data: {
-          user: {
-            id: user.id,
-            phone: user.phone,
-            email: user.email,
-            name: user.name,
-            isPhoneVerified: user.isPhoneVerified,
-            isEmailVerified: user.isEmailVerified,
-          },
-          accessToken,
-          refreshToken,
-        },
+      // Verify Unified SMS OTP
+      const isValid = await verifyOtpSms(phone, otp);
+      if (!isValid) {
+        res.status(401).json({ success: false, message: 'Invalid or expired OTP' });
+        return;
+      }
+
+      // Mark phone as verified in DB
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { isPhoneVerified: true },
       });
-    } catch (err: any) {
-      console.error('❌ /api/auth/verify-otp error:', err?.message || err);
-      const status = err?.statusCode || 500;
-      res.status(status).json({
-        verified: false,
-        success: false,
-        message: status === 400 ? (err?.message || 'Invalid request') : 'Twilio service unavailable',
-      });
+
+      res.json({ success: true, message: 'OTP verified' });
+    } catch (err) {
+      console.error('Verify OTP error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 );
@@ -769,6 +893,7 @@ router.post(
       const user = await prisma.user.findUnique({ where: { phone } });
 
       if (user && !user.isPhoneVerified) {
+        // MSG91 now enabled
         await sendOtpSms(phone);
       }
 
@@ -812,20 +937,40 @@ router.post(
   authLimiter,
   [
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('email').optional().isEmail().normalizeEmail().withMessage('Valid email required'),
+    body('phone').optional().isMobilePhone('any').withMessage('Valid phone number required'),
     body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('verifyMethod').optional().isIn(['email', 'sms']).withMessage('Invalid verification method'),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { name, email, password } = req.body as { name: string; email: string; password: string };
+    const { name, email, phone, password, verifyMethod } = req.body as { name: string; email?: string; phone?: string; password: string; verifyMethod?: 'email' | 'sms' };
     try {
-      const existing = await prisma.practitioner.findUnique({ where: { email } });
-      if (existing) { res.status(409).json({ success: false, message: 'Email already registered' }); return; }
+      if (!email && !phone) {
+        res.status(400).json({ success: false, message: 'Either email or phone is required' });
+        return;
+      }
+
+      if (email) {
+        const existingEmail = await prisma.practitioner.findUnique({ where: { email } });
+        if (existingEmail) { res.status(409).json({ success: false, message: 'Email already registered' }); return; }
+      }
+
+      if (phone) {
+        const existingPhone = await prisma.practitioner.findUnique({ where: { phone } });
+        if (existingPhone) { res.status(409).json({ success: false, message: 'Phone already registered' }); return; }
+      }
 
       const passwordHash = await bcrypt.hash(password, 12);
       const practitioner = await prisma.practitioner.create({
-        data: { name, email, passwordHash, isVerified: false },
+        data: { name, email: email || null, phone: phone || null, passwordHash, isVerified: false },
       });
+
+      if (verifyMethod === 'sms' && phone) {
+        await sendOtpSms(phone).catch(e => console.error('OTP SMS failed:', e));
+      } else if (email) {
+        // Assume email verification is sent if there was an email verification flow for experts
+      }
 
       const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
       const accessToken = signAccessToken(payload);
@@ -833,12 +978,13 @@ router.post(
 
       res.status(201).json({
         success: true,
-        message: 'Expert account created.',
+        message: verifyMethod === 'sms' ? 'Expert account created. OTP sent.' : 'Expert account created.',
         data: {
-          practitioner: { id: practitioner.id, name: practitioner.name, email: practitioner.email, isVerified: practitioner.isVerified },
+          practitioner: { id: practitioner.id, name: practitioner.name, email: practitioner.email, phone: practitioner.phone, isVerified: practitioner.isVerified },
           accessToken,
           refreshToken,
           role: 'practitioner',
+          verifyMethod: verifyMethod === 'sms' ? 'sms' : 'email',
         },
       });
     } catch (err) {
@@ -863,8 +1009,14 @@ router.post(
 
     try {
       const practitioner = await prisma.practitioner.findUnique({ where: { email } });
-      if (!practitioner || !practitioner.passwordHash) {
+      if (!practitioner) {
         res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return;
+      }
+
+      if (!practitioner.passwordHash) {
+        // Since we added Google login for experts
+        res.status(401).json({ success: false, message: 'You signed up using Google. Please click "Sign in with Google" to log in, or use Forgot Password to set a manual password.' });
         return;
       }
 
@@ -878,10 +1030,6 @@ router.post(
       const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken(payload);
-
-      await prisma.refreshToken.create({
-        data: { userId: practitioner.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
-      });
 
       res.json({
         success: true,

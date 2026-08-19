@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Star, MessageCircle, Phone, Shield, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageCircle, Phone, Shield, Sparkles, Star, CheckCircle2, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { practitionersApi, sessionsApi, tokenStore } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { tokenStore, usersApi, practitionersApi, sessionsApi } from '@/lib/api';
 import { getAvatarUrl } from '@/lib/utils';
 
 interface Review {
@@ -31,6 +31,7 @@ interface PractitionerDetail {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating: number;
   reviewCount: number;
   reviews: Review[];
@@ -44,6 +45,7 @@ export default function PractitionerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState(false);
   const [chatting, setChatting] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -141,6 +143,33 @@ export default function PractitionerDetailPage() {
     }
   };
 
+  const handleRequestSession = async () => {
+    if (!p) return;
+    const token = tokenStore.getAccess();
+
+    if (!token) {
+      router.push(`/login?returnUrl=/practitioners/${p.id}`);
+      return;
+    }
+
+    setRequesting(true);
+
+    try {
+      const res = await sessionsApi.requestSession(token, p.id);
+
+      if (res.success) {
+        alert('Session request sent! The expert will propose available times shortly.');
+        router.push('/requests'); // Assuming we create this page
+      } else {
+        alert(res.message || 'Failed to request session.');
+      }
+    } catch {
+      alert('Network error while requesting session.');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#fffbf0] flex items-center justify-center font-sans">
@@ -191,11 +220,15 @@ export default function PractitionerDetailPage() {
                     alt={p.name}
                     className="w-28 h-28 md:w-32 md:h-32 rounded-3xl object-cover shadow-md border-2 border-yellow-100 transition-transform duration-300 hover:scale-105"
                   />
-                  {p.isOnline && (
+                  {p.isBusy ? (
+                    <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white">
+                      <span className="w-2 h-2 bg-white rounded-full" /> Busy
+                    </span>
+                  ) : p.isOnline ? (
                     <span className="absolute -bottom-2 right-1 flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg border-2 border-white animate-bounce">
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse" /> Online
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -244,10 +277,19 @@ export default function PractitionerDetailPage() {
                 <span className="text-3xl font-extrabold text-[#1a1a1a]">₹{p.perMinuteRate}</span>
                 <span className="text-sm text-gray-400 font-medium"> / minute</span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3 justify-end mt-4 sm:mt-0">
                 <Button 
-                  onClick={handleStartChat}
-                  disabled={!p.isOnline || chatting}
+                  onClick={handleRequestSession} 
+                  disabled={requesting}
+                  variant="outline" 
+                  className="border-emerald-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40 w-full sm:w-auto"
+                >
+                  {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+                  Request Session
+                </Button>
+                <Button 
+                  onClick={handleStartChat} 
+                  disabled={!p.isOnline || p.isBusy || chatting}
                   variant="outline" 
                   className="border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
                 >
@@ -260,7 +302,7 @@ export default function PractitionerDetailPage() {
                 </Button>
                 <Button
                   onClick={handleStartCall}
-                  disabled={!p.isOnline || calling}
+                  disabled={!p.isOnline || p.isBusy || calling}
                   className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold border-0 gap-2 rounded-2xl px-6 py-6 shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition-all disabled:opacity-40"
                 >
                   {calling ? (
@@ -269,7 +311,7 @@ export default function PractitionerDetailPage() {
                     </>
                   ) : (
                     <>
-                      <Phone className="h-5 w-5 animate-pulse" /> {p.isOnline ? 'Call Now' : 'Offline'}
+                      <Phone className="h-5 w-5 animate-pulse" /> {p.isBusy ? 'Busy' : p.isOnline ? 'Call Now' : 'Offline'}
                     </>
                   )}
                 </Button>

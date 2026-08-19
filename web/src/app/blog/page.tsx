@@ -27,138 +27,7 @@ const CATEGORIES = [
   { id: 'vastu', label: 'Vastu Shastra', icon: BookOpen },
 ];
 
-// --- SAMPLE BLOG ARTICLES ---
-const ARTICLES = [
-  {
-    id: 'kundli-houses-guide',
-    slug: 'kundli-houses-guide',
-    title: 'Unlocking Your Destiny: The Ultimate Guide to 12 Houses in Janam Kundli',
-    category: 'Kundli',
-    trending: true,
-    excerpt: 'Discover how planetary placements across the 12 Bhava (houses) dictate your career, marriage, wealth accumulation, and karmic life path in Vedic Astrology.',
-    image: '/guide_12_houses.jpg',
-    author: { name: 'Acharya Vikramaditya', role: 'Senior Vedic Astrologer', avatar: '/astrologer_avatar_1.jpg' },
-    date: 'Jul 26, 2026',
-    readTime: '6 min read',
-    views: '14.2K',
-    likes: 840,
-    tags: ['Kundli', 'Vedic Astrology', '12 Houses', 'Horoscope'],
-    content: `
-      <p className="leading-relaxed text-gray-700 font-normal">In classical Jyotish (Vedic Astrology), your Janam Kundli is divided into 12 equal sections called Bhavas or Houses. Each house governs a specific dimension of human existence, ranging from physical health and wealth to career peaks and spiritual liberation.</p>
-      
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">1. The Core Pillar: Kendra Houses (1, 4, 7, 10)</h3>
-      <p className="leading-relaxed text-gray-700">The 1st, 4th, 7th, and 10th houses are known as the Vishnu Sthanas or Kendra houses. Benefic planets placed in these houses grant high vitality, emotional peace, marital bliss, and career authority. For example, Jupiter in the 10th house creates executive leadership Raj Yogas, helping individuals rise to prominent administrative and management roles.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">2. The Fortune Triad: Trikona Houses (1, 5, 9)</h3>
-      <p className="leading-relaxed text-gray-700">The 1st, 5th, and 9th houses form the Laxmi Sthanas. The 9th house is widely considered the house of supreme luck (Bhagya Bhava). A strong 9th house lord brings unexpected prosperity, spiritual guidance, and divine protection throughout life. Meanwhile, the 5th house governs past life merits (Purva Punya) and creative intelligence.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">3. Dusthana Houses (6, 8, 12) & Practical Remedies</h3>
-      <p className="leading-relaxed text-gray-700">The 6th, 8th, and 12th houses represent challenges, transformation, and liberation. While planets here cause initial obstacles, strong placement of lords can yield VIP Vipreet Raj Yogas. If malefic planets like Saturn or Rahu afflict a key house, Vedic tradition recommends specific mantra chants, gemstone therapy under expert guidance, and regular Saturday donations.</p>
-    `
-  },
-  {
-    id: 'mangal-dosha-remedies',
-    slug: 'mangal-dosha-remedies',
-    title: 'Mangal Dosha Decoded: Myths, Realities & Effective Vedic Remedies',
-    category: 'Vedic Astrology',
-    trending: true,
-    excerpt: 'Is Mangal Dosha causing marital delays? Learn the scientific Vedic principles behind Mars placement and simple remedies that neutralize its impact.',
-    image: '/guide_doshas.jpg',
-    author: { name: 'Dr. Sunita Sharma', role: 'Relationship Astrologer', avatar: '/astrologer_avatar_2.jpg' },
-    date: 'Jul 24, 2026',
-    readTime: '5 min read',
-    views: '18.9K',
-    likes: 1250,
-    tags: ['Manglik', 'Marriage', 'Remedies', 'Mars Transit'],
-    content: `
-      <p className="leading-relaxed text-gray-700 font-normal">Mangal Dosha (Manglik Dosh) occurs when the fiery planet Mars is placed in the 1st, 4th, 7th, 8th, or 12th house of your birth chart. While often feared as a major marital obstruction, classical Vedic texts reveal that over 50% of birth charts contain some form of Mangal Dosha that gets automatically canceled through favorable planetary aspects.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Automatic Cancellation Rules in Vedic Astrology</h3>
-      <p className="leading-relaxed text-gray-700">If Mars is placed in its own sign (Aries or Scorpio) or exalted sign (Capricorn), the malefic intensity of Mangal Dosha is completely nullified. Furthermore, if your partner also has Mars placed in a similar position, mutual cancellation occurs naturally, bringing deep harmony and mutual resilience to the marriage.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Effective Vedic Remedies for Peaceful Relationships</h3>
-      <p className="leading-relaxed text-gray-700">Ancient scriptures suggest practical remedies to align fiery Mars vibrations without fear:</p>
-      <ul className="list-disc pl-5 space-y-1.5 text-gray-700 mt-2">
-        <li>Recite the Hanuman Chalisa or Sundarkand every Tuesday morning with devotion.</li>
-        <li>Offer red lentils (Masoor Dal), jaggery, and red flowers to underprivileged individuals on Tuesdays.</li>
-        <li>Wear a natural Red Coral (Moonga) gemstone in a silver or copper ring after professional chart verification.</li>
-        <li>Perform Kumbh Vivah or Vishnu Pratima Vivah if severe Mars affliction is detected in the 7th house.</li>
-      </ul>
-    `
-  },
-  {
-    id: 'life-number-calculator-2026',
-    slug: 'life-number-calculator-2026',
-    title: 'Numerology 2026: Calculate Your Life Path Number & Financial Prospects',
-    category: 'Numerology',
-    trending: false,
-    excerpt: 'Your birth date holds secret vibrational frequencies. Discover your Life Path Number and what universal energies are shaping your personal growth in 2026.',
-    image: '/guide_kundli_basics.jpg',
-    author: { name: 'Pandit Rajesh Shastri', role: 'Numerology Expert', avatar: '/astrologer_avatar_3.jpg' },
-    date: 'Jul 22, 2026',
-    readTime: '4 min read',
-    views: '9.4K',
-    likes: 610,
-    tags: ['Numerology', 'Life Path', '2026 Predictions', 'Wealth'],
-    content: `
-      <p className="leading-relaxed text-gray-700 font-normal">Numerology is the ancient science of cosmic numbers and vibrational frequencies. By reducing your complete birth date (Day + Month + Year) to a single digit between 1 and 9, you unlock your core Life Path Number — revealing your inherent talents, career aptitude, financial timing, and ultimate life purpose.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">How to Calculate Your Life Path Number</h3>
-      <p className="leading-relaxed text-gray-700">For example, if your birth date is October 14, 1995: Add Month (1+0=1), Day (1+4=5), and Year (1+9+9+5=24 -> 2+4=6). Now add all three sums: 1 + 5 + 6 = 12 -> 1 + 2 = 3. Your Life Path Number is 3, governing communication, creativity, and public influence.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Universal Energies in 2026 (Number 10/1 Year)</h3>
-      <p className="leading-relaxed text-gray-700">The year 2026 (2+0+2+6 = 10 -> 1) is ruled by the Sun. It marks a powerful universal cycle of fresh starts, innovation, financial expansion, and executive leadership across all Life Path Numbers.</p>
-    `
-  },
-  {
-    id: 'gajakesari-raj-yoga',
-    slug: 'gajakesari-raj-yoga',
-    title: 'Gajakesari Raj Yoga: Is Jupiter & Moon Aligning For Sudden Financial Wealth?',
-    category: 'Kundli',
-    trending: true,
-    excerpt: 'When Jupiter and Moon form a 1st, 4th, 7th, or 10th house relation, Gajakesari Raj Yoga is activated. Discover if your chart possesses this royal yoga.',
-    image: '/guide_yogas.jpg',
-    author: { name: 'Acharya Vikramaditya', role: 'Senior Vedic Astrologer', avatar: '/astrologer_avatar_1.jpg' },
-    date: 'Jul 18, 2026',
-    readTime: '5 min read',
-    views: '11.8K',
-    likes: 930,
-    tags: ['Raj Yoga', 'Gajakesari', 'Jupiter', 'Wealth Kundli'],
-    content: `
-      <p className="leading-relaxed text-gray-700 font-normal">Gajakesari Yoga is widely celebrated as one of the most benevolent wealth and honor Yogas in classical Vedic Astrology. "Gaja" in Sanskrit signifies an elephant (representing immense memory, majesty, and royalty), while "Kesari" signifies a lion (symbolizing bravery, authority, and unshakeable confidence).</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">How Gajakesari Yoga Forms in Your Birth Chart</h3>
-      <p className="leading-relaxed text-gray-700">This auspicious yoga is activated when Jupiter (Guru) is placed in a Kendra house (1st, 4th, 7th, or 10th house) from the Moon, without being afflicted by malefic aspect from Rahu, Ketu, or combust Sun. When present in favorable signs such as Cancer, Sagittarius, or Pisces, its potency multiplies tenfold.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Key Life Benefits & Activation Period</h3>
-      <p className="leading-relaxed text-gray-700">Individuals blessed with Gajakesari Yoga enjoy high intellectual reputation, executive positions, steady wealth accumulation, and deep family prosperity. The yoga yields its maximum rewards during the Vimshottari Mahadasha or Antardasha of Jupiter and Moon, bringing sudden career breakthroughs and public recognition.</p>
-    `
-  },
-  {
-    id: '27-nakshatras-secrets',
-    slug: '27-nakshatras-secrets',
-    title: '27 Stellar Nakshatras: How Your Birth Constellation Shapes Your Soul',
-    category: 'Zodiac Signs',
-    trending: false,
-    excerpt: 'Beyond 12 Sun signs lie 27 powerful Nakshatras (lunar mansions). Learn your birth star characteristics, ruling deity, and life purpose.',
-    image: '/guide_nakshatras.jpg',
-    author: { name: 'Dr. Sunita Sharma', role: 'Relationship Astrologer', avatar: '/astrologer_avatar_2.jpg' },
-    date: 'Jul 15, 2026',
-    readTime: '6 min read',
-    views: '16.4K',
-    likes: 1420,
-    tags: ['Nakshatra', 'Lunar Mansions', 'Moon Sign', 'Soul Purpose'],
-    content: `
-      <p className="leading-relaxed text-gray-700 font-normal">While Western astrology relies heavily on monthly Sun Signs, classical Vedic Astrology assigns paramount importance to Moon Nakshatras — the 27 stellar constellations through which the Moon travels each month. Your birth Nakshatra dictates your emotional temperament, subconscious mind, and karmic life path.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Structure of the 27 Lunar Mansions</h3>
-      <p className="leading-relaxed text-gray-700">The 360-degree zodiac belt is divided into 27 equal Nakshatras of 13 degrees and 20 minutes each, starting from Ashwini in Aries to Revati in Pisces. Every Nakshatra is subdivided into 4 Padas (quarters) and governed by a specific celestial deity, planetary ruler, and animal totem.</p>
-
-      <h3 className="text-xl font-bold text-gray-900 mt-6 mb-2">Unlocking Your Soul Purpose Through Nakshatra Padas</h3>
-      <p className="leading-relaxed text-gray-700">By analyzing your Moon's exact Nakshatra and Pada at birth, an astrologer can accurately predict career inclination, marriage compatibility, health vulnerabilities, and the exact Mahadasha sequence governing your life timeline.</p>
-    `
-  }
-];
+// ARTICLES fetched dynamically
 
 export default function BlogPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -170,7 +39,8 @@ export default function BlogPage() {
   // ── ASTROLOGER ROLE STATE ──
   const [isPractitioner, setIsPractitioner] = useState(false);
   const [practitionerName, setPractitionerName] = useState('Astrologer');
-  const [allArticles, setAllArticles] = useState<any[]>(ARTICLES);
+  const [allArticles, setAllArticles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // ── BLOG WRITE/EDIT FORM STATE ──
   const [showBlogForm, setShowBlogForm] = useState(false);
@@ -192,6 +62,37 @@ export default function BlogPage() {
         setPractitionerName(name || 'Astrologer');
       }
     }
+
+    const fetchBlogs = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/blogs`).then(r => r.json());
+        if (res.success) {
+          const mapped = res.data.blogs.map((b: any) => ({
+            id: b.id,
+            slug: b.id,
+            title: b.title,
+            category: 'General',
+            excerpt: b.content.substring(0, 150) + '...',
+            image: b.imageUrl || '/guide_12_houses.jpg',
+            author: { name: b.author || 'Admin', role: 'Author', avatar: '/astrologer_avatar_1.jpg' },
+            date: new Date(b.createdAt).toLocaleDateString(),
+            readTime: '5 min read',
+            views: '0',
+            likes: 0,
+            trending: false,
+            tags: [],
+            content: b.content
+          }));
+          setAllArticles(mapped);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBlogs();
   }, []);
 
   const filteredArticles = allArticles.filter((art) => {

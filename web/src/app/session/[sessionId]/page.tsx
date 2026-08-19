@@ -41,6 +41,9 @@ export default function SessionPage() {
     agoraApi.getChannel(token, sessionId).then((res) => {
       if (res.success && res.data) {
         setSessionType(res.data.sessionType);
+        if (res.data.sessionType === 'AUDIO' || res.data.sessionType === 'VIDEO') {
+          setTab('call');
+        }
       }
     });
 

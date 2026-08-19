@@ -51,6 +51,7 @@ export interface PractitionerProfile {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating?: number;
   reviewCount?: number;
 }
@@ -112,8 +113,14 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
-  googleSignIn: (idToken: string) =>
-    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+  requestLoginOtp: (phone: string, role?: 'user' | 'practitioner') =>
+    request('/api/auth/login-otp/request', { method: 'POST', body: JSON.stringify({ phone, role }) }),
+
+  verifyLoginOtp: (phone: string, otp: string, role?: 'user' | 'practitioner') =>
+    request<AuthData | any>('/api/auth/login-otp/verify', { method: 'POST', body: JSON.stringify({ phone, otp, role }) }),
+
+  googleSignIn: (idToken: string, role?: string) =>
+    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, role }) }),
 
   appleSignIn: (body: { appleId: string; email?: string; name?: string }) =>
     request<AuthData>('/api/auth/apple', { method: 'POST', body: JSON.stringify(body) }),
@@ -142,10 +149,10 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify({ email, password }) }
     ),
 
-  practitionerRegister: (name: string, email: string, password: string) =>
-    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+  practitionerRegister: (body: { name: string; email?: string; phone?: string; password: string; verifyMethod?: 'email' | 'sms' }) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; phone: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string; verifyMethod?: string }>(
       '/api/auth/practitioner/register',
-      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+      { method: 'POST', body: JSON.stringify(body) }
     ),
 
   refresh: (refreshToken: string) =>
@@ -240,6 +247,30 @@ export const practitionersApi = {
 
 
 export const sessionsApi = {
+  getRequests: (token: string) =>
+    request<{ sessions: any[] }>('/api/schedules/requests', { headers: authHeader(token) }),
+
+  proposeTimes: (token: string, sessionId: string, slots: { startTime: string; endTime: string }[]) =>
+    request(`/api/schedules/${sessionId}/propose`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ slots }),
+    }),
+
+  selectTime: (token: string, sessionId: string, proposalId: string) =>
+    request(`/api/schedules/${sessionId}/select`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ proposalId }),
+    }),
+
+  requestSession: (token: string, practitionerId: string) =>
+    request<{ session: { id: string; status: string; type: string } }>('/api/schedules/request', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ practitionerId }),
+    }),
+
   create: (token: string, practitionerId: string, type: 'CHAT' | 'AUDIO' | 'VIDEO') =>
     request<{ session: { id: string; status: string; type: string } }>('/api/sessions', {
       method: 'POST',
@@ -263,7 +294,7 @@ export const sessionsApi = {
     request(`/api/sessions/${sessionId}/reject`, { method: 'POST', headers: authHeader(token) }),
 
   connect: (token: string, sessionId: string) =>
-    request(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
+    request<{ session: { startTime: string } }>(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
 
   submitTranscript: (token: string, sessionId: string, transcriptText: string) =>
     request(`/api/sessions/${sessionId}/transcript`, {
