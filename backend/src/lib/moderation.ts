@@ -13,7 +13,7 @@ export function scanContent(text: string): { flagged: boolean; reasons: string[]
 export async function flagContentIfNeeded(
   content: string,
   source: string,
-  meta: { sessionId?: string; userId?: string; practitionerId?: string; transcriptId?: string }
+  meta: { sessionId?: string; userId?: string; practitionerId?: string; transcriptId?: string; chatMessageId?: string }
 ): Promise<void> {
   const { flagged, reasons } = scanContent(content);
   if (!flagged) return;

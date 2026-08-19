@@ -3,34 +3,55 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { astrologerApi, astrologerTokenStore } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronRight, User, Mail, MapPin, Globe, Briefcase } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 
-const COUNTRY_CODES = [
-  { flag: '🇮🇳', code: '+91', country: 'India' },
-  { flag: '🇺🇸', code: '+1',  country: 'USA' },
-  { flag: '🇬🇧', code: '+44', country: 'UK' },
-  { flag: '🇦🇪', code: '+971', country: 'UAE' },
-  { flag: '🇸🇬', code: '+65', country: 'Singapore' },
-  { flag: '🇦🇺', code: '+61', country: 'Australia' },
-  { flag: '🇲🇾', code: '+60', country: 'Malaysia' },
-  { flag: '🇨🇦', code: '+1',  country: 'Canada' },
-];
+function StepBar({ step }: { step: number }) {
+  const steps = ['About You', 'Your Practice', 'Final Details'];
+  return (
+    <div className="flex items-center justify-center gap-0 mb-10">
+      {steps.map((label, i) => {
+        const s = i + 1;
+        const done = step > s;
+        const active = step === s;
+        return (
+          <div key={s} className="flex items-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
+                done    ? 'bg-amber-500 border-amber-500 text-white' :
+                active  ? 'bg-white border-amber-500 text-amber-600' :
+                          'bg-white border-gray-200 text-gray-400'
+              }`}>
+                {done ? '✓' : s}
+              </div>
+              <span className={`text-[11px] font-medium hidden sm:block ${active ? 'text-amber-600' : done ? 'text-amber-400' : 'text-gray-400'}`}>{label}</span>
+            </div>
+            {s < 3 && (
+              <div className={`w-16 sm:w-24 h-0.5 mx-1 mb-5 rounded ${done ? 'bg-amber-400' : 'bg-gray-200'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-const PRIMARY_SKILLS = [
-  'Vedic Astrology', 'Western Astrology', 'KP Astrology', 'Lal Kitab',
-  'Tarot Card Reading', 'Numerology', 'Vastu Shastra', 'Palmistry',
-  'Face Reading', 'Reiki Healing', 'Chakra Balancing', 'Meditation',
-  'Yoga', 'Ayurveda', 'Life Coaching', 'Spiritual Coaching',
-];
+const inputCls = "w-full h-12 rounded-xl border border-yellow-200 bg-[#fffbf0] pl-11 pr-4 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition";
 
-const LANGUAGES = [
-  'Hindi', 'English', 'Tamil', 'Telugu', 'Kannada',
-  'Malayalam', 'Bengali', 'Marathi', 'Gujarati', 'Punjabi',
-  'Odia', 'Urdu', 'Sanskrit',
-];
+function Field({ label, required, icon, children }: { label: string; required?: boolean; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-semibold text-gray-700">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <div className="relative">
+        <span className="absolute left-3.5 top-3.5 text-gray-400">{icon}</span>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function AstrologerOnboardingPage() {
   const router = useRouter();
@@ -38,246 +59,131 @@ export default function AstrologerOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [countryCode, setCountryCode] = useState('+91');
-  const [countryFlag, setCountryFlag] = useState('🇮🇳');
-  const [countryName, setCountryName] = useState('India');
-  const [phoneNumber, setPhoneNumber] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    const saved = localStorage.getItem('hca_phone') ?? '';
-    const codes = ['+971', '+91', '+65', '+61', '+60', '+44', '+1'];
-    for (const c of codes) {
-      if (saved.startsWith(c)) return saved.slice(c.length);
-    }
-    return saved.replace(/\D/g, '');
-  });
-  const [fullName, setFullName] = useState('');
-  const [primarySkill, setPrimarySkill] = useState('');
-  const [languages, setLanguages] = useState<string[]>([]);
-  const [gender, setGender] = useState('');
-  const [agreed, setAgreed] = useState(false);
-
-  const toggleLanguage = (lang: string) =>
-    setLanguages((prev) => prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]);
+  const [form, setForm] = useState({ fullName: '', businessName: '', email: '', location: '', website: '' });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     const token = astrologerTokenStore.getAccess();
     if (!token) { router.replace('/astrologer/login'); return; }
-
     astrologerApi.getApplication(token).then((res) => {
       if (!res.success) { astrologerTokenStore.clear(); router.replace('/astrologer/login'); return; }
       const p = res.data?.profile;
-      if (!p) { setLoading(false); return; }
-      if (p.applicationStatus === 'APPROVED' && p.accountStatus === 'ACTIVE') {
-        router.replace('/astrologer/dashboard'); return;
+      if (p) {
+        if (p.applicationStatus === 'APPROVED' && p.accountStatus === 'ACTIVE') { router.replace('/astrologer/dashboard'); return; }
+        if (['ADMIN_REVIEW', 'UNDER_REVIEW', 'PENDING_REVIEW', 'SUBMITTED'].includes(p.applicationStatus)) { router.replace('/astrologer/onboarding/submitted'); return; }
+        if (p.fullLegalName) set('fullName', p.fullLegalName);
+        if (p.displayName) set('businessName', p.displayName);
+        if (p.email) set('email', p.email);
+        if (p.city || p.country) set('location', [p.city, p.country].filter(Boolean).join(', '));
       }
-      if (['ADMIN_REVIEW', 'UNDER_REVIEW', 'PENDING_REVIEW', 'SUBMITTED'].includes(p.applicationStatus)) {
-        router.replace('/astrologer/onboarding/submitted'); return;
-      }
-      // Pre-fill if returning
-      if (p.fullLegalName) setFullName(p.fullLegalName);
-      if (p.gender) setGender(p.gender);
-      if (p.languages?.length) setLanguages(p.languages);
-      if (p.specializations?.length) setPrimarySkill(p.specializations[0]);
       setLoading(false);
-    }).catch(() => { router.replace('/astrologer/login'); });
+    }).catch(() => router.replace('/astrologer/login'));
   }, [router]);
 
   const handleNext = async () => {
-    if (!phoneNumber.trim()) { setError('Enter your mobile number.'); return; }
-    if (!fullName.trim()) { setError('Enter your full name.'); return; }
-    if (!primarySkill) { setError('Select your primary skill.'); return; }
-    if (languages.length === 0) { setError('Select at least one language.'); return; }
-    if (!gender) { setError('Select your gender.'); return; }
-    if (!agreed) { setError('Please agree to the Terms & Conditions.'); return; }
-
+    if (!form.fullName.trim()) { setError('Full name is required.'); return; }
+    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) { setError('Valid email is required.'); return; }
+    if (!form.location.trim()) { setError('Please tell us where you are based.'); return; }
     const token = astrologerTokenStore.getAccess();
     if (!token) { router.replace('/astrologer/login'); return; }
-
-    setSaving(true);
-    setError('');
+    setSaving(true); setError('');
     try {
       await astrologerApi.updateApplication(token, {
-        fullLegalName: fullName,
-        displayName: fullName,
-        gender,
-        languages,
-        specializations: [primarySkill],
-        step: 2,
+        fullLegalName: form.fullName,
+        displayName: form.businessName || form.fullName,
+        email: form.email,
+        city: form.location,
+        step: 1,
       });
       router.push('/astrologer/onboarding/profile');
-    } catch {
-      setError('Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+    } catch { setError('Failed to save. Please try again.'); }
+    finally { setSaving(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#fffbf0]">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#fffbf0]">
+      <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#fffbf0] flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
-        {/* Title */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-gray-900">Expert Registration</h1>
-          <p className="text-gray-500 text-sm mt-2">Join HealConnect as a verified spiritual expert</p>
+      {/* Left panel */}
+      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10">
+          <Link href="/" className="flex items-center gap-2 mb-16">
+            <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
+            <span className="text-2xl font-extrabold text-white">HealConnect</span>
+          </Link>
+          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">
+            Practitioner<br />Interest Form
+          </h1>
+          <p className="text-amber-100 text-lg font-medium mb-2">Discover. Connect. Thrive.</p>
+          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+            We're building a curated community of trusted practitioners across holistic health, astrology, spirituality, and personal development.
+          </p>
+          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+            This short form takes around 5 minutes. If we feel your practice could be a good fit, we'll be in touch for a conversation.
+          </p>
+        </div>
+        <div className="relative z-10 border-t border-white/20 pt-6">
+          <p className="text-amber-100/60 text-xs">© 2026 HealConnect. All rights reserved.</p>
+        </div>
+      </div>
+
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+
+        {/* Mobile logo */}
+        <div className="flex items-center gap-2 mb-8 md:hidden">
+          <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
+          <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-amber-100 p-8 space-y-5">
+        <div className="w-full max-w-md">
+          <StepBar step={1} />
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
-          )}
+          <div className="bg-white rounded-2xl shadow-xl border border-yellow-100 p-8">
+            <h2 className="text-xl font-extrabold text-gray-900 mb-1">Tell us about you</h2>
+            <p className="text-sm text-gray-500 mb-6">Basic contact information so we can get in touch.</p>
 
-          {/* Mobile Number */}
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-1 block">Mobile Number</Label>
-            <div className="flex gap-2">
-              {/* Country selector */}
-              <div className="relative">                <select
-                  value={countryCode}
-                  onChange={(e) => {
-                    const selected = COUNTRY_CODES.find((c) => c.code === e.target.value && c.country === e.target.options[e.target.selectedIndex].dataset.country);
-                    const opt = COUNTRY_CODES[e.target.selectedIndex];
-                    setCountryCode(opt.code);
-                    setCountryFlag(opt.flag);
-                    setCountryName(opt.country);
-                  }}
-                  className="h-11 pl-3 pr-8 rounded-lg border border-gray-200 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-400 appearance-none cursor-pointer"
-                >
-                  {COUNTRY_CODES.map((c, i) => (
-                    <option key={i} value={c.code} data-country={c.country}>
-                      {c.flag} {c.code} {c.country}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
-              </div>
-              {/* Number input */}
-              <Input
-                type="tel"
-                inputMode="numeric"
-                placeholder="98765 43210"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s]/g, ''))}
-                className="flex-1 h-11"
-              />
+            {error && (
+              <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>
+            )}
+
+            <div className="space-y-4">
+              <Field label="Full Name" required icon={<User className="w-4 h-4" />}>
+                <input className={inputCls} placeholder="Your full name" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
+              </Field>
+              <Field label="Professional / Business Name" icon={<Briefcase className="w-4 h-4" />}>
+                <input className={inputCls} placeholder="Optional" value={form.businessName} onChange={e => set('businessName', e.target.value)} />
+              </Field>
+              <Field label="Email" required icon={<Mail className="w-4 h-4" />}>
+                <input className={inputCls} type="email" placeholder="you@example.com" value={form.email} onChange={e => set('email', e.target.value)} />
+              </Field>
+              <Field label="Where are you based?" required icon={<MapPin className="w-4 h-4" />}>
+                <input className={inputCls} placeholder="Country / City" value={form.location} onChange={e => set('location', e.target.value)} />
+              </Field>
+              <Field label="Website or social media" icon={<Globe className="w-4 h-4" />}>
+                <input className={inputCls} placeholder="Optional — link to your work" value={form.website} onChange={e => set('website', e.target.value)} />
+              </Field>
             </div>
+
+            <button onClick={handleNext} disabled={saving}
+              className="mt-7 w-full h-12 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-bold rounded-full text-sm shadow-lg flex items-center justify-center gap-2 transition-colors">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Continue <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Full Name */}
-          <div>
-            <Label htmlFor="fullName" className="text-sm font-medium text-gray-700">Full Name</Label>
-            <Input
-              id="fullName"
-              placeholder="As per government ID"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 h-11"
-            />
-          </div>
-
-          {/* Primary Skill */}
-          <div>
-            <Label htmlFor="primarySkill" className="text-sm font-medium text-gray-700">Primary Skill</Label>
-            <div className="relative mt-1">
-              <select
-                id="primarySkill"
-                value={primarySkill}
-                onChange={(e) => setPrimarySkill(e.target.value)}
-                className="w-full h-11 pl-3 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 appearance-none"
-              >
-                <option value="">Select your primary skill</option>
-                {PRIMARY_SKILLS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Languages Known */}
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
-              Languages Known
-              {languages.length > 0 && <span className="ml-2 text-xs text-amber-600">({languages.length} selected)</span>}
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {LANGUAGES.map((lang) => (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => toggleLanguage(lang)}
-                  className={`px-3 py-1.5 rounded-full text-xs border font-medium transition-colors ${
-                    languages.includes(lang)
-                      ? 'bg-amber-500 text-white border-amber-500'
-                      : 'border-gray-200 text-gray-600 hover:border-amber-300'
-                  }`}
-                >
-                  {lang}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Gender */}
-          <div>
-            <Label htmlFor="gender" className="text-sm font-medium text-gray-700">Gender</Label>
-            <div className="relative mt-1">
-              <select
-                id="gender"
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full h-11 pl-3 pr-8 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 appearance-none"
-              >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* T&C */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-amber-500 flex-shrink-0"
-            />
-            <span className="text-sm text-gray-600">
-              I agree to the{' '}
-              <a href="/terms" target="_blank" className="text-amber-600 underline hover:text-amber-700">Terms & Conditions</a>
-              {' '}and{' '}
-              <a href="/privacy" target="_blank" className="text-amber-600 underline hover:text-amber-700">Privacy Policy</a>
-            </span>
-          </label>
-
-          {/* Next Button */}
-          <Button
-            onClick={handleNext}
-            disabled={saving}
-            className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full text-base shadow-lg border-0"
-          >
-            {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-            Continue <ChevronRight className="ml-2 w-4 h-4" />
-          </Button>
-
+          <p className="text-center text-sm text-gray-500 mt-5">
+            Already registered?{' '}
+            <Link href="/astrologer/login" className="text-amber-600 font-semibold hover:underline">Sign in</Link>
+          </p>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Already registered?{' '}
-          <a href="/astrologer/login" className="text-amber-600 hover:text-amber-700 font-medium">Sign in</a>
-        </p>
       </div>
     </div>
   );

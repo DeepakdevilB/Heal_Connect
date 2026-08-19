@@ -12,7 +12,7 @@ function getContainerClient() {
 export async function uploadProfilePhoto(
   buffer: Buffer,
   mimeType: string,
-  folder: 'users' | 'practitioners'
+  folder: 'users' | 'practitioners' | 'astrologer-photos' | 'astrologer-docs'
 ): Promise<string> {
   const ext = mimeType.split('/')[1] || 'jpg';
   const blobName = `${folder}/${uuidv4()}.${ext}`;

@@ -23,6 +23,162 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000;       // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000;        // 1 minute
 
+// ─── POST /api/auth/astrologer/register ──────────────────────────────────────
+router.post(
+  '/register',
+  [
+    body('email').trim().isEmail().withMessage('Valid email required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { email, password, name } = req.body as { email: string; password: string; name: string };
+    try {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        res.status(409).json({ success: false, message: 'An account with this email already exists.', code: 'EMAIL_EXISTS' });
+        return;
+      }
+
+      const bcrypt = await import('bcryptjs');
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const user = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          provider: 'email',
+          isEmailVerified: false,
+          wallet: { create: { balance: 0 } },
+        },
+      });
+
+      const profile = await prisma.astrologerProfile.create({
+        data: {
+          userId: user.id,
+          fullLegalName: name,
+          displayName: name,
+          applicationStatus: 'DRAFT',
+          application: { create: { step: 1 } },
+        },
+      });
+
+      const payload = { userId: user.id, astrologerId: profile.id, role: 'ASTROLOGER' as const };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      await prisma.refreshToken.create({
+        data: { userId: user.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+      });
+
+      await audit(profile.id, user.id, 'REGISTER', req);
+
+      res.status(201).json({
+        success: true,
+        message: 'Account created successfully.',
+        data: {
+          accessToken,
+          refreshToken,
+          astrologer: {
+            id: profile.id,
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            applicationStatus: profile.applicationStatus,
+            accountStatus: profile.accountStatus,
+          },
+          redirect: '/astrologer/onboarding',
+        },
+      });
+    } catch (err) {
+      console.error('Astrologer register error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error.' });
+    }
+  }
+);
+
+// ─── POST /api/auth/astrologer/login-email ────────────────────────────────────
+router.post(
+  '/login-email',
+  [
+    body('email').trim().isEmail().withMessage('Valid email required'),
+    body('password').notEmpty().withMessage('Password required'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { email, password } = req.body as { email: string; password: string };
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user || !user.passwordHash) {
+        res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+        return;
+      }
+
+      const bcrypt = await import('bcryptjs');
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
+        res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+        return;
+      }
+
+      if (user.isBanned) {
+        res.status(403).json({ success: false, message: 'Account suspended.', code: 'ACCOUNT_SUSPENDED' });
+        return;
+      }
+
+      let profile = await prisma.astrologerProfile.findUnique({ where: { userId: user.id } });
+      if (!profile) {
+        profile = await prisma.astrologerProfile.create({
+          data: {
+            userId: user.id,
+            fullLegalName: user.name || '',
+            displayName: user.name || '',
+            applicationStatus: 'DRAFT',
+            application: { create: { step: 1 } },
+          },
+        });
+      }
+
+      const payload = { userId: user.id, astrologerId: profile.id, role: 'ASTROLOGER' as const };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+
+      await prisma.refreshToken.create({
+        data: { userId: user.id, token: refreshToken, expiresAt: getRefreshTokenExpiry() },
+      });
+
+      await audit(profile.id, user.id, 'LOGIN', req);
+
+      const isApproved = profile.applicationStatus === 'APPROVED' && profile.accountStatus === 'ACTIVE';
+      const isSubmitted = ['ADMIN_REVIEW', 'SUBMITTED'].includes(profile.applicationStatus);
+
+      res.json({
+        success: true,
+        message: 'Login successful.',
+        data: {
+          accessToken,
+          refreshToken,
+          astrologer: {
+            id: profile.id,
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            applicationStatus: profile.applicationStatus,
+            accountStatus: profile.accountStatus,
+            adminVerified: profile.adminVerified,
+          },
+          redirect: isApproved ? '/astrologer/dashboard' : isSubmitted ? '/astrologer/onboarding/submitted' : '/astrologer/onboarding',
+        },
+      });
+    } catch (err) {
+      console.error('Astrologer login-email error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error.' });
+    }
+  }
+);
+
 // ─── Helper: write audit log (non-blocking) ───────────────────────────────────
 async function audit(
   astrologerProfileId: string | null,

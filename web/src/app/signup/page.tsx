@@ -149,7 +149,7 @@ function SignupInner() {
                   role === 'user' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
                 <User className="w-4 h-4" /> User
               </button>
-              <button type="button" onClick={() => router.push('/astrologer/login')}
+              <button type="button" onClick={() => router.push('/expert/signup')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   role === 'expert' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
                 <Sparkles className="w-4 h-4" /> Expert

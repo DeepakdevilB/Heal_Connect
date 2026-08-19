@@ -1,76 +1,56 @@
 'use client';
 
-import { astrologerTokenStore } from '@/lib/api';
 import { CheckCircle } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 
 export default function AstrologerSubmittedPage() {
-  const profile = astrologerTokenStore.getProfile();
-  const name = profile?.displayName || 'Astrologer';
-
   return (
-    <div className="min-h-screen bg-[#fffbf0] flex items-center justify-center px-4 py-10">
-      <div className="max-w-lg w-full space-y-4">
+    <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
-        {/* Success card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-amber-100 p-8 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-green-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Application Submitted!</h1>
-          <p className="text-amber-600 font-medium text-sm mb-3">Welcome, {name}</p>
-          <p className="text-gray-500 text-sm leading-relaxed">
-            Your application is now under review. Our team carefully verifies every expert to maintain platform quality.
+      {/* Left panel */}
+      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10">
+          <Link href="/" className="flex items-center gap-2 mb-16">
+            <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
+            <span className="text-2xl font-extrabold text-white">HealConnect</span>
+          </Link>
+          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">Thank you<br />for applying.</h1>
+          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+            We carefully review every application to maintain the quality of our practitioner community.
           </p>
         </div>
+        <div className="relative z-10 border-t border-white/20 pt-6">
+          <p className="text-amber-100/60 text-xs">© 2026 HealConnect. All rights reserved.</p>
+        </div>
+      </div>
 
-        {/* Status tracker */}
-        <div className="bg-white rounded-2xl shadow-xl border border-amber-100 p-6">
-          <h2 className="font-semibold text-gray-800 mb-4 text-sm uppercase tracking-wide">Application Status</h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Application Received',   desc: 'Your details have been saved',              done: true,  active: false },
-              { label: 'Document Verification',  desc: 'ID & professional credentials check',       done: false, active: true  },
-              { label: 'Admin Review',            desc: 'Final approval by our team',                done: false, active: false },
-              { label: 'Account Activated',       desc: 'Start taking consultations',                done: false, active: false },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold ${
-                  item.done   ? 'bg-green-500 text-white' :
-                  item.active ? 'bg-amber-500 text-white ring-4 ring-amber-100' :
-                  'bg-gray-100 text-gray-400'
-                }`}>
-                  {item.done ? '✓' : i + 1}
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-medium ${item.done || item.active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</p>
-                  <p className={`text-xs ${item.done || item.active ? 'text-gray-500' : 'text-gray-300'}`}>{item.desc}</p>
-                </div>
-                {item.active && (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium flex-shrink-0">In Progress</span>
-                )}
-              </div>
-            ))}
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+        <div className="flex items-center gap-2 mb-8 md:hidden">
+          <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
+          <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
+        </div>
+
+        <div className="w-full max-w-md text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10 text-green-500" />
           </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-3">
+            Thank you for your interest in HealConnect.
+          </h1>
+          <p className="text-gray-500 text-sm leading-relaxed">
+            We'll review your application and be in touch if we'd like to invite you to the next stage.
+          </p>
+          <button
+            onClick={() => window.location.href = '/astrologer/login'}
+            className="mt-8 text-sm text-amber-600 hover:text-amber-700 font-semibold hover:underline transition-colors"
+          >
+            Sign in to check your status →
+          </button>
         </div>
-
-        {/* What next */}
-        <div className="bg-white rounded-2xl shadow-xl border border-amber-100 p-6">
-          <h2 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide">What Happens Next?</h2>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">📱</span> You'll receive an SMS once your application is reviewed</li>
-            <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">⏱️</span> Review typically takes <strong>2–3 business days</strong></li>
-            <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">✅</span> On approval, your account goes live and you can start earning</li>
-            <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">❓</span> If more info is needed, our team will contact you directly</li>
-          </ul>
-        </div>
-
-        <button
-          onClick={() => { astrologerTokenStore.clear(); window.location.href = '/astrologer/login'; }}
-          className="w-full py-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          Sign out and come back later →
-        </button>
-
       </div>
     </div>
   );

@@ -271,8 +271,9 @@ router.post('/me/verification/submit', requireAuth, async (req: AuthRequest, res
     const profile = await prisma.astrologerProfile.findUnique({ where: { id: aid }, include: { application: true } });
     if (!profile) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }
 
-    if (!['PROFILE_COMPLETED', 'KYC_PENDING', 'PROFESSIONAL_REVIEW'].includes(profile.applicationStatus)) {
-      res.status(400).json({ success: false, message: 'Complete your profile before submitting for verification.', code: 'PROFILE_INCOMPLETE' });
+    const nonSubmittableStatuses = ['ADMIN_REVIEW', 'APPROVED', 'REJECTED', 'SUSPENDED', 'BLOCKED'];
+    if (nonSubmittableStatuses.includes(profile.applicationStatus)) {
+      res.status(400).json({ success: false, message: 'Application already submitted or processed.', code: 'ALREADY_SUBMITTED' });
       return;
     }
 

@@ -312,6 +312,12 @@ export const astrologerAuthApi = {
   verifyOtp: (phone: string, otp: string, purpose: 'login' | 'register' = 'login') =>
     request<AstrologerAuthData>('/api/auth/astrologer/verify-otp', { method: 'POST', body: JSON.stringify({ phone, otp, purpose }) }),
 
+  register: (name: string, email: string, password: string) =>
+    request<AstrologerAuthData>('/api/auth/astrologer/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
+
+  loginEmail: (email: string, password: string) =>
+    request<AstrologerAuthData>('/api/auth/astrologer/login-email', { method: 'POST', body: JSON.stringify({ email, password }) }),
+
   logout: (accessToken: string, refreshToken?: string) =>
     request('/api/auth/astrologer/logout', {
       method: 'POST',
@@ -327,6 +333,8 @@ export interface AstrologerOnboardingProfile {
   userId: string;
   fullLegalName: string;
   displayName: string;
+  email?: string | null;
+  name?: string | null;
   dateOfBirth: string | null;
   gender: string | null;
   profilePhotoUrl: string | null;

@@ -1,268 +1,178 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { astrologerApi, astrologerTokenStore } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Loader2, ChevronLeft, Upload, CheckCircle, X, FileText, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, ChevronLeft, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 
-type DocSlot = {
-  key: string;
-  label: string;
-  required: boolean;
-  hint: string;
-  accept: string;
-};
+function StepBar({ step }: { step: number }) {
+  const steps = ['About You', 'Your Practice', 'Final Details'];
+  return (
+    <div className="flex items-center justify-center gap-0 mb-10">
+      {steps.map((label, i) => {
+        const s = i + 1;
+        const done = step > s;
+        const active = step === s;
+        return (
+          <div key={s} className="flex items-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
+                done    ? 'bg-amber-500 border-amber-500 text-white' :
+                active  ? 'bg-white border-amber-500 text-amber-600' :
+                          'bg-white border-gray-200 text-gray-400'
+              }`}>
+                {done ? '✓' : s}
+              </div>
+              <span className={`text-[11px] font-medium hidden sm:block ${active ? 'text-amber-600' : done ? 'text-amber-400' : 'text-gray-400'}`}>{label}</span>
+            </div>
+            {s < 3 && <div className={`w-16 sm:w-24 h-0.5 mx-1 mb-5 rounded ${done ? 'bg-amber-400' : 'bg-gray-200'}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-const DOC_SLOTS: DocSlot[] = [
-  { key: 'AADHAAR',     label: 'Aadhaar Card',              required: true,  hint: 'Front & back clearly visible · JPG, PNG, PDF · max 5MB', accept: 'image/jpeg,image/png,image/webp,application/pdf' },
-  { key: 'CERTIFICATE', label: 'Astrology Certificate',     required: false, hint: 'Any recognized astrology course certificate',            accept: 'image/jpeg,image/png,image/webp,application/pdf' },
-  { key: 'DEGREE',      label: 'Degree / Diploma',          required: false, hint: 'Academic degree or diploma (any field)',                  accept: 'image/jpeg,image/png,image/webp,application/pdf' },
-  { key: 'PAN',         label: 'PAN Card',                  required: false, hint: 'Required for earnings & tax purposes',                   accept: 'image/jpeg,image/png,image/webp,application/pdf' },
-  { key: 'PASSPORT',    label: 'Passport (if applicable)',  required: false, hint: 'For international experts',                              accept: 'image/jpeg,image/png,image/webp,application/pdf' },
-];
+const VERIFICATION_OPTIONS = ['Yes', 'No', "I'd like to discuss this"];
+const textareaCls = "w-full rounded-xl border border-yellow-200 bg-[#fffbf0] px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition resize-none";
 
 export default function AstrologerVerificationPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  // file state per slot
-  const [files, setFiles] = useState<Record<string, File | null>>({});
-  const [uploaded, setUploaded] = useState<Record<string, { name: string; url?: string }>>({});
-  const [uploadProgress, setUploadProgress] = useState<Record<string, boolean>>({});
-
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [anythingElse, setAnythingElse] = useState('');
+  const [verificationComfort, setVerificationComfort] = useState('');
 
   useEffect(() => {
     const token = astrologerTokenStore.getAccess();
     if (!token) { router.replace('/astrologer/login'); return; }
-
-    Promise.all([
-      astrologerApi.getApplication(token),
-      astrologerApi.getDocuments(token),
-    ]).then(([appRes, docsRes]) => {
-      if (!appRes.success) { astrologerTokenStore.clear(); router.replace('/astrologer/login'); return; }
-      const p = appRes.data?.profile;
+    astrologerApi.getApplication(token).then((res) => {
+      if (!res.success) { astrologerTokenStore.clear(); router.replace('/astrologer/login'); return; }
+      const p = res.data?.profile;
       if (p) {
         if (p.applicationStatus === 'APPROVED' && p.accountStatus === 'ACTIVE') { router.replace('/astrologer/dashboard'); return; }
         if (['ADMIN_REVIEW', 'UNDER_REVIEW', 'PENDING_REVIEW', 'SUBMITTED'].includes(p.applicationStatus)) { router.replace('/astrologer/onboarding/submitted'); return; }
-      }
-      if (docsRes.success && docsRes.data?.documents) {
-        const map: Record<string, { name: string }> = {};
-        for (const d of docsRes.data.documents) {
-          map[d.documentType] = { name: d.originalName };
-        }
-        setUploaded(map);
       }
       setLoading(false);
     }).catch(() => router.replace('/astrologer/login'));
   }, [router]);
 
-  const handleFileSelect = (key: string, file: File) => {
-    if (file.size > 5 * 1024 * 1024) { setError(`${key}: File must be under 5MB.`); return; }
-    setFiles((prev) => ({ ...prev, [key]: file }));
-    setError('');
-  };
-
-  const handleUpload = async (key: string) => {
-    const file = files[key];
-    if (!file) return;
-    const token = astrologerTokenStore.getAccess();
-    if (!token) return;
-
-    setUploadProgress((prev) => ({ ...prev, [key]: true }));
-    try {
-      const res = await astrologerApi.uploadDocument(token, file, key);
-      if (res.success) {
-        setUploaded((prev) => ({ ...prev, [key]: { name: file.name } }));
-        setFiles((prev) => ({ ...prev, [key]: null }));
-      } else {
-        setError(res.message || 'Upload failed.');
-      }
-    } catch {
-      setError('Upload failed. Please try again.');
-    } finally {
-      setUploadProgress((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
   const handleSubmit = async () => {
-    if (!uploaded['AADHAAR'] && !files['AADHAAR']) {
-      setError('Aadhaar Card is mandatory. Please upload it before submitting.');
-      return;
-    }
-
+    if (!verificationComfort) { setError('Please answer the verification question.'); return; }
     const token = astrologerTokenStore.getAccess();
     if (!token) { router.replace('/astrologer/login'); return; }
-
-    setSubmitting(true);
-    setError('');
+    setSubmitting(true); setError('');
     try {
-      // Upload any pending files first
-      for (const slot of DOC_SLOTS) {
-        if (files[slot.key]) await handleUpload(slot.key);
-      }
-
+      await astrologerApi.updateApplication(token, { previousPlatformExperience: anythingElse || undefined, step: 3 });
       await astrologerApi.submitVerification(token, {
-        idDocType: 'AADHAAR',
-        verificationType: uploaded['CERTIFICATE'] || files['CERTIFICATE'] ? 'CERTIFICATE' : 'EXPERIENCE',
-        platformProfileUrl: '',
+        verificationNotes: `Verification comfort: ${verificationComfort}${anythingElse ? ` | Notes: ${anythingElse}` : ''}`,
+        verificationType: 'EXPERIENCE',
       });
       router.push('/astrologer/onboarding/submitted');
-    } catch {
-      setError('Submission failed. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    } catch { setError('Submission failed. Please try again.'); }
+    finally { setSubmitting(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#fffbf0]">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#fffbf0]">
+      <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#fffbf0] py-10 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck className="w-6 h-6 text-amber-500" />
-            <h1 className="text-2xl font-extrabold text-gray-900">Identity Verification</h1>
-          </div>
-          <p className="text-gray-500 text-sm">
-            Upload your documents for verification. Aadhaar is mandatory. All documents are stored securely and reviewed only by our team.
+      {/* Left panel */}
+      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10">
+          <Link href="/" className="flex items-center gap-2 mb-16">
+            <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
+            <span className="text-2xl font-extrabold text-white">HealConnect</span>
+          </Link>
+          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">Almost There</h1>
+          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+            We won't ask you to upload documents at this stage. Any further verification will depend on the nature of your practice.
+          </p>
+          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+            If we feel your practice could be a good fit, we'll be in touch for a short conversation.
           </p>
         </div>
+        <div className="relative z-10 border-t border-white/20 pt-6">
+          <p className="text-amber-100/60 text-xs">© 2026 HealConnect. All rights reserved.</p>
+        </div>
+      </div>
 
-        {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            {error}
-          </div>
-        )}
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+        <div className="flex items-center gap-2 mb-8 md:hidden">
+          <Image src="/logo.png" alt="HealConnect" width={32} height={32} className="rounded-full" />
+          <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
+        </div>
 
-        <div className="space-y-4">
-          {DOC_SLOTS.map((slot) => {
-            const isUploaded = !!uploaded[slot.key];
-            const selectedFile = files[slot.key];
-            const isUploading = uploadProgress[slot.key];
+        <div className="w-full max-w-md">
+          <StepBar step={3} />
 
-            return (
-              <div key={slot.key} className={`bg-white rounded-2xl border p-5 shadow-sm ${slot.required ? 'border-amber-200' : 'border-gray-100'}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-800">{slot.label}</span>
-                      {slot.required && (
-                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">Required</span>
-                      )}
-                      {isUploaded && (
-                        <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" /> Uploaded
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{slot.hint}</p>
-                  </div>
-                </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-yellow-100 p-8 space-y-7">
+            <div>
+              <h2 className="text-xl font-extrabold text-gray-900 mb-1">Final Details</h2>
+              <p className="text-sm text-gray-500">Almost done — just a couple more things.</p>
+            </div>
 
-                {/* Already uploaded */}
-                {isUploaded && !selectedFile ? (
-                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate flex-1">{uploaded[slot.key].name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setUploaded((prev) => { const n = { ...prev }; delete n[slot.key]; return n; })}
-                      className="text-gray-400 hover:text-red-500 flex-shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : selectedFile ? (
-                  /* File selected, not yet uploaded */
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-                      <FileText className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate flex-1">{selectedFile.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => { setFiles((prev) => ({ ...prev, [slot.key]: null })); if (inputRefs.current[slot.key]) inputRefs.current[slot.key]!.value = ''; }}
-                        className="text-gray-400 hover:text-red-500 flex-shrink-0"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleUpload(slot.key)}
-                      disabled={isUploading}
-                      className="w-full py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                    >
-                      {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      {isUploading ? 'Uploading...' : 'Upload Now'}
-                    </button>
-                  </div>
-                ) : (
-                  /* Empty — show drop zone */
-                  <button
-                    type="button"
-                    onClick={() => inputRefs.current[slot.key]?.click()}
-                    className={`w-full flex items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl text-sm transition-colors ${
-                      slot.required
-                        ? 'border-amber-300 text-amber-600 hover:bg-amber-50'
-                        : 'border-gray-200 text-gray-500 hover:border-amber-300 hover:text-amber-600'
-                    }`}
-                  >
-                    <Upload className="w-5 h-5" />
-                    Click to select file
-                  </button>
-                )}
+            {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
 
-                <input
-                  ref={(el) => { inputRefs.current[slot.key] = el; }}
-                  type="file"
-                  accept={slot.accept}
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(slot.key, f); }}
-                />
+            {/* Anything else */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Anything else you'd like us to know? <span className="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <textarea className={textareaCls} rows={4} placeholder="Optional." value={anythingElse} onChange={e => setAnythingElse(e.target.value)} />
+            </div>
+
+            {/* Verification */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                If we invite you to the next stage <span className="text-red-500">*</span>
+              </label>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Would you be comfortable taking part in a short conversation and, if you progress further, providing appropriate identification and/or supporting information about your practice?
+              </p>
+              <div className="space-y-2.5">
+                {VERIFICATION_OPTIONS.map(opt => (
+                  <label key={opt} className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    verificationComfort === opt
+                      ? 'border-amber-400 bg-amber-50'
+                      : 'border-gray-200 hover:border-amber-200 bg-white'
+                  }`}>
+                    <input type="radio" name="verification" value={opt} checked={verificationComfort === opt}
+                      onChange={() => setVerificationComfort(opt)} className="accent-amber-500 w-4 h-4" />
+                    <span className="text-sm font-medium text-gray-700">{opt}</span>
+                  </label>
+                ))}
               </div>
-            );
-          })}
-        </div>
+              <p className="text-xs text-gray-400 mt-3">
+                We won't ask you to upload documents at this stage.
+              </p>
+            </div>
 
-        {/* Info box */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700 flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold mb-1">Your documents are safe</p>
-            <p className="text-xs text-blue-600">All uploaded documents are encrypted and only accessible to our verification team. They are never shared with clients.</p>
+            {/* Nav */}
+            <div className="flex justify-between items-center pt-2">
+              <button onClick={() => router.push('/astrologer/onboarding/profile')} disabled={submitting}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors">
+                <ChevronLeft className="w-4 h-4" /> Back
+              </button>
+              <button onClick={handleSubmit} disabled={submitting}
+                className="flex items-center gap-2 px-7 h-11 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-bold shadow-lg transition-colors">
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {submitting ? 'Submitting...' : 'Submit'}
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* Navigation */}
-        <div className="flex justify-between items-center mt-8 pb-6">
-          <Button variant="outline" onClick={() => router.push('/astrologer/onboarding/profile')} disabled={submitting}>
-            <ChevronLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 h-12 rounded-full shadow-lg border-0"
-          >
-            {submitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
-            {submitting ? 'Submitting...' : 'Submit Application'}
-          </Button>
-        </div>
-
       </div>
     </div>
   );
