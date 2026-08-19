@@ -113,6 +113,12 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
+  requestLoginOtp: (phone: string, role?: 'user' | 'practitioner') =>
+    request('/api/auth/login-otp/request', { method: 'POST', body: JSON.stringify({ phone, role }) }),
+
+  verifyLoginOtp: (phone: string, otp: string, role?: 'user' | 'practitioner') =>
+    request<AuthData | any>('/api/auth/login-otp/verify', { method: 'POST', body: JSON.stringify({ phone, otp, role }) }),
+
   googleSignIn: (idToken: string, role?: string) =>
     request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, role }) }),
 
@@ -143,10 +149,10 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify({ email, password }) }
     ),
 
-  practitionerRegister: (name: string, email: string, password: string) =>
-    request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
+  practitionerRegister: (body: { name: string; email?: string; phone?: string; password: string; verifyMethod?: 'email' | 'sms' }) =>
+    request<{ practitioner: { id: string; name: string; email: string | null; phone: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string; verifyMethod?: string }>(
       '/api/auth/practitioner/register',
-      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+      { method: 'POST', body: JSON.stringify(body) }
     ),
 
   refresh: (refreshToken: string) =>

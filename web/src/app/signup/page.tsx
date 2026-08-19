@@ -27,8 +27,34 @@ function SignupInner() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [signupMethod, setSignupMethod] = useState<'email' | 'phone'>('email');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authApi.verifyOtp(phone.replace(/\s+/g, ''), otp);
+      if (!res.success) {
+        setError(res.message || 'Invalid OTP');
+        return;
+      }
+      setSuccess('Phone verified!');
+      setTimeout(() => {
+        if (role === 'expert') router.push('/expert/dashboard');
+        else router.push('/dashboard');
+      }, 1200);
+    } catch {
+      setError('Failed to verify OTP.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -38,7 +64,13 @@ function SignupInner() {
     if (!pwdOk) { setError('Password must be min. 8 chars, 1 uppercase, 1 number.'); setLoading(false); return; }
     try {
       if (role === 'expert') {
-        const res = await authApi.practitionerRegister(name, email, password);
+        const res = await authApi.practitionerRegister({
+          name,
+          email: signupMethod === 'email' ? email : undefined,
+          phone: signupMethod === 'phone' ? phone.replace(/\s+/g, '') : undefined,
+          password,
+          verifyMethod: signupMethod === 'phone' ? 'sms' : 'email'
+        });
         if (!res.success || !res.data) {
           setError(res.message || 'Registration failed');
           return;
@@ -48,10 +80,21 @@ function SignupInner() {
         localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
         localStorage.setItem('hc_pid', res.data.practitioner.id);
         localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? name);
-        setSuccess('Expert account created!');
-        setTimeout(() => router.push('/expert/dashboard'), 1200);
+        
+        if (signupMethod === 'phone') {
+          router.push(`/verify-otp?phone=${encodeURIComponent(phone.replace(/\s+/g, ''))}`);
+        } else {
+          setSuccess('Expert account created!');
+          setTimeout(() => router.push('/expert/dashboard'), 1200);
+        }
       } else {
-        const res = await authApi.register({ name, email, password });
+        const res = await authApi.register({
+          name,
+          email: signupMethod === 'email' ? email : undefined,
+          phone: signupMethod === 'phone' ? phone.replace(/\s+/g, '') : undefined,
+          password,
+          verifyMethod: signupMethod === 'phone' ? 'sms' : 'email'
+        });
         if (!res.success || !res.data) {
           setError(res.errors?.length ? res.errors.map((e) => e.message).join(' · ') : res.message || 'Registration failed');
           return;
@@ -61,8 +104,13 @@ function SignupInner() {
         localStorage.removeItem('hc_practitioner_id');
         localStorage.removeItem('hc_pid');
         localStorage.removeItem('hc_practitioner_name');
-        setSuccess('Account created!');
-        setTimeout(() => router.push(`/verify-email/pending?email=${encodeURIComponent(email)}`), 1200);
+        
+        if (signupMethod === 'phone') {
+          router.push(`/verify-otp?phone=${encodeURIComponent(phone.replace(/\s+/g, ''))}`);
+        } else {
+          setSuccess('Account created!');
+          setTimeout(() => router.push(`/verify-email/pending?email=${encodeURIComponent(email)}`), 1200);
+        }
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
@@ -163,13 +211,27 @@ function SignupInner() {
                 <p className="font-semibold">✓ {success}</p>
                 <p className="text-green-600 mt-0.5">
                   {role === 'expert'
-                    ? 'Welcome! Redirecting to your expert dashboard...'
-                    : 'A verification email has been sent. Please verify before logging in.'}
+                    ? (signupMethod === 'phone' ? 'Please enter the OTP sent to your phone.' : 'Welcome! Redirecting to your expert dashboard...')
+                    : (signupMethod === 'phone' ? 'Please enter the OTP sent to your phone.' : 'A verification email has been sent. Please verify before logging in.')}
                 </p>
               </div>
             )}
 
-            <form onSubmit={handleRegister} className="space-y-4">
+            <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
+              <button type="button" onClick={() => { setSignupMethod('email'); setError(''); setSuccess(''); }}
+                className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  signupMethod === 'email' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                Email & Password
+              </button>
+              <button type="button" onClick={() => { setSignupMethod('phone'); setError(''); setSuccess(''); }}
+                className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  signupMethod === 'phone' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                Phone & OTP
+              </button>
+            </div>
+
+            {signupMethod === 'email' && (
+              <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-[#1a1a1a]">Full Name</Label>
                 <div className="relative">
@@ -201,6 +263,48 @@ function SignupInner() {
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Join as Expert' : 'Create Account'} <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
             </form>
+            )}
+
+            {signupMethod === 'phone' && (
+              <form onSubmit={otpSent ? handleVerifyOtp : handleRegister} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name-phone" className="text-[#1a1a1a]">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input id="name-phone" type="text" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} disabled={otpSent} required autoComplete="name" className="pl-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-[#1a1a1a]">Phone Number (with country code)</Label>
+                  <Input id="phone" type="tel" placeholder="+919876543210" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={otpSent} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                </div>
+                {!otpSent && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password-phone" className="text-[#1a1a1a]">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                      <Input id="password-phone" type={showPassword ? 'text' : 'password'} placeholder="Min. 8 chars, 1 uppercase, 1 number" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" className="pl-10 pr-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600" tabIndex={-1}>
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    {password.length > 0 && password.length < 8 && (
+                      <p className="text-xs text-amber-500 mt-1">Password must be at least 8 characters</p>
+                    )}
+                  </div>
+                )}
+                {otpSent && (
+                  <div className="space-y-2">
+                    <Label htmlFor="otp" className="text-[#1a1a1a]">6-digit OTP</Label>
+                    <Input id="otp" type="text" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a] tracking-widest text-center text-xl font-mono" maxLength={6} />
+                    <button type="button" onClick={() => setOtpSent(false)} className="text-sm text-[#f59e0b] hover:underline mt-1 block">Change phone number</button>
+                  </div>
+                )}
+                <Button type="submit" disabled={loading || (!!success && success !== 'Account created! OTP sent.' && success !== 'Expert account created! OTP sent.')} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{otpSent ? 'Verify & Finish' : (role === 'expert' ? 'Join as Expert' : 'Create Account')} <ArrowRight className="ml-2 h-4 w-4" /></>}
+                </Button>
+              </form>
+            )}
 
             <div className="relative flex items-center py-1">
               <div className="flex-grow border-t border-yellow-100" />

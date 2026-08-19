@@ -32,6 +32,11 @@ function LoginInner() {
   const [success, setSuccess] = useState('');
   const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
 
+  const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -66,6 +71,47 @@ function LoginInner() {
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
+  }
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!phone) { setError('Phone number is required.'); return; }
+    setLoading(true);
+    try {
+      const res = await (authApi as any).requestLoginOtp(phone.replace(/\s+/g, ''), role);
+      if (!res.success) { setError(res.message || 'Failed to send OTP.'); return; }
+      router.push(`/verify-otp?phone=${encodeURIComponent(phone.replace(/\s+/g, ''))}&type=login&role=${encodeURIComponent(role)}`);
+    } catch {
+      setError('Something went wrong sending OTP.');
+    } finally { setLoading(false); }
+  }
+
+  async function handleLoginOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    setLoading(true);
+    try {
+      const res = await (authApi as any).verifyLoginOtp(phone.replace(/\s+/g, ''), otp, role);
+      if (!res.success || !res.data) { setError(res.message || 'Invalid OTP.'); return; }
+      
+      tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
+      if (role === 'expert') {
+        localStorage.setItem('hc_role', 'practitioner');
+        localStorage.setItem('hc_practitioner_id', res.data.practitioner.id);
+        localStorage.setItem('hc_pid', res.data.practitioner.id);
+        localStorage.setItem('hc_practitioner_name', res.data.practitioner.name ?? '');
+        router.push('/expert/dashboard');
+      } else {
+        localStorage.removeItem('hc_role');
+        localStorage.removeItem('hc_practitioner_id');
+        localStorage.removeItem('hc_pid');
+        localStorage.removeItem('hc_practitioner_name');
+        router.push('/dashboard');
+      }
+    } catch {
+      setError('Something went wrong verifying OTP.');
+    } finally { setLoading(false); }
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
@@ -173,6 +219,21 @@ function LoginInner() {
               </div>
             )}
 
+            {mode === 'login' && (
+              <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1">
+                <button type="button" onClick={() => { setLoginMethod('password'); setError(''); setSuccess(''); }}
+                  className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    loginMethod === 'password' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  Email & Password
+                </button>
+                <button type="button" onClick={() => { setLoginMethod('otp'); setError(''); setSuccess(''); }}
+                  className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    loginMethod === 'otp' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  Phone & OTP
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
                 <p className="font-semibold">{error}</p>
@@ -188,7 +249,7 @@ function LoginInner() {
             )}
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
-            {mode === 'login' && (
+            {mode === 'login' && loginMethod === 'password' && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-[#1a1a1a]">Email</Label>
@@ -212,6 +273,27 @@ function LoginInner() {
                 </div>
                 <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{role === 'expert' ? 'Log in as Expert' : 'Log in'} <ArrowRight className="ml-2 h-4 w-4" /></>}
+                </Button>
+              </form>
+            )}
+
+            {mode === 'login' && loginMethod === 'otp' && (
+              <form onSubmit={otpSent ? handleLoginOtp : handleSendOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-[#1a1a1a]">Phone Number (with country code)</Label>
+                  <Input id="phone" type="tel" placeholder="+919876543210" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={otpSent} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                </div>
+                
+                {otpSent && (
+                  <div className="space-y-2">
+                    <Label htmlFor="otp" className="text-[#1a1a1a]">6-digit OTP</Label>
+                    <Input id="otp" type="text" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a] tracking-widest text-center text-xl font-mono" maxLength={6} />
+                    <button type="button" onClick={() => setOtpSent(false)} className="text-sm text-[#f59e0b] hover:underline mt-1 block">Change phone number</button>
+                  </div>
+                )}
+
+                <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{otpSent ? 'Verify & Log in' : 'Send OTP'} <ArrowRight className="ml-2 h-4 w-4" /></>}
                 </Button>
               </form>
             )}
