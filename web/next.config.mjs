@@ -2,19 +2,21 @@
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-  reactStrictMode: false, // Disable to prevent double useEffect firing (timer issue)
-  // Proxy /api/* → backend (browser calls /api/... → Next.js forwards to backend, no CORS issues)
+  reactStrictMode: false,
+  allowedDevOrigins: ['cytoplast-robin-hasty.ngrok-free.dev', 'localhost:3000'],
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
       process.env.BACKEND_URL ||
       'http://localhost:8082';
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
-      },
-    ];
+    return {
+      fallback: [
+        {
+          source: '/api/:path*',
+          destination: `${backendUrl}/api/:path*`,
+        },
+      ],
+    };
   },
   output: 'standalone',
   images: {

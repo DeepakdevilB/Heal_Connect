@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, type AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth';
 import { handleValidation } from '../middleware/validate';
 import { getIO } from '../lib/socket';
 import { SESSION_DISCLAIMER, SESSION_SAFETY_GUIDELINES } from '../lib/safetyGuidelines';
@@ -153,12 +153,17 @@ router.get('/practitioner/history', requireAuth, async (req: AuthRequest, res: R
     }),
     prisma.session.aggregate({
       where: { practitionerId, status: 'COMPLETED' },
-      _sum: { totalCost: true }
+      _sum: { totalCost: true },
+      _count: { _all: true },
     })
   ]);
 
   const totalEarnings = aggregations._sum.totalCost || 0;
-  res.json({ success: true, data: { sessions, totalEarnings } });
+  // Real lifetime count, not sessions.length — that list is capped at the
+  // last 20 (take: 20 above), so the expert dashboard's "Sessions Done" stat
+  // was silently stuck at a max of 20 for any practitioner past that point.
+  const totalSessionsCompleted = aggregations._count._all;
+  res.json({ success: true, data: { sessions, totalEarnings, totalSessionsCompleted } });
 });
 
 // ─── GET /api/sessions/user/history — user session history ───────────────────
@@ -187,8 +192,13 @@ router.get('/user/history', requireAuth, async (req: AuthRequest, res: Response)
     if (!s.startTime || !s.endTime) return sum;
     return sum + Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
   }, 0);
+  // Real lifetime count — allUserSessions is the unlimited query above (used
+  // for totalMinutes), unlike `sessions` which is capped at the last 20.
+  // The frontend previously used sessions.length for its "sessions done"
+  // stat, so it was silently stuck at a max of 20.
+  const totalSessionsCompleted = allUserSessions.length;
 
-  res.json({ success: true, data: { sessions, totalSpent, totalMinutes } });
+  res.json({ success: true, data: { sessions, totalSpent, totalMinutes, totalSessionsCompleted } });
 });
 
 // ─── GET /api/sessions/user/transcripts — user's own call transcripts ────────
@@ -274,7 +284,7 @@ router.get('/practitioner/transcripts', requireAuth, async (req: AuthRequest, re
 });
 
 // DEV TEMP: Clear stuck active sessions
-router.post('/dev-clear', async (req: any, res: Response) => {
+router.post('/dev-clear', requireAdmin, async (req: any, res: Response) => {
   try {
     const result = await prisma.session.updateMany({
       where: { status: { in: ['ACTIVE', 'INITIATED', 'ACCEPTED'] } },
@@ -466,10 +476,17 @@ router.post(
     const { transcriptText } = req.body as { transcriptText: string };
 
     try {
-      // Verify the session belongs to this user and is completed
+      // Verify the session belongs to this user/practitioner and is completed
       const session = await prisma.session.findFirst({
-        where: { id: sessionId, userId, status: 'COMPLETED' },
-        select: { id: true, practitionerId: true, type: true },
+        where: {
+          id: sessionId,
+          OR: [
+            { userId },
+            ...(req.user!.practitionerId ? [{ practitionerId: req.user!.practitionerId }] : [{ practitionerId: userId }]),
+          ],
+          status: 'COMPLETED',
+        },
+        select: { id: true, userId: true, practitionerId: true, type: true },
       });
 
       if (!session) {
@@ -486,7 +503,7 @@ router.post(
         data: {
           sessionId,
           transcriptText,
-          userId,
+          userId: session.userId,
           practitionerId: session.practitionerId,
         },
       });
@@ -494,7 +511,7 @@ router.post(
       // Task 3: scan transcript for policy violations (async, non-blocking)
       flagContentIfNeeded(transcriptText, 'CALL_TRANSCRIPT', {
         sessionId,
-        userId,
+        userId: session.userId,
         practitionerId: session.practitionerId,
         transcriptId: transcript.id,
       }).catch((err) => console.error('[moderation] transcript scan error:', err));

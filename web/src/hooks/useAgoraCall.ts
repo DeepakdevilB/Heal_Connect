@@ -14,6 +14,7 @@ interface UseAgoraCallReturn {
   callState: CallState;
   isMuted: boolean;
   remoteUsers: IAgoraRTCRemoteUser[];
+  localTrack: IMicrophoneAudioTrack | null;
   join: (sessionId: string) => Promise<void>;
   leave: () => Promise<void>;
   toggleMute: () => void;
@@ -28,6 +29,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
   const [callState, setCallState] = useState<CallState>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([]);
+  const [localTrack, setLocalTrack] = useState<IMicrophoneAudioTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<string | null>(null);
 
@@ -41,6 +43,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
   const cleanup = useCallback(async () => {
     localTrackRef.current?.close();
     localTrackRef.current = null;
+    setLocalTrack(null);
     if (clientRef.current) {
       await clientRef.current.leave().catch(() => {});
       clientRef.current = null;
@@ -105,6 +108,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
       // Create and publish microphone track
       const micTrack = await AgoraRTC.createMicrophoneAudioTrack();
       localTrackRef.current = micTrack;
+      setLocalTrack(micTrack);
       await client.publish(micTrack);
 
       if (client.remoteUsers.length > 0) {
@@ -129,6 +133,7 @@ export function useAgoraCall(): UseAgoraCallReturn {
     await cleanup();
     setCallState('ended');
     setRemoteUsers([]);
+    setLocalTrack(null);
     setIsMuted(false);
   }, [cleanup]);
 
@@ -157,7 +162,13 @@ export function useAgoraCall(): UseAgoraCallReturn {
     setIsMuted(next);
   }, [isMuted]);
 
-  return { callState, isMuted, remoteUsers, join, leave,
+  return {
+    callState,
+    isMuted,
+    remoteUsers,
+    localTrack,
+    join,
+    leave,
     toggleMute,
     error,
     startTime,

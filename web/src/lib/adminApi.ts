@@ -1,13 +1,13 @@
 /**
  * adminApi.ts — Admin Panel API client
  *
- * All requests go through the Next.js proxy rewrite (/api/* → backend:8082/api/*).
- * The x-admin-key header is set from NEXT_PUBLIC_ADMIN_KEY env var (or default for local dev).
- * In production, set NEXT_PUBLIC_ADMIN_KEY in the deployment environment.
+ * Requests go to our own /api/admin/** Route Handlers (app/api/admin/**),
+ * which check the httpOnly admin session cookie and attach the real backend
+ * x-admin-key server-side before forwarding. The browser never holds that
+ * key — it previously did, via NEXT_PUBLIC_ADMIN_KEY, which is inlined into
+ * the public JS bundle by Next.js and readable by anyone. `credentials:
+ * 'same-origin'` ensures the session cookie is actually sent.
  */
-
-const ADMIN_KEY =
-  process.env['NEXT_PUBLIC_ADMIN_KEY'] ?? 'healconnect-admin-2026';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -21,12 +21,15 @@ async function adminFetch<T>(
 ): Promise<ApiResponse<T>> {
   const res = await fetch(path, {
     ...options,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-key': ADMIN_KEY,
       ...options.headers,
     },
   });
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') window.location.href = '/admin/login';
+  }
   return res.json() as Promise<ApiResponse<T>>;
 }
 
@@ -276,4 +279,29 @@ export const banApi = {
       method: 'PATCH',
       body: JSON.stringify({ banned: false }),
     }),
+};
+
+// ─── SEC-10: Admin Audit Log ─────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  adminLabel: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  meta: string | null; // JSON string
+  createdAt: string;
+}
+
+export const auditLogApi = {
+  list: (params: { action?: string; targetType?: string; page?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.action)     q.set('action',     params.action);
+    if (params.targetType) q.set('targetType', params.targetType);
+    if (params.page)       q.set('page',       String(params.page));
+    if (params.limit)      q.set('limit',      String(params.limit));
+    return adminFetch<{ entries: AuditLogEntry[]; pagination: { page: number; limit: number; total: number; pages: number } }>(
+      `/api/admin/audit-log?${q.toString()}`
+    );
+  },
 };

@@ -360,9 +360,20 @@ model Consent {
   // For consent captured before login (banner shown to anonymous visitors), we key
   // off a random id stored in a first-party cookie instead of a user/practitioner id.
   visitorId      String?
-  category       String   // "ANALYTICS" | "MARKETING"  (necessary/functional cookies need no consent)
+  // "TERMS" | "PRIVACY_NOTICE" | "SENSITIVE_DATA" | "ANALYTICS" | "EMAIL_MARKETING"
+  // | "SMS_MARKETING" | "PUSH_MARKETING"  (necessary/functional cookies need no
+  // consent, so there's no category for those). Kept as a plain string rather
+  // than a Prisma enum so a new category never requires a migration — validated
+  // in application code instead (see routes/consent.ts CONSENT_CATEGORIES and
+  // lib/consentPolicy.ts). "MARKETING" was the old name for EMAIL_MARKETING —
+  // renamed in migration add_consent_categories_and_policy_version.
+  category       String
   granted        Boolean
-  source         String   @default("BANNER") // "BANNER" | "SETTINGS"
+  source         String   @default("BANNER") // "BANNER" | "SETTINGS" | "REGISTRATION"
+  // Version stamp of whichever Terms/Privacy Notice wording was in effect when
+  // this decision was recorded (see lib/consentPolicy.ts CURRENT_POLICY_VERSION).
+  // Nullable because rows recorded before this field existed have no value.
+  policyVersion  String?
   ipAddress      String?
   userAgent      String?
   createdAt      DateTime @default(now())
@@ -386,6 +397,33 @@ model PrivacyRequestLog {
   createdAt      DateTime @default(now())
 
   @@index([subjectId])
+}
+
+// ─── SEC-10: Admin Audit Log ──────────────────────────────────────────────────
+// Append-only. Every admin action that modifies data is recorded here.
+// No FK to User/Practitioner — the log must survive even if those rows are
+// later deleted (erasure). adminLabel is the email/name string taken from env
+// so single-admin installs still produce human-readable logs; when per-admin
+// accounts are added (SEC-04/05 future work) this becomes a real foreign key.
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  // WHO — label from env (ADMIN_LOGIN_EMAIL) until per-admin accounts exist
+  adminLabel  String
+  // WHAT — coarse action type for filtering
+  action      String   // "BAN" | "UNBAN" | "DELETE_USER" | "DELETE_PRACTITIONER"
+                       // | "VERIFY_PRACTITIONER" | "ADJUST_WALLET" | "MIGRATE"
+                       // | "MODERATE" | "TICKET_REPLY" | "CUSTOM"
+  // ON WHAT
+  targetType  String   // "USER" | "PRACTITIONER" | "SESSION" | "WALLET" | "SYSTEM"
+  targetId    String?  // null for system-level actions (MIGRATE, etc.)
+  // DETAIL — arbitrary JSON blob (ban reason, amount, old/new value, etc.)
+  meta        String?  // JSON string; keep as String to avoid Prisma Json type issues
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
 
 // ─── Phase 6: Push Notifications ──────────────────────────────────────────────
@@ -625,4 +663,32 @@ model SessionReminder {
   @@unique([sessionId, participantId, reminderType])
   @@index([sessionId])
   @@index([participantId])
+}
+
+// ─── SEC-04/05: Per-admin accounts, RBAC & MFA ────────────────────────────────
+// Standalone table — no FK to User/Practitioner. Admin accounts are managed
+// separately from the customer-facing auth system.
+//
+// role:      "SUPERADMIN" | "MODERATOR"
+// mfaSecret: base32 TOTP secret (Google Authenticator / Authy compatible)
+// loginToken: short-lived one-time token issued after password auth, consumed
+//             by MFA verify. Cleared once the full session cookie is granted.
+
+model AdminUser {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          String    @default("MODERATOR")  // "SUPERADMIN" | "MODERATOR"
+  mfaSecret     String?   // base32 TOTP secret
+  mfaEnabled    Boolean   @default(false)
+  // Short-lived token issued after password auth; consumed by POST /mfa/verify
+  loginToken    String?
+  loginTokenExp DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  // Who created this admin account (null for bootstrap / self-seeded rows)
+  createdById   String?
+
+  @@index([email])
 }

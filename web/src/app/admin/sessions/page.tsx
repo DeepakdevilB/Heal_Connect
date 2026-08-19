@@ -12,7 +12,6 @@ import {
   Toast, Pagination, SkeletonRow
 } from '@/components/admin-shell';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 type SessionRecord = {
   id: string;
@@ -55,7 +54,7 @@ export default function AdminSessionsPage() {
     setChatLoading(true);
     try {
       const res = await fetch(`/api/admin/sessions/${sessionId}/chat`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success) {
         setChatMessages(res.data.messages || []);
@@ -71,7 +70,7 @@ export default function AdminSessionsPage() {
     setTranscriptLoading(true);
     try {
       const res = await fetch(`/api/admin/sessions/${sessionId}/transcript`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success && res.data.transcript) {
         setTranscriptData(res.data.transcript);
@@ -90,7 +89,7 @@ export default function AdminSessionsPage() {
     try {
       const res = await fetch(`/api/admin/sessions/${sessionId}/transcript/scan`, {
         method: 'POST',
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       
       if (res.success) {
@@ -114,7 +113,7 @@ export default function AdminSessionsPage() {
     try {
       const statusQuery = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
       const res = await fetch(`/api/admin/sessions?page=${page}&limit=10&search=${encodeURIComponent(search)}${statusQuery}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then((r) => r.json());
 
       if (res.success && res.data) {

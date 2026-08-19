@@ -45,6 +45,10 @@ export default function DashboardPage() {
   const [sessionsDone, setSessionsDone] = useState(0);
   const [minutesUsed, setMinutesUsed] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<PractitionerProfile[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -55,14 +59,46 @@ export default function DashboardPage() {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
       }
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Debounced expert search autocomplete
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      practitionersApi.list({ search: query, limit: 6 }).then((res) => {
+        if (res.success && res.data) {
+          setSuggestions(res.data.practitioners);
+          setShowSuggestions(true);
+        }
+      }).finally(() => setSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const goToPractitioner = (id: string) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    router.push(`/practitioners/${id}`);
+  };
+
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
+      setShowSuggestions(false);
       router.push(`/practitioners?search=${encodeURIComponent(searchQuery.trim())}`);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
 
@@ -130,7 +166,10 @@ export default function DashboardPage() {
 
     sessionsApi.userHistory(token).then((res) => {
       if (res.success && res.data) {
-        setSessionsDone(res.data.sessions.length);
+        // Real lifetime total, not res.data.sessions.length — that list is
+        // capped at the last 20 by the backend, which silently stuck this
+        // stat at a max of 20 for anyone past that point.
+        setSessionsDone(res.data.totalSessionsCompleted);
         setMinutesUsed(res.data.totalMinutes || 0);
       }
     });
@@ -181,9 +220,51 @@ export default function DashboardPage() {
           </Link>
 
           <div className="hidden md:flex items-center gap-2 flex-1 max-w-md mx-8">
-            <div className="relative w-full">
+            <div className="relative w-full" ref={searchBoxRef}>
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              <input type="text" placeholder="Search experts, specialties..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearchKeyDown} className="w-full pl-9 pr-4 py-2 text-sm rounded-full bg-amber-50 border border-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400/40 text-[#1a1a1a] placeholder:text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search experts, specialties..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                className="w-full pl-9 pr-4 py-2 text-sm rounded-full bg-amber-50 border border-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400/40 text-[#1a1a1a] placeholder:text-gray-400"
+              />
+
+              {/* Autocomplete dropdown */}
+              {showSuggestions && searchQuery.trim().length >= 2 && (
+                <div className="absolute left-0 right-0 mt-2 bg-white border border-amber-100 rounded-2xl shadow-xl overflow-hidden z-50">
+                  {searchLoading ? (
+                    <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                  ) : suggestions.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-gray-400">No experts found for &ldquo;{searchQuery}&rdquo;</div>
+                  ) : (
+                    <>
+                      {suggestions.map((exp) => (
+                        <button
+                          key={exp.id}
+                          onClick={() => goToPractitioner(exp.id)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition-colors text-left border-b border-gray-50 last:border-b-0"
+                        >
+                          <img src={getPractitionerAvatar(exp.photoUrl, exp.name)} alt={exp.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{exp.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{exp.specialties.slice(0, 2).join(' · ') || '—'}</p>
+                          </div>
+                          {exp.isOnline && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { setShowSuggestions(false); router.push(`/practitioners?search=${encodeURIComponent(searchQuery.trim())}`); }}
+                        className="w-full text-center px-4 py-2.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
+                      >
+                        See all results for &ldquo;{searchQuery}&rdquo;
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

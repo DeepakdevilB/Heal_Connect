@@ -18,6 +18,12 @@ import chatRouter from './routes/chat';
 import agoraRouter from './routes/agora';
 import adminRouter from './routes/admin';
 import sessionsRouter from './routes/sessions';
+import adminAuthRouter from './routes/adminAuth';
+import contactRouter from './routes/contact';
+import ticketsRouter from './routes/tickets';
+import consentRouter from './routes/consent';
+import deepgramRouter from './routes/deepgram';
+import notificationRoutes from './routes/notifications';
 import { startBillingEngine } from './workers/billingEngine';
 
 const app = express();
@@ -107,6 +113,12 @@ app.use('/api/chat', chatRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin-auth', adminAuthRouter);
+app.use('/api/contact', contactRouter);
+app.use('/api/tickets', ticketsRouter);
+app.use('/api/consent', consentRouter);
+app.use('/api/deepgram', deepgramRouter);
+app.use('/api/notifications', notificationRoutes);
 
 // Serve local uploads when Azure Storage is not configured
 if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {

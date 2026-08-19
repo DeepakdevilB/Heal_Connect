@@ -12,7 +12,6 @@ import {
 } from '@/components/admin-shell';
 import { banApi } from '@/lib/adminApi';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 type UserRecord = {
   id: string;
@@ -119,7 +118,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/users?page=${userPage}&limit=10&search=${encodeURIComponent(searchUsers)}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then((r) => r.json());
 
       if (res.success && res.data) {
@@ -139,7 +138,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/practitioners?page=${practPage}&limit=10&search=${encodeURIComponent(searchPract)}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then((r) => r.json());
 
       if (res.success && res.data) {
@@ -190,10 +189,10 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetch('/api/admin/clean-dummies', {
       method: 'POST',
-      headers: { 'x-admin-key': ADMIN_KEY },
-    }).catch(() => {});
+      headers: {},
+    }).then(() => fetchPractitioners()).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchPractitioners]);
 
   // User Actions
   const deleteUser = (uid: string) => {
@@ -205,7 +204,7 @@ export default function AdminUsersPage() {
         try {
           const res = await fetch(`/api/admin/users/${uid}`, {
             method: 'DELETE',
-            headers: { 'x-admin-key': ADMIN_KEY },
+            headers: {},
           }).then((r) => r.json());
           if (res.success) {
             showToast('User deleted from database');
@@ -226,7 +225,7 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch(`/api/admin/practitioners/${pid}/verify`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isVerified: !current }),
       }).then((r) => r.json());
 
@@ -250,7 +249,7 @@ export default function AdminUsersPage() {
         try {
           const res = await fetch(`/api/admin/practitioners/${pid}`, {
             method: 'DELETE',
-            headers: { 'x-admin-key': ADMIN_KEY },
+            headers: {},
           }).then((r) => r.json());
           if (res.success) {
             showToast('Practitioner deleted from database');
@@ -362,7 +361,7 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch(`/api/admin/users/${editBalanceUser.id}/balance`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ balance: Number(balanceInput) }),
       }).then((r) => r.json());
 

@@ -79,8 +79,9 @@ function authHeader(token: string) {
 
 export const authApi = {
   register: (body: {
-    email: string; password: string; name: string;
+    email: string; password: string; name: string; dob: string;
     phone?: string; verifyMethod?: 'email' | 'sms';
+    acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean;
   }) =>
     request<AuthData>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
 
@@ -117,10 +118,16 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify({ email, password }) }
     ),
 
-  practitionerRegister: (name: string, email: string, password: string) =>
+  practitionerRegister: (
+    name: string,
+    email: string,
+    password: string,
+    dob: string,
+    consent: { acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean }
+  ) =>
     request<{ practitioner: { id: string; name: string; email: string | null; isVerified: boolean }; accessToken: string; refreshToken: string; role: string }>(
       '/api/auth/practitioner/register',
-      { method: 'POST', body: JSON.stringify({ name, email, password }) }
+      { method: 'POST', body: JSON.stringify({ name, email, password, dob, ...consent }) }
     ),
 
   refresh: (refreshToken: string) =>
@@ -215,6 +222,9 @@ export const practitionersApi = {
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
 
+  deleteAccount: (token: string) =>
+    request('/api/practitioners/me', { method: 'DELETE', headers: authHeader(token) }),
+
   exportData: (token: string) =>
     request('/api/practitioners/me/export', { method: 'POST', headers: authHeader(token) }),
 };
@@ -261,13 +271,13 @@ export const sessionsApi = {
     ),
 
   practitionerHistory: (token: string) =>
-    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number }>(
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; user: { id: string; name: string | null; photoUrl: string | null } }[]; totalEarnings: number; totalSessionsCompleted: number }>(
       '/api/sessions/practitioner/history',
       { headers: authHeader(token) }
     ),
 
   userHistory: (token: string) =>
-    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number }>(
+    request<{ sessions: { id: string; type: string; totalCost: number; startTime: string | null; endTime: string | null; practitioner: { id: string; name: string; photoUrl: string | null; specialties: string[] } }[]; totalSpent: number; totalMinutes: number; totalSessionsCompleted: number }>(
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
@@ -293,6 +303,7 @@ export interface TranscriptEntry {
   user?: { name: string; photoUrl: string | null };
 }
 
+
 export const agoraApi = {
   getToken: (token: string, sessionId: string) =>
     request<{ token: string; channelName: string; uid: number; appId: string; expireTs: number }>(
@@ -314,6 +325,15 @@ export const agoraApi = {
       method: 'POST',
       headers: authHeader(token),
       body: JSON.stringify(body),
+    }),
+};
+
+export const deepgramApi = {
+  getToken: (token: string, sessionId: string) =>
+    request<{ apiKey?: string; isConfigured: boolean; isEphemeral?: boolean }>('/api/deepgram/token', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ sessionId }),
     }),
 };
 
@@ -611,8 +631,17 @@ export const tokenStore = {
 
 // ─── GDPR: Consent ────────────────────────────────────────────────────────────
 
-export type ConsentCategory = 'ANALYTICS' | 'MARKETING';
-export type ConsentState = Partial<Record<ConsentCategory, { granted: boolean; updatedAt: string }>>;
+export type ConsentCategory =
+  | 'TERMS'
+  | 'PRIVACY_NOTICE'
+  | 'SENSITIVE_DATA'
+  | 'ANALYTICS'
+  | 'EMAIL_MARKETING'
+  | 'SMS_MARKETING'
+  | 'PUSH_MARKETING';
+export type ConsentState = Partial<
+  Record<ConsentCategory, { granted: boolean; updatedAt: string; policyVersion: string | null }>
+>;
 
 /** First-party random id used to track consent for visitors who aren't logged in yet. */
 export function getVisitorId(): string {

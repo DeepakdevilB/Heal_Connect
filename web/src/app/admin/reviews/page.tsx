@@ -13,7 +13,6 @@ import {
 } from '@/components/admin-shell';
 import { Star, MessageSquare, EyeOff, Flag, Trash2, Eye, Filter, RefreshCw } from 'lucide-react';
 
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY ?? 'healconnect-admin-2026';
 
 interface Review {
   id: string;
@@ -33,7 +32,7 @@ interface ReviewStats {
 async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY, ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   return res.json();
 }

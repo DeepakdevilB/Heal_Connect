@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { AdminShell, StatCard } from '@/components/admin-shell';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 type AnalyticsData = {
   chartData: Array<{
@@ -39,7 +38,7 @@ export default function AdminAnalyticsPage() {
 
   const fetchAnalytics = useCallback(async () => {
     try {
-      const headers = { 'x-admin-key': ADMIN_KEY };
+      const headers = {};
       const [res, chatRes] = await Promise.all([
         fetch('/api/admin/analytics/charts', { headers }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/analytics/chat', { headers }).then((r) => r.json()).catch(() => null),

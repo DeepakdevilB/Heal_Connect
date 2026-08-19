@@ -24,6 +24,7 @@ import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
 import { blacklistToken } from '../lib/redis';
+import { buildRegistrationConsentRows } from '../lib/consentPolicy';
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -72,18 +73,51 @@ router.post(
       .matches(/[0-9]/).withMessage('Password must contain at least one number'),
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('phone').optional({ nullable: true }).isMobilePhone('any').withMessage('Valid phone number required'),
+    // CHILD-02: DOB is required so we can enforce the 18+ age gate server-side.
+    // The frontend adds a date picker — the server validates independently and
+    // rejects under-18 registrations regardless of what the client sends.
+    body('dob')
+      .notEmpty().withMessage('Date of birth is required')
+      .isISO8601().withMessage('Date of birth must be a valid date (YYYY-MM-DD)'),
     body('verifyMethod')
       .optional()
       .isIn(['email', 'sms'])
       .withMessage('verifyMethod must be "email" or "sms"'),
+    // Two separate required checkboxes, not one bundled "I agree to
+    // everything" — see lib/consentPolicy.ts.
+    body('acceptTerms')
+      .custom((v) => v === true)
+      .withMessage('You must accept the Terms of Service to create an account'),
+    body('acceptPrivacy')
+      .custom((v) => v === true)
+      .withMessage('You must acknowledge the Privacy Notice to create an account'),
+    body('emailMarketingOptIn')
+      .optional()
+      .isBoolean()
+      .withMessage('emailMarketingOptIn must be a boolean'),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { email, password, name, phone, verifyMethod = 'email' } =
+    const { email, password, name, phone, dob, verifyMethod = 'email', emailMarketingOptIn } =
       req.body as {
-        email: string; password: string; name: string;
+        email: string; password: string; name: string; dob: string;
         phone?: string; verifyMethod?: 'email' | 'sms';
+        acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean;
       };
+
+    // CHILD-02: server-authoritative age check — the client date picker is UX
+    // only; this is the real enforcement.
+    const dobDate = new Date(dob);
+    const minBirthDate = new Date();
+    minBirthDate.setFullYear(minBirthDate.getFullYear() - 18);
+    if (isNaN(dobDate.getTime()) || dobDate > minBirthDate) {
+      res.status(422).json({
+        success: false,
+        message: 'You must be at least 18 years old to create an account.',
+        code: 'AGE_GATE',
+      });
+      return;
+    }
 
     // SMS chosen but provider not configured for this number → fall back to email silently
     const useEmail = verifyMethod === 'email' || (phone ? !isOtpConfigured(phone) : true);
@@ -110,17 +144,33 @@ router.post(
       const emailVerifyToken = hashToken(rawEmailToken);
       const emailVerifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-      const user = await prisma.user.create({
-        data: {
-          email,
-          name,
-          passwordHash,
-          phone: phone ?? null,
-          emailVerifyToken,
-          emailVerifyExpiry,
-          provider: 'email',
-          wallet: { create: { balance: 0 } },
-        },
+      // User creation and its consent evidence are written atomically — an
+      // account should never exist without a record of what it agreed to.
+      const user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            email,
+            name,
+            passwordHash,
+            phone: phone ?? null,
+            dob: dobDate,
+            emailVerifyToken,
+            emailVerifyExpiry,
+            provider: 'email',
+            wallet: { create: { balance: 0 } },
+          },
+        });
+        await tx.consent.createMany({
+          data: buildRegistrationConsentRows({
+            userId: created.id,
+            acceptTerms: true, // validated above — registration fails otherwise
+            acceptPrivacy: true,
+            emailMarketingOptIn,
+            ipAddress: req.ip ?? null,
+            userAgent: req.headers['user-agent'] ?? null,
+          }),
+        });
+        return created;
       });
 
       // Send welcome email (non-blocking — never crash registration)
@@ -868,17 +918,61 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
     body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    // CHILD-02: also required for practitioners — they handle health data and
+    // must be adults.
+    body('dob')
+      .notEmpty().withMessage('Date of birth is required')
+      .isISO8601().withMessage('Date of birth must be a valid date (YYYY-MM-DD)'),
+    body('acceptTerms')
+      .custom((v) => v === true)
+      .withMessage('You must accept the Terms of Service to create an account'),
+    body('acceptPrivacy')
+      .custom((v) => v === true)
+      .withMessage('You must acknowledge the Privacy Notice to create an account'),
+    body('emailMarketingOptIn')
+      .optional()
+      .isBoolean()
+      .withMessage('emailMarketingOptIn must be a boolean'),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
-    const { name, email, password } = req.body as { name: string; email: string; password: string };
+    const { name, email, password, dob, emailMarketingOptIn } = req.body as {
+      name: string; email: string; password: string; dob: string;
+      acceptTerms: boolean; acceptPrivacy: boolean; emailMarketingOptIn?: boolean;
+    };
+
+    // CHILD-02: server-authoritative age check
+    const dobDate = new Date(dob);
+    const minBirthDate = new Date();
+    minBirthDate.setFullYear(minBirthDate.getFullYear() - 18);
+    if (isNaN(dobDate.getTime()) || dobDate > minBirthDate) {
+      res.status(422).json({
+        success: false,
+        message: 'You must be at least 18 years old to register as a practitioner.',
+        code: 'AGE_GATE',
+      });
+      return;
+    }
     try {
       const existing = await prisma.practitioner.findUnique({ where: { email } });
       if (existing) { res.status(409).json({ success: false, message: 'Email already registered' }); return; }
 
       const passwordHash = await bcrypt.hash(password, 12);
-      const practitioner = await prisma.practitioner.create({
-        data: { name, email, passwordHash, isVerified: false },
+      const practitioner = await prisma.$transaction(async (tx) => {
+        const created = await tx.practitioner.create({
+          data: { name, email, passwordHash, isVerified: false },
+        });
+        await tx.consent.createMany({
+          data: buildRegistrationConsentRows({
+            practitionerId: created.id,
+            acceptTerms: true,
+            acceptPrivacy: true,
+            emailMarketingOptIn,
+            ipAddress: req.ip ?? null,
+            userAgent: req.headers['user-agent'] ?? null,
+          }),
+        });
+        return created;
       });
 
       const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };

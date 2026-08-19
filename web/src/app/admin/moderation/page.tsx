@@ -10,7 +10,6 @@ import {
 } from '@/components/admin-shell';
 import { banApi } from '@/lib/adminApi';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 type FlaggedRecord = {
   id: string;
@@ -42,7 +41,7 @@ export default function AdminModerationPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/moderation?status=${statusFilter}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then((r) => r.json());
 
       if (res.success && res.data) {
@@ -67,7 +66,6 @@ export default function AdminModerationPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': ADMIN_KEY,
         },
         body: JSON.stringify({ status: newStatus }),
       }).then((r) => r.json());

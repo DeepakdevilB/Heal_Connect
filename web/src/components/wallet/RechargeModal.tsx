@@ -16,11 +16,40 @@ interface RechargeModalProps {
 
 const PRESET_AMOUNTS = [99, 199, 499, 999];
 
+// Razorpay's client-side `handler` fires the instant the payment is
+// submitted — actual wallet credit happens later, asynchronously, when the
+// webhook lands (see backend/src/routes/wallet.ts POST /webhook). Calling
+// onSuccess() immediately was optimistic: the modal would close saying
+// "success" while the balance the user sees afterward could still be stale
+// for several seconds. Poll briefly for the real update instead of guessing.
+const BALANCE_POLL_INTERVAL_MS = 1500;
+const BALANCE_POLL_MAX_ATTEMPTS = 10; // ~15s total
+
 export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps) {
   const [amount, setAmount] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'stripe'>('razorpay');
+  const [confirming, setConfirming] = useState(false);
+
+  /** Poll the wallet until its balance rises above `baseline`, or give up after a while. */
+  const waitForCredit = async (token: string, baseline: number) => {
+    setConfirming(true);
+    try {
+      for (let attempt = 0; attempt < BALANCE_POLL_MAX_ATTEMPTS; attempt++) {
+        await new Promise((r) => setTimeout(r, BALANCE_POLL_INTERVAL_MS));
+        const res = await walletApi.getBalance(token);
+        if (res.success && res.data && res.data.wallet.balance > baseline) {
+          return; // confirmed — webhook landed
+        }
+      }
+      // Timed out without seeing the credit — webhook may just be slow.
+      // Don't block the user here; onSuccess()'s own refresh (dashboard/wallet
+      // page) will pick it up once it does land.
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   const handleRecharge = async (rechargeAmount: number) => {
     if (rechargeAmount < 10) {
@@ -54,6 +83,12 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
 
       const { orderId } = res.data;
 
+      // Baseline balance to poll against — captured before checkout opens so
+      // waitForCredit() can tell "webhook landed" apart from "balance just
+      // happened to already be this number".
+      const balanceRes = await walletApi.getBalance(token);
+      const baselineBalance = balanceRes.success && balanceRes.data ? balanceRes.data.wallet.balance : 0;
+
       // 2. Load Razorpay script
       const isLoaded = await loadRazorpay();
       if (!isLoaded) {
@@ -70,10 +105,14 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
         order_id: orderId,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
         handler: function (_response: any) {
-          // Payment successful! Webhook will handle the actual DB update.
-          // We can just optimistically trigger onSuccess.
-          onSuccess();
-          onClose();
+          // Payment submitted on Razorpay's side — the actual wallet credit
+          // still depends on their webhook reaching us. Keep the modal open
+          // on a short "confirming" state and wait for it to actually show
+          // up, instead of closing on a balance that hasn't updated yet.
+          void waitForCredit(token, baselineBalance).finally(() => {
+            onSuccess();
+            onClose();
+          });
         },
         prefill: {
           name: 'HealConnect User',
@@ -99,8 +138,20 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !confirming && onClose()}>
       <DialogContent className="sm:max-w-md bg-white border border-yellow-100 font-sans">
+        {confirming ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
+            <Loader2 className="w-10 h-10 text-[#f59e0b] animate-spin" />
+            <div>
+              <p className="font-bold text-[#1a1a1a]">Confirming your payment…</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Payment received — updating your wallet balance. This usually takes a few seconds.
+              </p>
+            </div>
+          </div>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-extrabold text-[#1a1a1a]">
             <Wallet className="w-5 h-5 text-[#f59e0b]" /> Recharge Wallet
@@ -170,6 +221,8 @@ export function RechargeModal({ isOpen, onClose, onSuccess }: RechargeModalProps
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : `Proceed to Pay ₹${amount || 0}`}
           </Button>
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

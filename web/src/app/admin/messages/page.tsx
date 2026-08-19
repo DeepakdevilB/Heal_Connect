@@ -19,7 +19,6 @@ import {
   X
 } from 'lucide-react';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 export default function AdminMessagesPage() {
   const [search, setSearch] = useState('');
@@ -38,7 +37,7 @@ export default function AdminMessagesPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/messages?status=${statusFilter}`, {
-        headers: { 'x-admin-key': ADMIN_KEY },
+        headers: {},
       }).then(r => r.json());
       if (res.success && res.data) {
         setMessages(res.data.messages);
@@ -79,7 +78,7 @@ export default function AdminMessagesPage() {
       if (action === 'delete') {
         const res = await fetch(`/api/admin/messages/${messageId}`, {
           method: 'DELETE',
-          headers: { 'x-admin-key': ADMIN_KEY },
+          headers: {},
         }).then(r => r.json());
         
         if (res.success) {
@@ -90,7 +89,7 @@ export default function AdminMessagesPage() {
       } else if (action === 'resolve') {
         const res = await fetch(`/api/admin/messages/${messageId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'resolved' }),
         }).then(r => r.json());
 
@@ -117,7 +116,7 @@ export default function AdminMessagesPage() {
     try {
       const res = await fetch(`/api/admin/messages/${selectedMessage.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'replied' }),
       }).then(r => r.json());
 

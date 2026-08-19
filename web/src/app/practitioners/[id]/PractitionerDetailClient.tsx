@@ -237,16 +237,20 @@ export default function PractitionerDetailPage() {
           <button
             onClick={handleShare}
             aria-label="Share this profile"
-            className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-[#f59e0b] transition-colors bg-transparent border border-yellow-200 hover:border-yellow-400 rounded-full px-3.5 py-1.5 cursor-pointer"
+            className={`ml-auto flex items-center gap-2 text-sm font-bold rounded-full px-5 py-2.5 cursor-pointer shadow-md transition-all hover:scale-105 active:scale-95 ${
+              shared
+                ? 'bg-emerald-500 text-white shadow-emerald-500/30'
+                : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30 hover:from-amber-600 hover:to-orange-600'
+            }`}
           >
             {shared ? (
               <>
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-emerald-600">Link copied</span>
+                <Check className="h-4 w-4" />
+                <span>Link copied</span>
               </>
             ) : (
               <>
-                <Share2 className="h-3.5 w-3.5" />
+                <Share2 className="h-4 w-4" />
                 <span>Share</span>
               </>
             )}

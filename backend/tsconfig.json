@@ -39,7 +39,16 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    // Interop with CommonJS packages (express, cors, bcryptjs, jsonwebtoken,
+    // qrcode, multer, razorpay, stripe, @sendgrid/mail, ...) that declare
+    // their types with `export =` rather than a true ES default export.
+    // Without this, `import express from 'express'` is a type error under
+    // `strict`, and every handler that relies on Express's contextual req/res
+    // typing falls back to implicit `any`.
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]

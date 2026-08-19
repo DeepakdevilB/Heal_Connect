@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { AdminShell, Toast, StatusBadge } from '@/components/admin-shell';
 
-const ADMIN_KEY = 'healconnect-admin-2026';
 
 export default function AdminBlogsPage() {
   const [blogs, setBlogs] = useState<any[]>([]);
@@ -21,7 +20,7 @@ export default function AdminBlogsPage() {
   const fetchBlogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/blogs', { headers: { 'x-admin-key': ADMIN_KEY } }).then(r => r.json());
+      const res = await fetch('/api/admin/blogs', { headers: {} }).then(r => r.json());
       if (res.success) setBlogs(res.data.blogs);
     } catch (err) {
       console.error(err);
@@ -40,7 +39,7 @@ export default function AdminBlogsPage() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       }).then(r => r.json());
       
@@ -59,7 +58,7 @@ export default function AdminBlogsPage() {
     try {
       const res = await fetch(`/api/admin/blogs/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-key': ADMIN_KEY }
+        headers: {}
       }).then(r => r.json());
       if (res.success) {
         setToast({ message: 'Blog deleted', type: 'success' });

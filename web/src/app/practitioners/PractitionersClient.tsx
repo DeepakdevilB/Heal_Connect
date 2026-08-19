@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -44,12 +44,48 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const SELECT_CLS = 'w-full text-sm rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40';
 
 export default function PractitionersPage() {
+  const router = useRouter();
   const [practitioners, setPractitioners] = useState<Practitioner[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>({ search: '', specialty: '', language: '', minRating: '', maxRate: '', onlineOnly: false });
+  const [suggestions, setSuggestions] = useState<Practitioner[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced search autocomplete
+  useEffect(() => {
+    const query = filters.search.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`${API_URL}/api/practitioners?search=${encodeURIComponent(query)}&limit=6`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.data?.practitioners) {
+            setSuggestions(data.data.practitioners);
+            setShowSuggestions(true);
+          }
+        })
+        .catch(console.error);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
 
   const fetchPractitioners = useCallback(async (f: Filters, p: number) => {
     setLoading(true);
@@ -87,9 +123,37 @@ export default function PractitionersPage() {
 
         {/* Search + Filter Bar */}
         <div className="flex gap-3 mb-6">
-          <div className="relative flex-1">
+          <div className="relative flex-1" ref={searchBoxRef}>
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            <input type="text" placeholder="Search by name or specialty..." value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} className="w-full pl-9 pr-4 py-2 text-sm rounded-full bg-yellow-50 border border-yellow-200 focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40 text-[#1a1a1a] placeholder:text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name or specialty..."
+              value={filters.search}
+              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              onKeyDown={(e) => { if (e.key === 'Escape') setShowSuggestions(false); }}
+              className="w-full pl-9 pr-4 py-2 text-sm rounded-full bg-yellow-50 border border-yellow-200 focus:outline-none focus:ring-2 focus:ring-[#f59e0b]/40 text-[#1a1a1a] placeholder:text-gray-400"
+            />
+
+            {/* Autocomplete dropdown */}
+            {showSuggestions && filters.search.trim().length >= 2 && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 mt-2 bg-white border border-yellow-100 rounded-2xl shadow-xl overflow-hidden z-50">
+                {suggestions.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setShowSuggestions(false); router.push(`/practitioners/${p.id}`); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition-colors text-left border-b border-gray-50 last:border-b-0"
+                  >
+                    <img src={getPractitionerAvatar(p.photoUrl, p.name)} alt={p.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{p.specialties.slice(0, 2).join(' · ') || '—'}</p>
+                    </div>
+                    {p.isOnline && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <Button variant="outline" onClick={() => setShowFilters((v) => !v)} className="rounded-full gap-2 border-yellow-200 hover:bg-yellow-50 text-[#1a1a1a]">
             <SlidersHorizontal className="h-4 w-4" />
