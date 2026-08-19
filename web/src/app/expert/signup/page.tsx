@@ -33,7 +33,7 @@ export default function ExpertSignupPage() {
     formData.append('name', form.name);
     formData.append('email', form.email);
     formData.append('password', form.password);
-    formData.append('kycDocument', kycDocument);
+    if (kycDocument) formData.append('kycDocument', kycDocument);
     certificates.forEach(c => formData.append('certificates', c));
 
     try {
