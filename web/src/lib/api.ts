@@ -7,6 +7,7 @@ interface ApiResponse<T = unknown> {
   message: string;
   data?: T;
   errors?: { field: string; message: string }[];
+  code?: string;
 }
 
 interface AuthData {
@@ -21,6 +22,13 @@ interface AuthData {
   accessToken: string;
   refreshToken: string;
   verifyMethod?: 'email' | 'sms';
+}
+
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }
 
 export interface UserProfile {
@@ -39,6 +47,7 @@ export interface UserProfile {
 export interface PractitionerProfile {
   id: string;
   name: string;
+  email?: string | null;
   bio: string | null;
   specialties: string[];
   certifications: string[];
@@ -48,6 +57,7 @@ export interface PractitionerProfile {
   photoUrl: string | null;
   isVerified: boolean;
   isOnline: boolean;
+  isBusy?: boolean;
   avgRating?: number;
   reviewCount?: number;
 }
@@ -77,8 +87,8 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
-  googleSignIn: (idToken: string) =>
-    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+  googleSignIn: (idToken: string, state?: string) =>
+    request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, state }) }),
 
   appleSignIn: (body: { appleId: string; email?: string; name?: string }) =>
     request<AuthData>('/api/auth/apple', { method: 'POST', body: JSON.stringify(body) }),
@@ -149,6 +159,9 @@ export const usersApi = {
 
   deleteAccount: (token: string) =>
     request('/api/users/me', { method: 'DELETE', headers: authHeader(token) }),
+
+  exportData: (token: string) =>
+    request('/api/users/me/export', { method: 'POST', headers: authHeader(token) }),
 };
 
 export const practitionersApi = {
@@ -201,6 +214,9 @@ export const practitionersApi = {
 
   delete: (token: string, id: string) =>
     request(`/api/practitioners/${id}`, { method: 'DELETE', headers: authHeader(token) }),
+
+  exportData: (token: string) =>
+    request('/api/practitioners/me/export', { method: 'POST', headers: authHeader(token) }),
 };
 
 export const sessionsApi = {
@@ -212,13 +228,31 @@ export const sessionsApi = {
     }),
 
   get: (token: string, sessionId: string) =>
-    request<{ session: { id: string; status: string; type: string; practitioner: PractitionerProfile } }>(
+    request<{ session: { id: string; status: string; type: string; practitionerId?: string; practitioner: PractitionerProfile; userId?: string; user?: any } }>(
       `/api/sessions/${sessionId}`,
       { headers: authHeader(token) }
     ),
 
   end: (token: string, sessionId: string) =>
     request(`/api/sessions/${sessionId}/end`, { method: 'POST', headers: authHeader(token) }),
+
+  connect: (token: string, sessionId: string) =>
+    request<{ session: any }>(`/api/sessions/${sessionId}/connect`, { method: 'POST', headers: authHeader(token) }),
+
+  requestSession: (token: string, practitionerId: string, type?: string) =>
+    request<{ session: any }>('/api/sessions/request', { method: 'POST', headers: authHeader(token), body: JSON.stringify({ practitionerId, type }) }),
+
+  getRequests: (token: string) =>
+    request<{ sessions: any[] }>('/api/sessions/requests', { headers: authHeader(token) }),
+
+  selectTime: (token: string, requestId: string, time: string) =>
+    request(`/api/sessions/requests/${requestId}/select-time`, { method: 'POST', headers: authHeader(token), body: JSON.stringify({ time }) }),
+
+  accept: (token: string, requestId: string) =>
+    request(`/api/sessions/requests/${requestId}/accept`, { method: 'POST', headers: authHeader(token) }),
+
+  proposeTimes: (token: string, requestId: string, times: { startTime: string; endTime: string }[]) =>
+    request(`/api/sessions/requests/${requestId}/propose-times`, { method: 'POST', headers: authHeader(token), body: JSON.stringify({ times }) }),
 
   practitionerActive: (token: string) =>
     request<{ sessions: { id: string; type: string; status: string; createdAt: string; user: { id: string; name: string | null; photoUrl: string | null } }[] }>(
@@ -237,7 +271,27 @@ export const sessionsApi = {
       '/api/sessions/user/history',
       { headers: authHeader(token) }
     ),
+
+  myTranscripts: (token: string, page?: number) =>
+    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>('/api/sessions/transcripts' + (page ? `?page=${page}` : ''), { headers: authHeader(token) }),
+
+  practitionerTranscripts: (token: string, page?: number) =>
+    request<{ transcripts: TranscriptEntry[]; pagination: Pagination }>('/api/sessions/practitioner/transcripts' + (page ? `?page=${page}` : ''), { headers: authHeader(token) }),
 };
+
+export interface TranscriptEntry {
+  id: string;
+  sessionId: string;
+  type: string;
+  startTime: string;
+  endTime: string;
+  submittedAt: string;
+  transcriptText?: string;
+  recordingUrl?: string;
+  session: any;
+  practitioner?: { name: string; photoUrl: string | null };
+  user?: { name: string; photoUrl: string | null };
+}
 
 export const agoraApi = {
   getToken: (token: string, sessionId: string) =>
@@ -362,6 +416,11 @@ export interface AstrologerOnboardingProfile {
   professionalVerified: boolean;
   adminVerified: boolean;
   application?: { step: number; submittedAt: string | null; lastSavedAt: string };
+  isOnline?: boolean;
+  avgRating?: number;
+  reviewCount?: number;
+  totalConsultations?: number;
+  totalEarnings?: number;
 }
 
 export const astrologerApi = {
@@ -581,4 +640,63 @@ export const consentApi = {
       body: JSON.stringify(token ? { category, granted } : { category, granted, visitorId: getVisitorId() }),
     });
   },
+};
+
+export interface TicketMessageEntry {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  senderRole: string;
+  senderType?: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface SupportTicketEntry {
+  id: string;
+  subject: string;
+  message: string;
+  category: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { messages: number };
+  messages?: TicketMessageEntry[];
+}
+
+export const ticketsApi = {
+  create: (token: string, subject: string, message: string, category?: string) =>
+    request<{ ticket: SupportTicketEntry }>('/api/tickets', {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ subject, message, category }),
+    }),
+
+  list: (token: string) =>
+    request<{ tickets: SupportTicketEntry[] }>('/api/tickets', {
+      headers: authHeader(token),
+    }),
+
+  mine: (token: string) =>
+    request<{ tickets: SupportTicketEntry[] }>('/api/tickets/mine', {
+      headers: authHeader(token),
+    }),
+
+  get: (token: string, id: string) =>
+    request<{ ticket: SupportTicketEntry }>(`/api/tickets/${id}`, {
+      headers: authHeader(token),
+    }),
+
+  reply: (token: string, id: string, message: string) =>
+    request<{ message: TicketMessageEntry }>(`/api/tickets/${id}/reply`, {
+      method: 'POST',
+      headers: authHeader(token),
+      body: JSON.stringify({ message }),
+    }),
+
+  close: (token: string, id: string) =>
+    request<{ ticket: SupportTicketEntry }>(`/api/tickets/${id}/close`, {
+      method: 'POST',
+      headers: authHeader(token),
+    }),
 };
