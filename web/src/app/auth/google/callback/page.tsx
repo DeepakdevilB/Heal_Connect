@@ -17,19 +17,29 @@ export default function GoogleCallbackPage() {
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const idToken = params.get('id_token');
+    const state = params.get('state') || 'user';
 
     if (!idToken) {
       setError('No token received from Google. Please try again.');
       return;
     }
 
-    authApi.googleSignIn(idToken).then((res) => {
+    authApi.googleSignIn(idToken, state).then((res) => {
       if (!res.success || !res.data) {
         setError(res.message || 'Google sign-in failed');
         return;
       }
       tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
-      router.replace('/dashboard');
+      if (state === 'expert' || (res.data as any).role === 'practitioner' || (res.data.user as any).role === 'practitioner') {
+        localStorage.setItem('hc_role', 'practitioner');
+        localStorage.setItem('hc_practitioner_id', res.data.user.id);
+        localStorage.setItem('hc_pid', res.data.user.id);
+        localStorage.setItem('hc_practitioner_name', res.data.user.name || '');
+        router.replace('/expert/dashboard');
+      } else {
+        localStorage.removeItem('hc_role');
+        router.replace('/dashboard');
+      }
     }).catch((err) => {
       setError(`Google sign-in failed. Please try again. [${err.message || String(err)}]`);
     });

@@ -3,7 +3,6 @@ import { type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
 import { scanContent, flagContentIfNeeded } from '../lib/moderation';
-import adminAstrologersRouter from './adminAstrologers';
 
 void requireAuth;
 
@@ -14,17 +13,157 @@ const router = Router();
 const execPromise = util.promisify(exec);
 
 // ─── 0. Run Database Migrations ──────────────────────────────────────────────
-router.post('/migrate', async (req: Request, res: Response) => {
+router.all('/migrate', async (req: Request, res: Response) => {
   if (req.query['secret'] !== 'healconnect2026') {
     res.status(200).json({ success: false, message: 'Unauthorized' });
     return;
   }
   try {
-    const { stdout, stderr } = await execPromise('npx prisma migrate deploy || ./node_modules/.bin/prisma migrate deploy || npm run migrate');
-    res.json({ success: true, message: 'Migrations applied successfully', stdout, stderr });
+    // Adding SupportTicket tables
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SupportTicket" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "subject" TEXT NOT NULL,
+          "category" TEXT NOT NULL DEFAULT 'OTHER',
+          "status" TEXT NOT NULL DEFAULT 'OPEN',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL,
+          CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TicketMessage" (
+          "id" TEXT NOT NULL,
+          "ticketId" TEXT NOT NULL,
+          "senderType" TEXT NOT NULL,
+          "message" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "TicketMessage_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Ban fields
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "banReason" TEXT, ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "googleId" TEXT UNIQUE;`);
+
+    // GDPR fields
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CallTranscript" ADD COLUMN IF NOT EXISTS "purgedAt" TIMESTAMP(3);`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Consent" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "visitorId" TEXT,
+          "category" TEXT NOT NULL,
+          "granted" BOOLEAN NOT NULL,
+          "source" TEXT NOT NULL DEFAULT 'BANNER',
+          "ipAddress" TEXT,
+          "userAgent" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "Consent_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Mehak's merged tables
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "scheduledStartTime" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scheduledEndTime" TIMESTAMP(3);`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DeviceToken" (
+          "id" TEXT NOT NULL,
+          "userId" TEXT,
+          "practitionerId" TEXT,
+          "token" TEXT NOT NULL,
+          "platform" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "DeviceToken_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE,
+          CONSTRAINT "DeviceToken_practitionerId_fkey" FOREIGN KEY ("practitionerId") REFERENCES "Practitioner"("id") ON DELETE CASCADE
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DeviceToken_token_key" ON "DeviceToken"("token");`);
+    
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NotificationLog" (
+          "id" TEXT NOT NULL,
+          "recipientId" TEXT NOT NULL,
+          "recipientType" TEXT NOT NULL,
+          "type" TEXT NOT NULL,
+          "title" TEXT NOT NULL,
+          "body" TEXT NOT NULL,
+          "entityId" TEXT,
+          "status" TEXT NOT NULL,
+          "errorMsg" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "NotificationLog_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionTimeProposal" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "proposedBy" TEXT NOT NULL,
+          "startTime" TIMESTAMP(3) NOT NULL,
+          "endTime" TIMESTAMP(3) NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "expiresAt" TIMESTAMP(3),
+          CONSTRAINT "SessionTimeProposal_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionTimeProposal_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SessionReminder" (
+          "id" TEXT NOT NULL,
+          "sessionId" TEXT NOT NULL,
+          "participantId" TEXT NOT NULL,
+          "reminderType" TEXT NOT NULL,
+          "scheduledFor" TIMESTAMP(3) NOT NULL,
+          "enabled" BOOLEAN NOT NULL DEFAULT true,
+          "sent" BOOLEAN NOT NULL DEFAULT false,
+          "sentAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SessionReminder_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SessionReminder_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE
+      );
+    `);
+    
+    try {
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SessionReminder_sessionId_participantId_reminderType_key" ON "SessionReminder"("sessionId", "participantId", "reminderType");`);
+    } catch(e) {}
+
+    res.status(200).json({ success: true, message: 'Migrations applied successfully' });
   } catch (error: any) {
     console.error('Migration error:', error);
-    res.status(200).json({ success: false, message: 'Migration failed', error: error.message, stdout: error.stdout, stderr: error.stderr });
+    res.status(200).json({ success: false, message: 'Migration failed', error: error.message });
+  }
+});
+
+router.post('/fix-email', async (req: Request, res: Response) => {
+  try {
+    // Delete the mistakenly created new empty account if it exists
+    await prisma.practitioner.deleteMany({
+      where: { email: 'deep.pgl.work@gmail.com', reviewCount: 0, experienceYrs: 0 }
+    });
+    // Update the old account to have the correct dotted email
+    const updated = await prisma.practitioner.updateMany({
+      where: { email: 'deeppglwork@gmail.com' },
+      data: { email: 'deep.pgl.work@gmail.com' }
+    });
+    res.json({ success: true, updated: updated.count });
+  } catch (e: any) {
+    res.json({ success: false, error: e.message });
   }
 });
 
@@ -41,9 +180,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
 }
 
 router.use(requireAdmin);
-
-// ─── Astrologer Management (sub-router) ──────────────────────────────────────
-router.use('/astrologers', adminAstrologersRouter);
 
 // ─── Clean Dummy Practitioners Endpoint ───────────────────────────────────────
 router.post('/clean-dummies', async (_req: Request, res: Response) => {
@@ -716,6 +852,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
           duration: true,
           startTime: true,
           endTime: true,
+          scheduledStartTime: true,
+          scheduledEndTime: true,
           totalCost: true,
           perMinuteRate: true,
           createdAt: true,
@@ -744,6 +882,8 @@ router.get('/sessions', async (req: Request, res: Response) => {
         status: s.status,
         durationMinutes: calculatedDuration,
         startTime: s.startTime ? s.startTime.toISOString() : s.createdAt.toISOString(),
+        scheduledStartTime: s.scheduledStartTime ? s.scheduledStartTime.toISOString() : null,
+        scheduledEndTime: s.scheduledEndTime ? s.scheduledEndTime.toISOString() : null,
         endTime: s.endTime ? s.endTime.toISOString() : null,
         totalCost: Math.round(s.totalCost * 100) / 100,
         paymentStatus: s.totalCost > 0 ? 'Paid' : 'Free / Pending',
@@ -1198,4 +1338,31 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// ─── 15. Payouts (Stub) ────────────────────────────────────────────────────────
+router.post('/payouts/:id/process', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { status, amount, practitionerId } = req.body;
+    
+    // In a real implementation, you would update the Payout model here and call Razorpay
+    
+    // 6. Notify Practitioner about payout
+    if (status === 'SUCCESS' && practitionerId) {
+      const { sendNotificationToPractitioner } = await import('../services/notification.service');
+      await sendNotificationToPractitioner(practitionerId, {
+        type: 'PAYOUT',
+        title: 'Payout Processed',
+        body: `Your payout of ₹${amount} has been successfully processed to your bank account.`,
+        entityId: id
+      });
+    }
+
+    res.json({ success: true, message: 'Payout processed' });
+  } catch (err) {
+    console.error('Payout processing error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;
+

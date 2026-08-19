@@ -1,46 +1,59 @@
-import Redis, { Cluster } from 'ioredis';
+import Redis from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+let redis: any = null;
 
-function createClient(): Redis | Cluster {
-  // Azure Redis Cluster URLs come as rediss://host:port
-  // Detect cluster mode via env flag or URL pattern
-  if (process.env.REDIS_CLUSTER === 'true') {
-    const url = new URL(REDIS_URL);
-    return new Cluster(
-      [{ host: url.hostname, port: Number(url.port) || 6380 }],
-      {
-        dnsLookup: (address, callback) => callback(null, address),
-        redisOptions: {
-          tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
-          password: url.password || undefined,
-          maxRetriesPerRequest: 3,
-        },
-        enableAutoPipelining: false,
-      }
-    );
-  }
+if (process.env.REDIS_URL) {
+  const REDIS_URL = process.env.REDIS_URL;
+  const isAzure = REDIS_URL.includes('azure.net') || REDIS_URL.startsWith('rediss://');
 
-  return new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 3,
+  const options = {
+    tls: isAzure ? { rejectUnauthorized: false } : undefined,
+    maxRetriesPerRequest: null,
     enableAutoPipelining: false,
-    tls: REDIS_URL.startsWith('rediss://') ? {} : undefined,
-    retryStrategy(times) {
+    retryStrategy(times: number) {
+      if (times > 5) return null; // stop retrying after 5 attempts
       return Math.min(times * 50, 3000);
-    },
+    }
+  };
+
+  // Azure Redis Enterprise uses a proxy that handles clustering internally.
+  // We MUST use the standalone Redis client, otherwise ioredis tries to run CLUSTER SLOTS,
+  // which causes infinite reconnect loops because internal node IPs aren't directly routable.
+  redis = new Redis(REDIS_URL, options);
+
+  redis.on('error', (err: any) => {
+    console.error('Redis Client Error:', err.message);
   });
+
+  redis.on('connect', () => {
+    console.log('Successfully connected to Redis');
+  });
+} else {
+  console.warn('⚠ REDIS_URL not set — token blacklisting & distributed locks disabled. Using in-memory fallbacks.');
 }
 
-export const redis = createClient();
+export { redis };
 
-redis.on('error', (err: Error) => console.error('Redis error:', err.message));
-redis.on('connect', () => console.log('Successfully connected to Redis'));
-
+/**
+ * Blacklists a JWT token by storing it in Redis until it expires.
+ * @param token The JWT token to blacklist
+ * @param expiresInMs Time in milliseconds until the token expires naturally
+ */
 export async function blacklistToken(token: string, expiresInMs: number): Promise<void> {
-  await redis.set(`bl_${token}`, 'true', 'PX', expiresInMs);
+  if (!redis) return;
+  const key = `bl_${token}`;
+  // Store the token with an expiration (PX = milliseconds)
+  await redis.set(key, 'true', 'PX', expiresInMs);
 }
 
+/**
+ * Checks if a JWT token has been blacklisted.
+ * @param token The JWT token to check
+ * @returns true if blacklisted, false otherwise
+ */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
-  const result = await redis.get(`bl_${token}`);
+  if (!redis) return false;
+  const key = `bl_${token}`;
+  const result = await redis.get(key);
   return result === 'true';
 }

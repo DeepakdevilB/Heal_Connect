@@ -15,7 +15,7 @@ async function main() {
       perMinuteRate: 50,
       isVerified: true,
       isOnline: true,
-      photoUrl: '/avatars/astrologer_1.jpg'
+      photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
     }
   });
 
@@ -31,7 +31,7 @@ async function main() {
       perMinuteRate: 35,
       isVerified: true,
       isOnline: false,
-      photoUrl: '/avatars/astrologer_2.jpg'
+      photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ananda'
     }
   });
 
@@ -47,7 +47,7 @@ async function main() {
       perMinuteRate: 60,
       isVerified: true,
       isOnline: true,
-      photoUrl: '/avatars/astrologer_3.jpg'
+      photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael'
     }
   });
 

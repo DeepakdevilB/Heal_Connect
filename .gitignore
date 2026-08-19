@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment variables — NEVER commit real secrets
+# Environment variables
 .env
 .env.*
 !.env.example
@@ -28,39 +28,13 @@ yarn-error.log*
 
 # macOS
 .DS_Store
-Thumbs.db
 
-# Certificates & keys
+# Certificates
 *.pem
 *.key
-*.p12
-*.pfx
 
 # Vercel
 .vercel
 
 # Extracted docs output
 docs/extracted_texts.txt
-
-# Local file uploads (dev fallback — never commit user documents)
-backend/uploads/
-uploads/
-
-# Prisma generated
-backend/generated/
-
-# Patch files
-*.patch
-
-# Local migration SQL dumps
-migration.sql
-
-# Test / debug scripts
-backend/poll.ts
-backend/test-*.ts
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo

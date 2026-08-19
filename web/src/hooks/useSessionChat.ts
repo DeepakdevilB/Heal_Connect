@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSocket, disconnectSocket } from '@/lib/socket';
-import { tokenStore, walletApi, sessionsApi } from '@/lib/api';
+import { tokenStore, walletApi } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -57,12 +57,26 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
     socket.emit('join_room', { sessionId });
 
     socket.on('joined_room', () => {
+      setSessionStatus('connecting'); // Wait for peer before becoming active
+    });
+
+    socket.on('session_started', ({ startTime }: { sessionId: string; startTime?: string }) => {
       setSessionStatus('active');
       // Stop any existing timers before starting new ones (Strict Mode safety)
       if (timerRef.current) clearInterval(timerRef.current);
       if (walletPollRef.current) clearInterval(walletPollRef.current);
-      // Start session timer
-      timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+      
+      // Start session timer synced to backend time
+      if (startTime) {
+        const startTs = new Date(startTime).getTime();
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+        timerRef.current = setInterval(() => {
+          setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTs) / 1000)));
+        }, 1000);
+      } else {
+        timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+      }
+
       // Start wallet polling
       fetchWallet();
       walletPollRef.current = setInterval(fetchWallet, 15000);
@@ -97,14 +111,22 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
       disconnectSocket();
     });
 
+    socket.on('session_disconnected', () => {
+      stopTimers();
+      setSessionStatus('ended');
+      disconnectSocket();
+    });
+
     return () => {
       socket.off('joined_room');
+      socket.off('session_started');
       socket.off('message_history');
       socket.off('new_message');
       socket.off('typing_update');
       socket.off('receipt_update');
       socket.off('low_balance');
       socket.off('session_terminated');
+      socket.off('session_disconnected');
       stopTimers();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,11 +162,15 @@ export function useSessionChat(sessionId: string, currentUserId: string): UseSes
     getSocket(token).emit('message_read', { sessionId, messageId });
   }, [sessionId]);
 
-  const endSession = useCallback(() => {
+  const endSession = useCallback(async () => {
     stopTimers();
     setSessionStatus('ended');
     const token = tokenStore.getAccess();
-    if (token) sessionsApi.end(token, sessionId).catch(console.error);
+    if (token) {
+      import('@/lib/api').then(({ sessionsApi }) => {
+        sessionsApi.end(token, sessionId).catch(console.error);
+      });
+    }
     disconnectSocket();
   }, [sessionId]);
 

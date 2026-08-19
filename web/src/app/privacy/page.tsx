@@ -1,112 +1,144 @@
-import Link from 'next/link';
+import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo';
+import Navbar from '@/components/navbar';
+import { ShieldCheck } from 'lucide-react';
 
-export const metadata = { title: 'Privacy Policy — HealConnect' };
+export const metadata: Metadata = buildMetadata({
+  title: 'Privacy Policy',
+  description:
+    'How HealConnect collects, uses, shares, and protects your personal data, and how to exercise your data protection rights.',
+  path: '/privacy',
+});
 
-export default function PrivacyPage() {
-  const sections = [
-    {
-      title: '1. Information We Collect',
-      content: `We collect the following types of information:
-• Personal Information: Name, mobile number, email address, date of birth, gender, profile photo.
-• Identity Documents: Aadhaar card, PAN card, passport, or other government-issued IDs submitted during expert verification.
-• Professional Information: Specializations, qualifications, certifications, social media profiles.
-• Usage Data: Session history, chat messages, call logs, wallet transactions, device information, and IP address.
-• Payment Information: Processed securely via Razorpay or Stripe. We do not store card details.`,
-    },
-    {
-      title: '2. How We Use Your Information',
-      content: `We use your information to:
-• Create and manage your account on HealConnect.
-• Verify expert identity and professional credentials.
-• Facilitate real-time chat and audio consultations.
-• Process wallet recharges and expert payouts.
-• Send OTP verification, session notifications, and platform updates via SMS and email.
-• Improve platform features, detect fraud, and ensure safety.
-• Comply with legal obligations under Indian law.`,
-    },
-    {
-      title: '3. How We Share Your Information',
-      content: `We do not sell your personal data. We may share information with:
-• Verification Team: Identity documents are reviewed only by authorised HealConnect staff.
-• Service Providers: Twilio (SMS), SendGrid (email), Razorpay/Stripe (payments), Azure (storage) — bound by confidentiality agreements.
-• Legal Authorities: When required by law, court order, or to protect the rights and safety of users.
-• Other Users: Your display name, profile photo, specializations, and ratings are visible to clients on the platform.`,
-    },
-    {
-      title: '4. Data Storage & Security',
-      content: `Your data is stored on secure servers hosted on Microsoft Azure (Central India region). We use industry-standard encryption (TLS/HTTPS) for data in transit and AES-256 for data at rest. Identity documents are stored in Azure Blob Storage with restricted access. We implement JWT-based authentication with token rotation and Redis-based blacklisting for session security.`,
-    },
-    {
-      title: '5. Cookies & Local Storage',
-      content: `HealConnect uses browser localStorage to store authentication tokens and session preferences. We do not use third-party tracking cookies. You can clear your browser storage at any time, which will log you out of the platform.`,
-    },
-    {
-      title: '6. Your Rights',
-      content: `You have the right to:
-• Access the personal data we hold about you.
-• Request correction of inaccurate information.
-• Request deletion of your account and associated data.
-• Withdraw consent for marketing communications at any time.
-To exercise these rights, contact us at privacy@healconnect.in`,
-    },
-    {
-      title: '7. Data Retention',
-      content: `We retain your personal data for as long as your account is active or as required by law. Upon account deletion, personal data is removed within 30 days, except where retention is required for legal, tax, or fraud prevention purposes. Chat messages and session records may be retained for up to 12 months for dispute resolution.`,
-    },
-    {
-      title: '8. Children\'s Privacy',
-      content: `HealConnect is not intended for users under the age of 18. We do not knowingly collect personal information from minors. If we become aware that a minor has registered, we will immediately delete their account and associated data.`,
-    },
-    {
-      title: '9. Third-Party Links',
-      content: `Our platform may contain links to third-party websites (e.g. Instagram, YouTube, LinkedIn profiles of experts). We are not responsible for the privacy practices of these external sites. We encourage you to review their privacy policies.`,
-    },
-    {
-      title: '10. Changes to This Policy',
-      content: `We may update this Privacy Policy from time to time. We will notify you of significant changes via email or in-app notification. Continued use of the Platform after changes constitutes acceptance of the updated policy.`,
-    },
-    {
-      title: '11. Contact Us',
-      content: `For privacy-related queries, data requests, or concerns, contact our Data Protection Officer at:
-Email: privacy@healconnect.in
-Address: HealConnect, Mumbai, Maharashtra, India`,
-    },
-  ];
+const LAST_UPDATED = 'August 8, 2026';
 
+function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#fffbf0]">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-amber-500 to-orange-500 py-14 px-4 text-center">
-        <h1 className="text-3xl font-extrabold text-white mb-2">Privacy Policy</h1>
-        <p className="text-yellow-100 text-sm">Last updated: January 2026</p>
-      </div>
+    <section className="mb-10">
+      <h2 className="text-xl font-extrabold text-gray-900 mb-3 flex items-baseline gap-2">
+        <span className="text-amber-500">{n}.</span> {title}
+      </h2>
+      <div className="text-gray-700 leading-relaxed space-y-3 text-[15px]">{children}</div>
+    </section>
+  );
+}
 
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-sm border border-amber-100 p-8 space-y-8">
+export default function PrivacyPolicyPage() {
+  return (
+    <div className="min-h-screen bg-[#faf9f6] text-[#1a1a1a] flex flex-col font-sans">
+      <Navbar />
 
-          <p className="text-gray-600 text-sm leading-relaxed border-l-4 border-amber-400 pl-4">
-            HealConnect ("we", "us", "our") is committed to protecting your privacy. This policy explains how we collect, use, store, and protect your personal information when you use our platform.
-          </p>
-
-          {sections.map((s) => (
-            <div key={s.title}>
-              <h2 className="text-base font-bold text-gray-900 mb-2">{s.title}</h2>
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{s.content}</p>
+      <main className="flex-1 pt-32 pb-24">
+        <div className="container mx-auto px-4 max-w-3xl">
+          <div className="text-center mb-14">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck className="w-8 h-8" />
             </div>
-          ))}
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">Privacy Policy</h1>
+            <p className="text-gray-500">Last updated: {LAST_UPDATED}</p>
+          </div>
 
-        </div>
-
-        <div className="mt-8 text-center space-y-2">
-          <p className="text-sm text-gray-500">
-            Also read our{' '}
-            <Link href="/terms" className="text-amber-600 hover:text-amber-700 font-medium underline">Terms & Conditions</Link>
+          <p className="text-gray-700 leading-relaxed mb-10 text-[15px]">
+            This policy explains how HealConnect ("we", "us") collects, uses, and protects your personal data when
+            you use our website and app to connect with astrologers and wellness practitioners. It applies to
+            registered users and practitioners (experts) alike. It is written to be read alongside applicable data
+            protection law, including the EU/UK GDPR and India's Digital Personal Data Protection Act.
           </p>
-          <Link href="/astrologer/onboarding" className="inline-block text-sm text-gray-400 hover:text-gray-600">
-            ← Back to Registration
-          </Link>
+
+          <Section n={1} title="Who we are">
+            <p>
+              HealConnect operates this platform. For any privacy question, correction request, or complaint,
+              contact us at <span className="font-semibold">privacy@healconnect.app</span>.
+            </p>
+          </Section>
+
+          <Section n={2} title="What we collect">
+            <p>
+              Account details: name, email, phone number, gender, date of birth, and birth place (used for
+              astrological readings). Consultation content: chat messages and call transcripts exchanged during a
+              session with a practitioner. Payment references: wallet transaction records — we never store your
+              card or UPI details directly; our payment processor handles those. Usage data: device/browser
+              information and basic activity logs needed to operate and secure the service.
+            </p>
+          </Section>
+
+          <Section n={3} title="Why we process your data (lawful basis)">
+            <p>
+              Creating your account and delivering a consultation (contract). Fraud prevention, account security,
+              and abuse moderation (legitimate interest). Analytics and marketing communications (consent — see
+              "Cookies" below; off by default, and you can withdraw it at any time).
+            </p>
+          </Section>
+
+          <Section n={4} title="Chat and call content — a note on sensitive topics">
+            <p>
+              During a consultation you may voluntarily share sensitive details with a practitioner (for example,
+              about your health, relationships, or beliefs) as part of getting a reading. We treat this content as
+              high-risk: it's encrypted in transit, access is restricted to the two participants and to our
+              moderation team when a message is flagged for review, and it is automatically purged after{' '}
+              <span className="font-semibold">90 days</span> — the message thread stays for your records, but the
+              text itself is permanently removed. If a message is under active moderation review, it's held past
+              90 days only until that review closes, then purged the same way.
+            </p>
+          </Section>
+
+          <Section n={5} title="Who we share data with">
+            <p>
+              Practitioners you consult with (only what's needed to deliver the session). Our hosting/database
+              provider, payment processor, SMS/email provider (for OTPs and notifications), and — only once you've
+              opted in — analytics or marketing tools. We do not sell your data.
+            </p>
+          </Section>
+
+          <Section n={6} title="International transfers">
+            <p>
+              If any service provider we use processes data outside your country, we rely on their standard
+              contractual safeguards (such as Standard Contractual Clauses) to protect it.
+            </p>
+          </Section>
+
+          <Section n={7} title="How long we keep data">
+            <p>
+              Account and profile data: kept while your account is active. Chat/call content: purged after 90 days
+              (see above). Session and payment records: retained for as long as required for accounting and legal
+              obligations, even after you delete your account, since we anonymize rather than remove the
+              underlying financial record. Consent decisions: kept as an audit trail of what you agreed to and
+              when.
+            </p>
+          </Section>
+
+          <Section n={8} title="Your rights">
+            <p>
+              You can access and download a copy of your data, correct inaccurate details, delete (erase) your
+              account, and withdraw consent for analytics/marketing at any time. To download your data or delete
+              your account, use the options in your account settings. To exercise any other right, email{' '}
+              <span className="font-semibold">privacy@healconnect.app</span>.
+            </p>
+          </Section>
+
+          <Section n={9} title="Cookies and tracking">
+            <p>
+              We use a consent banner to ask before enabling analytics or marketing cookies — both are off until
+              you choose "Accept". Necessary cookies (for login sessions) don't require consent since the service
+              can't function without them. You can change your choice at any time from the banner or by clearing
+              your browser's local storage for this site.
+            </p>
+          </Section>
+
+          <Section n={10} title="Complaints">
+            <p>
+              If you're unhappy with how we've handled your data, you can contact us first at{' '}
+              <span className="font-semibold">privacy@healconnect.app</span>, or lodge a complaint with your local
+              data protection authority.
+            </p>
+          </Section>
+
+          <p className="text-xs text-gray-400 mt-14 border-t border-gray-200 pt-6">
+            This policy is provided as a good-faith summary of our data practices and is not legal advice. Contact
+            details above are placeholders — please confirm the right contact address before publishing.
+          </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
