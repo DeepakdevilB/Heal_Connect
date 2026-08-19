@@ -88,6 +88,12 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     request<AuthData>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
+  requestLoginOtp: (phone: string, role?: string) =>
+    request('/api/auth/login-otp/request', { method: 'POST', body: JSON.stringify({ phone, role }) }),
+
+  verifyLoginOtp: (phone: string, otp: string, role?: string) =>
+    request<AuthData>('/api/auth/login-otp/verify', { method: 'POST', body: JSON.stringify({ phone, otp, role }) }),
+
   googleSignIn: (idToken: string, state?: string) =>
     request<AuthData>('/api/auth/google', { method: 'POST', body: JSON.stringify({ idToken, state }) }),
 

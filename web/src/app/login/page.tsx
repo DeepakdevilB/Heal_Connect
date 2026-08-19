@@ -35,11 +35,13 @@ function LoginInner() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
+  const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -79,13 +81,41 @@ function LoginInner() {
 
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
+    setSuccess('');
     try {
       const res = await authApi.forgotPassword(email);
-      setSuccess(res.message || 'Check your email for a reset link.');
-    } catch { setError('Something went wrong. Please try again.'); }
-    finally { setLoading(false); }
+      if (res.success) {
+        setSuccess(res.message);
+      } else {
+        setError(res.message);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!phone) return setError('Please enter a phone number.');
+    setLoading(true);
+    setError('');
+    try {
+      const cleanPhone = phone.replace(/\s+/g, '');
+      const res = await (authApi as any).requestLoginOtp(cleanPhone, 'user');
+      if (!res.success) {
+        setError(res.message || 'Failed to send OTP.');
+        return;
+      }
+      router.push(`/verify-otp?phone=${encodeURIComponent(cleanPhone)}&type=login&role=user`);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong sending OTP.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleGoogleSignIn() {
@@ -183,6 +213,21 @@ function LoginInner() {
             {success && <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{success}</div>}
 
             {mode === 'login' && (
+              <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1 mb-4">
+                <button type="button" onClick={() => { setLoginMethod('password'); setError(''); setSuccess(''); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    loginMethod === 'password' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  Email & Password
+                </button>
+                <button type="button" onClick={() => { setLoginMethod('otp'); setError(''); setSuccess(''); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    loginMethod === 'otp' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                  Phone & OTP
+                </button>
+              </div>
+            )}
+
+            {mode === 'login' && loginMethod === 'password' && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-[#1a1a1a]">Email</Label>

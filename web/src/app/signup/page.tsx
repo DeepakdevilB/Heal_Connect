@@ -30,18 +30,15 @@ function SignupInner() {
     router.replace(isExpert ? '/expert/dashboard' : '/dashboard');
   }, [router]);
 
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  // Kept as two separate boxes rather than one bundled "I agree to
-  // everything" checkbox — Terms and Privacy Notice are each their own
-  // consent record (see backend lib/consentPolicy.ts), and marketing is
-  // opt-in and never required to create an account.
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [emailMarketingOptIn, setEmailMarketingOptIn] = useState(false);
@@ -102,6 +99,26 @@ function SignupInner() {
       }
     } catch { setError('Something went wrong. Please try again.'); }
     finally { setLoading(false); }
+  }
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!phone) return setError('Please enter a phone number.');
+    setLoading(true);
+    setError('');
+    try {
+      const cleanPhone = phone.replace(/\s+/g, '');
+      const res = await (authApi as any).requestLoginOtp(cleanPhone, 'user');
+      if (!res.success) {
+        setError(res.message || 'Failed to send OTP.');
+        return;
+      }
+      router.push(`/verify-otp?phone=${encodeURIComponent(cleanPhone)}&type=register&role=user`);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong sending OTP.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleGoogleSignIn() {
@@ -189,6 +206,42 @@ function SignupInner() {
               </div>
             )}
 
+            <div className="flex rounded-xl border border-yellow-200 overflow-hidden bg-[#fffbf0] p-1 gap-1 mb-4">
+              <button type="button" onClick={() => { setLoginMethod('password'); setError(''); setSuccess(''); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  loginMethod === 'password' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                Email & Password
+              </button>
+              <button type="button" onClick={() => { setLoginMethod('otp'); setError(''); setSuccess(''); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  loginMethod === 'otp' ? 'bg-[#f59e0b] text-white shadow' : 'text-gray-500 hover:text-[#f59e0b]'}`}>
+                Phone & OTP
+              </button>
+            </div>
+
+            {loginMethod === 'otp' && (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-[#1a1a1a]">Phone Number</Label>
+                  <Input id="phone" type="tel" placeholder="+919876543210" value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                </div>
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-start gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} required className="mt-0.5 rounded border-yellow-300 text-[#f59e0b] focus:ring-[#f59e0b]" />
+                    <span>I agree to the <Link href="/terms" target="_blank" className="text-[#f59e0b] font-semibold hover:underline">Terms of Service</Link></span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={acceptPrivacy} onChange={(e) => setAcceptPrivacy(e.target.checked)} required className="mt-0.5 rounded border-yellow-300 text-[#f59e0b] focus:ring-[#f59e0b]" />
+                    <span>I've read and acknowledge the <Link href="/privacy" target="_blank" className="text-[#f59e0b] font-semibold hover:underline">Privacy Notice</Link></span>
+                  </label>
+                </div>
+                <Button type="submit" disabled={loading || !acceptTerms || !acceptPrivacy} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Send OTP <ArrowRight className="ml-2 h-4 w-4" /></>}
+                </Button>
+              </form>
+            )}
+
+            {loginMethod === 'password' && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-[#1a1a1a]">Full Name</Label>
@@ -280,6 +333,7 @@ function SignupInner() {
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Create Account <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
             </form>
+            )}
 
             <div className="relative flex items-center py-1">
               <div className="flex-grow border-t border-yellow-100" />

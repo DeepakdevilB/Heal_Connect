@@ -15,8 +15,11 @@ function VerifyOtpContent() {
   const searchParams = useSearchParams();
   const router       = useRouter();
   const rawPhone = searchParams.get('phone') ?? '';
+  const type = searchParams.get('type') ?? 'signup';
+  const role = searchParams.get('role') ?? 'user';
   // Ensure the + prefix is preserved (URL encoding can sometimes lose it)
-  const phone = rawPhone && !rawPhone.startsWith('+') ? `+${rawPhone}` : rawPhone;
+  let phone = rawPhone && !rawPhone.startsWith('+') ? `+${rawPhone}` : rawPhone;
+  phone = phone.replace(/\s+/g, ''); // strip spaces
 
   // 6 individual digit inputs (Twilio Verify default)
   const [digits,   setDigits]   = useState<string[]>(Array(6).fill(''));
@@ -28,32 +31,30 @@ function VerifyOtpContent() {
   const [isOrbiting, setIsOrbiting] = useState(false);
   const [shakeTrigger, setShakeTrigger] = useState(false);
   const [activeFocus, setActiveFocus] = useState<number | null>(0);
+  
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (!phone) router.push('/signup');
+    else inputRefs.current[0]?.focus();
+  }, [phone, router]);
 
   const otp = digits.join('');
 
-  // Auto-focus first input on load
-  useEffect(() => {
-    inputRefs.current[0]?.focus();
-  }, []);
-
-  function handleDigit(index: number, value: string) {
+  function handleDigit(index: number, val: string) {
     if (isOrbiting || loading) return;
-    const digit = value.replace(/\D/g, '').slice(-1);
+    const char = val.replace(/\D/g, '');
     const next = [...digits];
-    next[index] = digit;
+    next[index] = char.substring(0, 1);
     setDigits(next);
     
-    if (digit) {
-      if (index < 5) {
-        inputRefs.current[index + 1]?.focus();
-        setActiveFocus(index + 1);
-      } else {
-        // Blur and start verification flow
-        inputRefs.current[index]?.blur();
-        setActiveFocus(null);
-        triggerVerificationFlow(next.join(''));
-      }
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+      setActiveFocus(index + 1);
+    }
+    
+    if (index === 5 && char) {
+      triggerVerificationFlow(next.join(''));
     }
   }
 
@@ -77,12 +78,19 @@ function VerifyOtpContent() {
   function handlePaste(e: React.ClipboardEvent) {
     if (isOrbiting || loading) return;
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      const splitDigits = pasted.split('');
-      setDigits(splitDigits);
-      inputRefs.current[5]?.focus();
-      setActiveFocus(5);
-      triggerVerificationFlow(pasted);
+    if (pasted) {
+      const next = [...digits];
+      for (let i = 0; i < pasted.length; i++) {
+        next[i] = pasted[i];
+      }
+      setDigits(next);
+      const focusIndex = Math.min(pasted.length, 5);
+      inputRefs.current[focusIndex]?.focus();
+      setActiveFocus(focusIndex);
+      
+      if (pasted.length === 6) {
+        triggerVerificationFlow(pasted);
+      }
     }
     e.preventDefault();
   }
@@ -120,39 +128,35 @@ function VerifyOtpContent() {
 
     // Wait for the orbit animation to complete (approx 850ms)
     setTimeout(async () => {
-      // 🧪 Dev Testing Mode Bypasses:
-      if (otpCode === '123456') {
-        setSuccess(true);
-        setTimeout(() => router.push('/login'), 2000);
-        return;
-      }
-      if (otpCode === '000000') {
-        setError('Invalid OTP. Please try again (Simulated Failure).');
-        setDigits(Array(6).fill(''));
-        setShakeTrigger(true);
-        // Auto reset shake trigger
-        setTimeout(() => setShakeTrigger(false), 600);
-        setIsOrbiting(false);
-        setLoading(false);
-        setTimeout(() => {
-          inputRefs.current[0]?.focus();
-          setActiveFocus(0);
-        }, 100);
-        return;
-      }
-
       setLoading(true);
       try {
-        const res  = await fetch(`${API_URL}/api/auth/verify-otp`, {
+        const endpoint = type === 'login' ? `${API_URL}/api/auth/login-otp/verify` : `${API_URL}/api/auth/verify-otp`;
+        const body = type === 'login' ? JSON.stringify({ phone, otp: otpCode, role }) : JSON.stringify({ phone, otp: otpCode });
+        
+        const res  = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, otp: otpCode }),
+          body
         });
-        const data = await res.json() as { success: boolean; message: string };
+        const data = await res.json() as { success: boolean; message: string; data?: { accessToken: string; refreshToken: string; role?: string; practitioner?: any } };
 
         if (data.success) {
+          if (type === 'login' && data.data) {
+            localStorage.setItem('hc_access_token', data.data.accessToken);
+            localStorage.setItem('hc_refresh_token', data.data.refreshToken);
+            if (role === 'expert' && data.data.practitioner) {
+              localStorage.setItem('hc_role', 'practitioner');
+              localStorage.setItem('hc_pid', data.data.practitioner.id);
+            }
+          }
           setSuccess(true);
-          setTimeout(() => router.push('/login'), 2000);
+          setTimeout(() => {
+            if (type === 'login') {
+              router.push(role === 'expert' ? '/expert/dashboard' : '/dashboard');
+            } else {
+              router.push('/login');
+            }
+          }, 2000);
         } else {
           setError(data.message || 'Invalid OTP. Please try again.');
           setDigits(Array(6).fill(''));
@@ -178,7 +182,7 @@ function VerifyOtpContent() {
           setActiveFocus(0);
         }, 100);
       }
-    }, 850);
+    }, 1500);
   }
 
   async function handleVerify(e: React.FormEvent) {
@@ -269,10 +273,6 @@ function VerifyOtpContent() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700 font-semibold text-center flex flex-col gap-1">
-            <span>🧪 Dev Testing Mode Enabled</span>
-            <span className="font-normal text-amber-600">Enter <strong className="font-bold text-amber-800">123456</strong> to simulate Success or <strong className="font-bold text-amber-800">000000</strong> to simulate Failure</span>
-          </div>
           {error && (
             <motion.div 
               initial={{ opacity: 0, y: -5 }}
@@ -331,7 +331,7 @@ function VerifyOtpContent() {
                         : (isActive ? "0 0 0 3px rgba(245, 158, 11, 0.25)" : "0px 2px 4px rgba(0, 0, 0, 0.02)"),
                     }}
                     transition={isOrbiting ? {
-                      duration: 0.85,
+                      duration: 1.5,
                       ease: "easeInOut",
                       times: [0, 0.15, 0.32, 0.49, 0.66, 0.83, 1]
                     } : {

@@ -18,8 +18,8 @@ import {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
 } from '../lib/email';
-import { isOtpConfigured } from '../lib/sms';
-import { sendTwilioOTP, verifyTwilioOTP } from '../services/twilio.service';
+
+import { sendOtpSms, verifyOtpSms, isOtpConfigured } from '../lib/sms';
 import { handleValidation } from '../middleware/validate';
 import { authLimiter, emailLimiter } from '../middleware/rateLimiter';
 import { requireAuth, type AuthRequest } from '../middleware/auth';
@@ -185,7 +185,7 @@ router.post(
         if (phone.startsWith('+91')) {
           console.warn('MSG91 configuration pending — skipping OTP for Indian number during registration.');
         } else {
-          void sendTwilioOTP(phone).catch((e) => console.error('OTP SMS failed:', e));
+          void sendOtpSms(phone).catch((e) => console.error('OTP SMS failed:', e));
         }
       }
 
@@ -306,6 +306,135 @@ router.post(
     } catch (err: any) {
       console.error('Login error:', err);
       res.status(500).json({ success: false, message: 'Internal server error: ' + (err?.message || String(err)), stack: err?.stack });
+    }
+  }
+);
+
+// ─── OTP Login ───────────────────────────────────────────────────────────────
+
+router.post(
+  '/login-otp/request',
+  authLimiter,
+  [
+    body('phone').notEmpty().withMessage('Phone number required'),
+    body('role').optional().isIn(['user', 'practitioner']).withMessage('Role must be user or practitioner'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { phone, role = 'user' } = req.body as { phone: string; role?: 'user' | 'practitioner' };
+
+    try {
+      if (role === 'practitioner') {
+        const practitioner = await prisma.practitioner.findUnique({ where: { phone } });
+        if (!practitioner) {
+          res.status(404).json({ success: false, message: 'Practitioner not found with this phone number' });
+          return;
+        }
+      } else {
+        const user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) {
+          res.status(404).json({ success: false, message: 'User not found with this phone number' });
+          return;
+        }
+      }
+
+      await sendOtpSms(phone);
+
+      res.json({ success: true, message: 'OTP sent to your phone' });
+    } catch (err: any) {
+      console.error('Login OTP Request Error:', err);
+      res.status(500).json({ success: false, message: 'Failed to send OTP' });
+    }
+  }
+);
+
+router.post(
+  '/login-otp/verify',
+  authLimiter,
+  [
+    body('phone').notEmpty().withMessage('Phone number required'),
+    body('otp').notEmpty().withMessage('OTP required'),
+    body('role').optional().isIn(['user', 'practitioner']).withMessage('Role must be user or practitioner'),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    const { phone, otp, role = 'user' } = req.body as { phone: string; otp: string; role?: 'user' | 'practitioner' };
+
+    try {
+      const isValid = await verifyOtpSms(phone, otp);
+      if (!isValid) {
+        res.status(401).json({ success: false, message: 'Invalid or expired OTP' });
+        return;
+      }
+
+      if (role === 'practitioner') {
+        const practitioner = await prisma.practitioner.findUnique({ where: { phone } });
+        if (!practitioner) {
+          res.status(404).json({ success: false, message: 'Practitioner not found' });
+          return;
+        }
+        
+        if (isActivelyBanned(practitioner)) {
+          bannedResponse(res, practitioner);
+          return;
+        }
+
+        const payload: import('../lib/jwt').JwtPayload = { userId: practitioner.id, practitionerId: practitioner.id, ...(practitioner.email ? { email: practitioner.email } : {}) };
+        const accessToken = signAccessToken(payload);
+        const refreshToken = signRefreshToken(payload);
+
+        res.json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            practitioner,
+            accessToken,
+            refreshToken,
+          },
+        });
+      } else {
+        const user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) {
+          res.status(404).json({ success: false, message: 'User not found' });
+          return;
+        }
+        
+        if (isActivelyBanned(user)) {
+          bannedResponse(res, user);
+          return;
+        }
+
+        // Mark phone verified just in case it wasn't
+        if (!user.isPhoneVerified) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { isPhoneVerified: true },
+          });
+          user.isPhoneVerified = true;
+        }
+
+        const { accessToken, refreshToken } = await issueTokens(user.id, user.email);
+
+        res.json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              phone: user.phone,
+              isEmailVerified: user.isEmailVerified,
+              isPhoneVerified: user.isPhoneVerified,
+            },
+            accessToken,
+            refreshToken,
+          },
+        });
+      }
+    } catch (err: any) {
+      console.error('Login OTP Verify Error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 );
@@ -791,7 +920,7 @@ router.post(
         throw new Error('MSG91 configuration pending.');
       }
 
-      await sendTwilioOTP(phone);
+      await sendOtpSms(phone);
 
       res.json({ success: true, message: 'OTP sent successfully.' });
     } catch (err) {
@@ -830,9 +959,9 @@ router.post(
         throw new Error('MSG91 configuration pending.');
       }
 
-      const result = await verifyTwilioOTP(phone, otp);
+      const isValid = await verifyOtpSms(phone, otp);
 
-      if (result.status !== 'approved') {
+      if (!isValid) {
         res.status(400).json({ success: false, message: 'Invalid OTP' });
         return;
       }
@@ -873,7 +1002,7 @@ router.post(
         if (phone.startsWith('+91')) {
           throw new Error('MSG91 configuration pending.');
         }
-        await sendTwilioOTP(phone);
+        await sendOtpSms(phone);
       }
 
       res.json({ success: true, message: 'If this number is registered, a new OTP has been sent.' });
