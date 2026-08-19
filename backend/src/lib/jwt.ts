@@ -11,6 +11,8 @@ export interface JwtPayload {
   userId: string;
   email?: string;
   practitionerId?: string;
+  astrologerId?: string;
+  role?: 'ASTROLOGER' | string;
 }
 
 export function signAccessToken(payload: JwtPayload): string {

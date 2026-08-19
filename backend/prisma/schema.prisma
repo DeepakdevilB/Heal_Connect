@@ -54,6 +54,7 @@ model User {
   supportTickets        SupportTicket[]
   consents              Consent[]
   deviceTokens          DeviceToken[]
+  astrologerProfile     AstrologerProfile?
 }
 
 // ─── OTP model for SMS verification ──────────────────────────────────────────
@@ -432,6 +433,180 @@ model SessionTimeProposal {
   expiresAt      DateTime?
 
   @@index([sessionId])
+}
+
+// ─── Astrologer Onboarding ────────────────────────────────────────────────────
+
+model AstrologerOtp {
+  id        String   @id @default(uuid())
+  phone     String
+  otpHash   String
+  purpose   String   @default("login")
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+model AstrologerProfile {
+  id                            String   @id @default(uuid())
+  userId                        String   @unique
+  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullLegalName                 String   @default("")
+  displayName                   String   @default("")
+  profilePhotoUrl               String?
+  dateOfBirth                   DateTime?
+  gender                        String?
+  country                       String?  @default("India")
+  state                         String?
+  city                          String?
+  specializations               String[]
+  languages                     String[]
+  astrologyExperienceYears      Int      @default(0)
+  professionalConsultationYears Int      @default(0)
+  previousPlatformExperience    String?
+  professionalBio               String?
+  consultationApproach          String?
+  completedAstrologyCourse      Boolean  @default(false)
+  instituteName                 String?
+  courseName                    String?
+  completionYear                Int?
+  chatPricePerMin               Float    @default(0)
+  callPricePerMin               Float    @default(0)
+  isOnline                      Boolean  @default(false)
+  isChatAvailable               Boolean  @default(false)
+  isCallAvailable               Boolean  @default(false)
+  avgRating                     Float    @default(0)
+  reviewCount                   Int      @default(0)
+  totalConsultations            Int      @default(0)
+  totalEarnings                 Float    @default(0)
+  phoneVerified                 Boolean  @default(false)
+  emailVerified                 Boolean  @default(false)
+  identityVerified              Boolean  @default(false)
+  professionalVerified          Boolean  @default(false)
+  adminVerified                 Boolean  @default(false)
+  applicationStatus             String   @default("DRAFT")
+  accountStatus                 String   @default("INACTIVE")
+  rejectionReason               String?
+  approvedAt                    DateTime?
+  approvedBy                    String?
+  suspensionReason              String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  application              AstrologerApplication?
+  auditLogs                AstrologerAuditLog[]
+  documents                AstrologerDocument[]
+  kycVerification          AstrologerKycVerification?
+  professionalVerification AstrologerProfessionalVerification?
+  interviewVerification    AstrologerInterviewVerification?
+  adminReviews             AstrologerAdminReview[]
+
+  @@index([userId])
+}
+
+model AstrologerApplication {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String            @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  step                Int               @default(1)
+  lastSavedAt         DateTime?
+  submittedAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model AstrologerDocument {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  documentType        String
+  originalName        String
+  storedName          String
+  blobUrl             String
+  mimeType            String
+  sizeBytes           Int
+  isPrivate           Boolean           @default(true)
+  uploadedAt          DateTime          @default(now())
+
+  @@index([astrologerProfileId])
+}
+
+model AstrologerKycVerification {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String            @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  verificationStatus  String            @default("PENDING")
+  idDocType           String?
+  panLast4            String?
+  submittedAt         DateTime?
+  verifiedAt          DateTime?
+  failureReason       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model AstrologerProfessionalVerification {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String            @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  status              String            @default("PENDING")
+  verificationType    String?
+  platformProfileUrl  String?
+  professionalWebsite String?
+  notes               String?
+  submittedAt         DateTime?
+  reviewedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model AstrologerInterviewVerification {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String            @unique
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  status              String            @default("PENDING")
+  scheduledAt         DateTime?
+  completedAt         DateTime?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model AstrologerAdminReview {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String
+  astrologerProfile   AstrologerProfile @relation(fields: [astrologerProfileId], references: [id], onDelete: Cascade)
+  adminId             String
+  action              String
+  reason              String?
+  notes               String?
+  previousStatus      String?
+  newStatus           String?
+  createdAt           DateTime          @default(now())
+
+  @@index([astrologerProfileId])
+}
+
+model AstrologerAuditLog {
+  id                  String            @id @default(uuid())
+  astrologerProfileId String?
+  astrologerProfile   AstrologerProfile? @relation(fields: [astrologerProfileId], references: [id], onDelete: SetNull)
+  actorId             String?
+  actorType           String            @default("ASTROLOGER")
+  action              String
+  ipAddress           String?
+  userAgent           String?
+  previousState       String?
+  newState            String?
+  targetId            String?
+  createdAt           DateTime          @default(now())
+
+  @@index([astrologerProfileId])
+  @@index([actorId])
 }
 
 model SessionReminder {

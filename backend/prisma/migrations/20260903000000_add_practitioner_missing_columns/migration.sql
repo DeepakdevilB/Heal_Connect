@@ -1,0 +1,7 @@
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "googleId" TEXT;
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "isBanned" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "banReason" TEXT;
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "banUntil" TIMESTAMP(3);
+ALTER TABLE "Practitioner" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "Practitioner_googleId_key" ON "Practitioner"("googleId");

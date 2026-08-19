@@ -790,6 +790,43 @@ router.patch('/practitioners/:id/ban', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/admin/practitioners/:id
+router.get('/practitioners/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const p = await prisma.practitioner.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { sessions: true } },
+        reviews: { select: { rating: true, comment: true, createdAt: true } },
+        sessions: { orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, type: true, status: true, totalCost: true, duration: true, createdAt: true } },
+      },
+    });
+    if (!p) { res.status(404).json({ success: false, message: 'Practitioner not found' }); return; }
+    const ratings = p.reviews.map(r => r.rating);
+    const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+    res.json({
+      success: true,
+      data: {
+        practitioner: {
+          id: p.id, name: p.name, email: p.email, phone: p.phone,
+          bio: p.bio, specialties: p.specialties, certifications: p.certifications,
+          languages: p.languages, experienceYrs: p.experienceYrs, perMinuteRate: p.perMinuteRate,
+          photoUrl: p.photoUrl, isVerified: p.isVerified, isOnline: p.isOnline,
+          isBanned: p.isBanned, banReason: p.banReason, banUntil: p.banUntil,
+          createdAt: p.createdAt, sessionCount: p._count.sessions,
+          avgRating: Math.round(avgRating * 10) / 10,
+          recentSessions: p.sessions,
+          reviews: p.reviews,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // DELETE /api/admin/practitioners/:id
 router.delete('/practitioners/:id', async (req: Request, res: Response) => {
   try {
@@ -1335,6 +1372,101 @@ router.delete('/banners/:id', requireAdmin, async (req: Request, res: Response) 
     res.json({ success: true, message: 'Banner deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── 16. Astrologer Onboarding Applications ─────────────────────────────────
+router.get('/astrologer-profiles', async (req: Request, res: Response) => {
+  try {
+    const search = typeof req.query['search'] === 'string' ? req.query['search'] : undefined;
+    const status = typeof req.query['status'] === 'string' ? req.query['status'] : undefined;
+    const page = Math.max(1, parseInt(String(req.query['page'] ?? '1'), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query['limit'] ?? '20'), 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AstrologerProfileWhereInput = {};
+    if (search) {
+      where.OR = [
+        { fullLegalName: { contains: search, mode: 'insensitive' } },
+        { displayName: { contains: search, mode: 'insensitive' } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (status) where.applicationStatus = status;
+
+    const [profiles, total] = await Promise.all([
+      prisma.astrologerProfile.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { email: true, phone: true } } },
+      }),
+      prisma.astrologerProfile.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        profiles: profiles.map(p => ({
+          id: p.id,
+          fullLegalName: p.fullLegalName,
+          displayName: p.displayName,
+          email: p.user?.email || '',
+          phone: p.user?.phone || '',
+          specializations: p.specializations,
+          languages: p.languages,
+          applicationStatus: p.applicationStatus,
+          accountStatus: p.accountStatus,
+          astrologyExperienceYears: p.astrologyExperienceYears,
+          city: p.city,
+          country: p.country,
+          createdAt: p.createdAt,
+        })),
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      },
+    });
+  } catch (err) {
+    console.error('Astrologer profiles list error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.get('/astrologer-profiles/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const p = await prisma.astrologerProfile.findUnique({
+      where: { id },
+      include: {
+        user: { select: { email: true, phone: true, name: true } },
+        application: true,
+        kycVerification: true,
+        professionalVerification: true,
+        adminReviews: { orderBy: { createdAt: 'desc' }, take: 3 },
+      },
+    });
+    if (!p) { res.status(404).json({ success: false, message: 'Profile not found' }); return; }
+    res.json({ success: true, data: { profile: p } });
+  } catch (err) {
+    console.error('Astrologer profile detail error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.patch('/astrologer-profiles/:id/status', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { applicationStatus, accountStatus, rejectionReason } = req.body as { applicationStatus?: string; accountStatus?: string; rejectionReason?: string };
+    const data: any = {};
+    if (applicationStatus) data.applicationStatus = applicationStatus;
+    if (accountStatus) data.accountStatus = accountStatus;
+    if (rejectionReason !== undefined) data.rejectionReason = rejectionReason;
+    if (applicationStatus === 'APPROVED') { data.adminVerified = true; data.approvedAt = new Date(); }
+    const updated = await prisma.astrologerProfile.update({ where: { id }, data, select: { id: true, applicationStatus: true, accountStatus: true } });
+    res.json({ success: true, data: { profile: updated } });
+  } catch (err) {
+    console.error('Astrologer profile status update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
