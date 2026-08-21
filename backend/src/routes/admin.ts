@@ -1502,5 +1502,38 @@ router.get('/audit-log', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+// ─── 17. Reviews ─────────────────────────────────────────────────────────────
+router.get('/reviews', async (req: Request, res: Response) => {
+  try {
+    const reviews = await prisma.review.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        practitioner: { select: { id: true, name: true } },
+        session: { select: { id: true } }
+      }
+    });
+    res.json({ success: true, data: { reviews } });
+  } catch (err) {
+    console.error('Reviews fetch error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
 
+router.delete('/reviews/:id', requireAdminAuth(['SUPERADMIN', 'MODERATOR']), async (req: Request, res: Response) => {
+  try {
+    const id = req.params['id'];
+    if (!id) {
+      res.status(400).json({ success: false, message: 'ID required' });
+      return;
+    }
+    await prisma.review.delete({ where: { id } });
+    await writeAuditLog(req, 'DELETE_REVIEW', 'REVIEW', id);
+    res.json({ success: true, message: 'Review deleted successfully' });
+  } catch (err) {
+    console.error('Delete review error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+export default router;
