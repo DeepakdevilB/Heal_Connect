@@ -177,7 +177,7 @@ router.post(
       void sendWelcomeEmail(email, name).catch((e) => console.error('Welcome email failed:', e));
 
       if (useEmail) {
-        console.log(`\n✉️  [VERIFICATION LINK FOR ${email}]: http://localhost:3000/verify-email?token=${rawEmailToken}\n`);
+        console.log(`\n✉️  [VERIFICATION LINK FOR ${email}]: https://blue-plant-0d21bc900.7.azurestaticapps.net/verify-email?token=${rawEmailToken}\n`);
         void sendVerificationEmail(email, rawEmailToken).catch((e) =>
           console.error('Verification email failed:', e)
         );
@@ -271,7 +271,7 @@ router.post(
           data: { emailVerifyToken: tokenHash, emailVerifyExpiry },
         });
 
-        console.log(`\n✉️  [LOGIN VERIFICATION LINK FOR ${user.email}]: http://localhost:3000/verify-email?token=${rawToken}\n`);
+        console.log(`\n✉️  [LOGIN VERIFICATION LINK FOR ${user.email}]: https://blue-plant-0d21bc900.7.azurestaticapps.net/verify-email?token=${rawToken}\n`);
         if (user.email) {
           void sendVerificationEmail(user.email, rawToken).catch((e) => console.error('Verification email failed:', e));
         }
@@ -280,7 +280,7 @@ router.post(
           success: false,
           message: `Please verify your email (${user.email}) before logging in. A new verification link has been sent to your email.`,
           code: 'UNVERIFIED_ACCOUNT',
-          data: { email: user.email, phone: user.phone, verifyUrl: `http://localhost:3000/verify-email?token=${rawToken}` },
+          data: { email: user.email, phone: user.phone, verifyUrl: `https://blue-plant-0d21bc900.7.azurestaticapps.net/verify-email?token=${rawToken}` },
         });
         return;
       }
