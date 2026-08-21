@@ -13,12 +13,11 @@ const nextConfig = {
       fallback: [
         {
           source: '/api/:path*',
-          destination: `${backendUrl}/api/:path*`,
+          destination: backendUrl + '/api/:path*',
         },
       ],
     };
   },
-  output: 'standalone',
   images: {
     remotePatterns: [
       {
