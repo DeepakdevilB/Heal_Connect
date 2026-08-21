@@ -2,8 +2,8 @@ import sgMail from '@sendgrid/mail';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
-const FROM_EMAIL   = process.env.SENDGRID_FROM_EMAIL || 'noreply@healconnect.app';
-const FROM_NAME    = process.env.SENDGRID_FROM_NAME  || 'HealConnect';
+const FROM_EMAIL   = process.env.SENDGRID_FROM_EMAIL || 'noreply@Zenauraa.app';
+const FROM_NAME    = process.env.SENDGRID_FROM_NAME  || 'Zenauraa';
 const FRONTEND_URL = process.env.FRONTEND_URL        || 'https://blue-plant-0d21bc900.7.azurestaticapps.net';
 const APP_URL      = process.env.APP_URL             || FRONTEND_URL;
 
@@ -26,7 +26,7 @@ function wrap(body: string): string {
           <tr>
             <td style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:32px 40px;text-align:center;">
               <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.3px;">
-                ✦ HealConnect
+                ✦ Zenauraa
               </h1>
               <p style="margin:6px 0 0;color:#fef3c7;font-size:13px;">Your wellness journey starts here</p>
             </td>
@@ -89,7 +89,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
   const html = wrap(`
     <tr>
       <td style="padding:40px;">
-        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 12px;">Welcome to HealConnect, ${name}! 🎉</h2>
+        <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 12px;">Welcome to Zenauraa, ${name}! 🎉</h2>
         <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 24px;">
           We're so glad you're here. Your account is ready — connect with verified wellness
           experts for astrology, tarot, vastu, and more.
@@ -106,7 +106,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 
   await sendEmail({
     to,
-    subject: 'Welcome to HealConnect 🌟',
+    subject: 'Welcome to Zenauraa 🌟',
     html,
     textFallback: `Welcome email for ${name}. Dashboard link: ${dashboardUrl}`,
   });
@@ -132,7 +132,7 @@ export async function sendVerificationEmail(to: string, rawToken: string): Promi
 
   await sendEmail({
     to,
-    subject: 'Verify your HealConnect email',
+    subject: 'Verify your Zenauraa email',
     html,
     textFallback: `Verification Link: ${verifyUrl}`,
   });
@@ -147,7 +147,7 @@ export async function sendPasswordResetEmail(to: string, rawToken: string): Prom
       <td style="padding:40px;">
         <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Reset your password</h2>
         <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
-          We received a request to reset your HealConnect password.
+          We received a request to reset your Zenauraa password.
           Click below to choose a new one.
         </p>
         <p style="text-align:center;">${btn(resetUrl, 'Reset Password')}</p>
@@ -160,7 +160,7 @@ export async function sendPasswordResetEmail(to: string, rawToken: string): Prom
 
   await sendEmail({
     to,
-    subject: 'Reset your HealConnect password',
+    subject: 'Reset your Zenauraa password',
     html,
     textFallback: `Password Reset Link: ${resetUrl}`,
   });
@@ -175,7 +175,7 @@ export async function sendPasswordChangedEmail(to: string, name: string): Promis
       <td style="padding:40px;">
         <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Your password was changed ✓</h2>
         <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 24px;">
-          Hi ${name}, your HealConnect password was successfully updated.
+          Hi ${name}, your Zenauraa password was successfully updated.
         </p>
         <p style="color:#6b7280;font-size:16px;line-height:1.7;margin:0 0 32px;">
           If you made this change, great — you're all set!<br/>
@@ -188,7 +188,7 @@ export async function sendPasswordChangedEmail(to: string, name: string): Promis
 
   await sendEmail({
     to,
-    subject: 'Your HealConnect password was changed',
+    subject: 'Your Zenauraa password was changed',
     html,
     textFallback: `Password changed notification for ${name}. Login Link: ${loginUrl}`,
   });
