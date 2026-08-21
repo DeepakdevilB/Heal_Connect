@@ -255,6 +255,18 @@ function LoginInner() {
               </form>
             )}
 
+            {mode === 'login' && loginMethod === 'otp' && (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-[#1a1a1a]">Phone Number</Label>
+                  <Input id="phone" type="tel" placeholder="+919876543210" value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-white h-12 text-base font-bold rounded-full border-0 shadow-lg">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Send OTP <ArrowRight className="ml-2 h-4 w-4" /></>}
+                </Button>
+              </form>
+            )}
+
             {mode === 'forgot' && (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div className="space-y-2">
