@@ -1523,7 +1523,7 @@ router.get('/reviews', async (req: Request, res: Response) => {
 router.delete('/reviews/:id', requireAdminAuth(['SUPERADMIN', 'MODERATOR']), async (req: Request, res: Response) => {
   try {
     const id = req.params['id'];
-    if (!id) {
+    if (typeof id !== 'string' || !id) {
       res.status(400).json({ success: false, message: 'ID required' });
       return;
     }
