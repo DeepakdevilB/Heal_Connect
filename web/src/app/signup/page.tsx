@@ -42,6 +42,7 @@ function SignupInner() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [emailMarketingOptIn, setEmailMarketingOptIn] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
