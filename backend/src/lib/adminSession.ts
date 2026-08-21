@@ -20,7 +20,10 @@ const COOKIE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 function getSecret(): string {
   const secret = process.env['ADMIN_SESSION_SECRET'];
-  if (!secret) throw new Error('ADMIN_SESSION_SECRET is not set');
+  if (!secret) {
+    console.warn('WARNING: ADMIN_SESSION_SECRET is not set! Using an insecure fallback secret.');
+    return 'fallback_insecure_admin_session_secret_2026';
+  }
   return secret;
 }
 
