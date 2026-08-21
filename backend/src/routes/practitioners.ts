@@ -71,10 +71,32 @@ router.get(
       if (maxRate != null) where['perMinuteRate'] = { lte: parseFloat(maxRate) };
       if (onlineOnly === 'true') where['isOnline'] = true;
       if (search != null) {
-        where['OR'] = [
+        const searchOr: Record<string, unknown>[] = [
           { name: { contains: search, mode: 'insensitive' } },
           { bio: { contains: search, mode: 'insensitive' } },
         ];
+
+        // The search box says "Search by name or specialty", but `specialties`
+        // is a String[] column — Prisma's array filters only support exact,
+        // case-sensitive element matches (`has`/`hasSome`), not substring or
+        // case-insensitive matching. Resolve which known specialty tags
+        // case-insensitively contain the search term first (small, bounded
+        // set), then match practitioners against that resolved list — this is
+        // what makes typing "yoga" actually find someone tagged "Yoga".
+        const matchingSpecialties = await prisma.practitioner.findMany({
+          where: { isVerified: true },
+          select: { specialties: true },
+        }).then((rows) => {
+          const all = new Set<string>();
+          for (const r of rows) for (const s of r.specialties) all.add(s);
+          const term = search.toLowerCase();
+          return [...all].filter((s) => s.toLowerCase().includes(term));
+        });
+        if (matchingSpecialties.length > 0) {
+          searchOr.push({ specialties: { hasSome: matchingSpecialties } });
+        }
+
+        where['OR'] = searchOr;
       }
 
       const [practitioners, total] = await Promise.all([

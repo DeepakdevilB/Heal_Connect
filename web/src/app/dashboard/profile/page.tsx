@@ -91,6 +91,7 @@ export default function ProfilePage() {
     const token = tokenStore.getAccess();
     if (!token) return;
     setExporting(true);
+    setError('');
     try {
       const res = await usersApi.exportData(token);
       if (res.success && res.data) {
@@ -101,7 +102,19 @@ export default function ProfilePage() {
         a.download = `healconnect-my-data-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
+      } else {
+        // Previously silent: a non-success response (bad token, 5xx, etc.) left
+        // the button just stop spinning with no file and no explanation —
+        // indistinguishable from the feature doing nothing at all.
+        setError(res.message || 'Failed to export your data. Please try again.');
       }
+    } catch (err) {
+      // Previously unhandled: any thrown error (network failure, non-JSON
+      // response from a proxy/504, etc.) propagated silently past this
+      // try/finally with no catch, so the export could fail with zero
+      // visible feedback to the user.
+      console.error('Export failed:', err);
+      setError('Failed to export your data. Please try again.');
     } finally {
       setExporting(false);
     }

@@ -69,7 +69,7 @@ export default function PractitionersPage() {
   // Debounced search autocomplete
   useEffect(() => {
     const query = filters.search.trim();
-    if (query.length < 2) {
+    if (query.length < 1) {
       setSuggestions([]);
       return;
     }
@@ -136,7 +136,7 @@ export default function PractitionersPage() {
             />
 
             {/* Autocomplete dropdown */}
-            {showSuggestions && filters.search.trim().length >= 2 && suggestions.length > 0 && (
+            {showSuggestions && filters.search.trim().length >= 1 && suggestions.length > 0 && (
               <div className="absolute left-0 right-0 mt-2 bg-white border border-yellow-100 rounded-2xl shadow-xl overflow-hidden z-50">
                 {suggestions.map((p) => (
                   <button

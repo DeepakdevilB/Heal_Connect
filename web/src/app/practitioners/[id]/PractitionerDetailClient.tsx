@@ -234,27 +234,6 @@ export default function PractitionerDetailPage() {
             <Image src="/logo.png" alt="HealConnect" width={28} height={28} className="rounded-full shadow-sm" />
             <span className="font-extrabold text-[#f59e0b] tracking-tight">HealConnect</span>
           </button>
-          <button
-            onClick={handleShare}
-            aria-label="Share this profile"
-            className={`ml-auto flex items-center gap-2 text-sm font-bold rounded-full px-5 py-2.5 cursor-pointer shadow-md transition-all hover:scale-105 active:scale-95 ${
-              shared
-                ? 'bg-emerald-500 text-white shadow-emerald-500/30'
-                : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30 hover:from-amber-600 hover:to-orange-600'
-            }`}
-          >
-            {shared ? (
-              <>
-                <Check className="h-4 w-4" />
-                <span>Link copied</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4" />
-                <span>Share</span>
-              </>
-            )}
-          </button>
         </div>
       </header>
 
@@ -330,8 +309,28 @@ export default function PractitionerDetailPage() {
                 <span className="text-sm text-gray-400 font-medium"> / minute</span>
               </div>
               <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
-                <Button 
-                  onClick={handleRequestSession} 
+                <Button
+                  onClick={handleShare}
+                  aria-label="Share this profile"
+                  variant="outline"
+                  className={`gap-2 rounded-2xl px-5 font-semibold transition-all ${
+                    shared
+                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                      : 'border-yellow-200 hover:border-yellow-400 hover:text-[#d97706] hover:bg-amber-50'
+                  }`}
+                >
+                  {shared ? (
+                    <>
+                      <Check className="h-4 w-4" /> Link copied
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="h-4 w-4" /> Share
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleRequestSession}
                   disabled={requesting}
                   variant="outline" 
                   className="border-indigo-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 gap-2 rounded-2xl px-5 font-semibold transition-all disabled:opacity-40"
