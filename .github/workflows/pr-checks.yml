@@ -1,0 +1,40 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Build Backend (Type Check)
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Install Frontend Dependencies
+        working-directory: ./web
+        run: npm install
+
+      - name: Build Frontend (Type Check)
+        working-directory: ./web
+        run: npm run build
