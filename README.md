@@ -16,30 +16,28 @@ For security reasons, `.env` files are ignored in `.gitignore`. To run the proje
 
 Drop these files into their respective folders before starting!
 
-### Local Development Stack
-This repository now includes a `docker-compose.yml` that starts a local PostgreSQL 15 database and Redis 7 cache on the default ports:
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
+### Local Development Stack (Docker)
+This repository is fully containerized for local development using Docker. It spins up the Frontend, Backend, PostgreSQL, and Redis in isolated containers with hot-reloading enabled.
 
-Run the infrastructure first, then start the app servers.
+**Prerequisite:** Ensure Docker Desktop is installed and running.
 
-### 1. Backend Setup
+To start the entire stack:
 ```bash
-docker-compose up -d
-cd backend
-npm install
-npx prisma migrate deploy
-npm run dev
+docker-compose up --build
+```
+*(Note: Use `--build` the first time or when package dependencies change. For regular starts, just `docker-compose up` is enough).*
+
+**Run Database Migrations (First time only):**
+Once the containers are running, you need to push the Prisma schema to the local Postgres database. Open a new terminal and run:
+```bash
+docker-compose exec backend npx prisma migrate dev
 ```
 
-### 2. Frontend Setup
-```bash
-cd web
-npm install
-npm run dev
-```
-The application will be available at `http://localhost:3000`.
-API requests to `/api/*` now proxy to the local backend by default.
+**Access Points:**
+- **Frontend App**: `http://localhost:3000`
+- **Backend API**: `http://localhost:8082`
+- **Postgres DB**: `localhost:5432` (User: `postgres`, Pass: `test`)
+- **Redis Cache**: `localhost:6379`
 
 ---
 
