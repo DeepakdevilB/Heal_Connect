@@ -35,7 +35,9 @@ export default function SessionPage() {
 
     let currentJwtUserId = '';
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
       currentJwtUserId = payload.userId;
       setUserId(currentJwtUserId);
     } catch {
@@ -62,7 +64,9 @@ export default function SessionPage() {
         // Wait, sessions API returns practitioner { id, name ... } and user { id, name ... }
         // The practitioner ID is NOT the user ID. But wait! The JWT payload has userId and practitionerId.
         // It's safer to just parse practitionerId from JWT, or check if currentJwtUserId === session.userId.
-        const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const tokenPayload = JSON.parse(atob(base64));
         const isPractitioner = tokenPayload.practitionerId === session.practitionerId;
         setIsExpert(isPractitioner);
         

@@ -65,7 +65,9 @@ export default function ExpertDashboardPage() {
 
     // Verify the token actually has practitionerId embedded
     try {
-      const jwtPayload = JSON.parse(atob(token.split('.')[1]));
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jwtPayload = JSON.parse(atob(base64));
       if (!jwtPayload.practitionerId) {
         // Token is a user token, not a practitioner token — force re-login
         tokenStore.clear();
