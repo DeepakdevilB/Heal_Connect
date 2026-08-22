@@ -13,6 +13,17 @@ export default function ExpertSignupPage() {
   const [kycDocument, setKycDocument] = useState<File | null>(null);
   const [certificates, setCertificates] = useState<File[]>([]);
   const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const rules = [
+    { label: '1 uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
+    { label: '1 lowercase letter', test: (p: string) => /[a-z]/.test(p) },
+    { label: '1 number',           test: (p: string) => /[0-9]/.test(p) },
+    { label: '1 special character',test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+    { label: 'Minimum 8 characters',test: (p: string) => p.length >= 8 },
+  ];
+  const passed = rules.filter(r => r.test(form.password)).length;
+  const allPassed = passed === rules.length;
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -22,8 +33,8 @@ export default function ExpertSignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!allPassed) { setError('Password does not meet the required criteria.'); return; }
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     // if (!kycDocument) { setError('KYC Document is required.'); return; }
 
     setLoading(true);
@@ -136,7 +147,7 @@ export default function ExpertSignupPage() {
                   <input
                     className={inputCls + ' pr-11'}
                     type={showPass ? 'text' : 'password'}
-                    placeholder="Min. 6 characters"
+                    placeholder="Create a strong password"
                     value={form.password}
                     onChange={e => set('password', e.target.value)}
                     required
@@ -145,17 +156,46 @@ export default function ExpertSignupPage() {
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {form.password.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex gap-1">
+                      {rules.map((r, i) => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${r.test(form.password)
+                          ? passed <= 2 ? 'bg-red-400' : passed <= 3 ? 'bg-yellow-400' : passed <= 4 ? 'bg-blue-400' : 'bg-green-500'
+                          : 'bg-gray-200'}`} />
+                      ))}
+                    </div>
+                    <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      {rules.map(r => {
+                        const ok = r.test(form.password);
+                        return (
+                          <li key={r.label} className={`flex items-center gap-1.5 text-xs transition-colors ${ok ? 'text-green-600' : 'text-gray-400'}`}>
+                            <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${ok ? 'bg-green-500 text-white' : 'border border-gray-300'}`}>
+                              {ok ? '✓' : ''}
+                            </span>
+                            {r.label}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Confirm Password <span className="text-red-500">*</span></label>
-                <input
-                  className={inputCls}
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={form.confirm}
-                  onChange={e => set('confirm', e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    className={inputCls + ' pr-11'}
+                    type={showConfirm ? 'text' : 'password'}
+                    placeholder="Re-enter password"
+                    value={form.confirm}
+                    onChange={e => set('confirm', e.target.value)}
+                    required
+                  />
+                  <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               
               {/* HIDDEN FOR NOW

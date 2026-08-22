@@ -86,7 +86,7 @@ export default function AstrologerVerificationPage() {
     <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
       {/* Left panel */}
-      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+      <div className="hidden md:flex flex-col justify-start w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden sticky top-0 h-screen">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
@@ -94,15 +94,21 @@ export default function AstrologerVerificationPage() {
             <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
             <span className="text-2xl font-extrabold text-white">HealConnect</span>
           </Link>
-          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">Almost There</h1>
-          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+          <div className="mb-4 inline-flex items-center gap-2 bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-full tracking-wide">
+            STEP 3 OF 3
+          </div>
+          <h1 className="text-5xl font-extrabold text-white mb-4 leading-tight tracking-tight">
+            Almost<br />There
+          </h1>
+          <p className="text-amber-200 text-lg font-semibold mb-5">One last step.</p>
+          <p className="text-white/80 text-sm leading-relaxed max-w-sm">
             We won't ask you to upload documents at this stage. Any further verification will depend on the nature of your practice.
           </p>
-          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+          <p className="text-white/70 text-sm leading-relaxed mt-4 max-w-sm">
             If we feel your practice could be a good fit, we'll be in touch for a short conversation.
           </p>
         </div>
-        <div className="relative z-10 border-t border-white/20 pt-6">
+        <div className="relative z-10 mt-auto pt-12 border-t border-white/20">
           <p className="text-amber-100/60 text-xs">© 2026 HealConnect. All rights reserved.</p>
         </div>
       </div>
@@ -114,7 +120,7 @@ export default function AstrologerVerificationPage() {
           <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
         </div>
 
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-2xl">
           <StepBar step={3} />
 
           <div className="bg-white rounded-2xl shadow-xl border border-yellow-100 p-8 space-y-7">

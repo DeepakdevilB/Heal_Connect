@@ -39,6 +39,16 @@ function SignupInner() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const pwdRules = [
+    { label: '1 uppercase letter',   test: (p: string) => /[A-Z]/.test(p) },
+    { label: '1 lowercase letter',   test: (p: string) => /[a-z]/.test(p) },
+    { label: '1 number',             test: (p: string) => /[0-9]/.test(p) },
+    { label: '1 special character',  test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+    { label: 'Minimum 8 characters', test: (p: string) => p.length >= 8 },
+  ];
+  const pwdPassed = pwdRules.filter(r => r.test(password)).length;
+  const allPwdPassed = pwdPassed === pwdRules.length;
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [emailMarketingOptIn, setEmailMarketingOptIn] = useState(false);
@@ -64,8 +74,8 @@ function SignupInner() {
       return;
     }
     setLoading(true);
-    const pwdOk = /^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
-    if (!pwdOk) { setError('Password must be min. 8 chars, 1 uppercase, 1 number.'); setLoading(false); return; }
+    const pwdOk = allPwdPassed;
+    if (!pwdOk) { setError('Password does not meet the required criteria.'); setLoading(false); return; }
     try {
       if (role === 'expert') {
         const res = await authApi.practitionerRegister(name, email, password, dob, {
@@ -262,13 +272,35 @@ function SignupInner() {
                 <Label htmlFor="password" className="text-[#1a1a1a]">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Min. 8 chars, 1 uppercase, 1 number" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" className="pl-10 pr-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
+                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Create a strong password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" className="pl-10 pr-10 h-12 border-yellow-200 focus-visible:ring-[#f59e0b] bg-[#fffbf0] text-[#1a1a1a]" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600" tabIndex={-1}>
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-                {password.length > 0 && password.length < 8 && (
-                  <p className="text-xs text-amber-500 mt-1">Password must be at least 8 characters</p>
+                {password.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex gap-1">
+                      {pwdRules.map((r, i) => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                          r.test(password)
+                            ? pwdPassed <= 2 ? 'bg-red-400' : pwdPassed <= 3 ? 'bg-yellow-400' : pwdPassed <= 4 ? 'bg-blue-400' : 'bg-green-500'
+                            : 'bg-gray-200'}`} />
+                      ))}
+                    </div>
+                    <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      {pwdRules.map(r => {
+                        const ok = r.test(password);
+                        return (
+                          <li key={r.label} className={`flex items-center gap-1.5 text-xs transition-colors ${ok ? 'text-green-600' : 'text-gray-400'}`}>
+                            <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${ok ? 'bg-green-500 text-white' : 'border border-gray-300'}`}>
+                              {ok ? '✓' : ''}
+                            </span>
+                            {r.label}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 )}
               </div>
               {/* CHILD-02: DOB — required for 18+ age gate */}

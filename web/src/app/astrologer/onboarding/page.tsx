@@ -65,6 +65,16 @@ export default function AstrologerOnboardingPage() {
   useEffect(() => {
     const token = astrologerTokenStore.getAccess();
     if (!token) { router.replace('/astrologer/login'); return; }
+
+    // Use cached profile for redirect check only — skip the API call
+    const cached = astrologerTokenStore.getProfile();
+    if (cached) {
+      if (cached.applicationStatus === 'APPROVED' && cached.accountStatus === 'ACTIVE') { router.replace('/astrologer/dashboard'); return; }
+      if (['ADMIN_REVIEW', 'UNDER_REVIEW', 'PENDING_REVIEW', 'SUBMITTED'].includes(cached.applicationStatus)) { router.replace('/astrologer/onboarding/submitted'); return; }
+      setLoading(false);
+      return;
+    }
+
     astrologerApi.getApplication(token).then((res) => {
       if (!res.success) { astrologerTokenStore.clear(); router.replace('/astrologer/login'); return; }
       const p = res.data?.profile;
@@ -110,7 +120,7 @@ export default function AstrologerOnboardingPage() {
     <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
       {/* Left panel */}
-      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden sticky top-0 h-screen">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
@@ -118,14 +128,17 @@ export default function AstrologerOnboardingPage() {
             <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
             <span className="text-2xl font-extrabold text-white">HealConnect</span>
           </Link>
-          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">
+          <div className="mb-3 inline-flex items-center gap-2 bg-white/15 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+            STEP 1 OF 3
+          </div>
+          <h1 className="text-5xl font-extrabold text-white mb-5 leading-tight tracking-tight">
             Practitioner<br />Interest Form
           </h1>
-          <p className="text-amber-100 text-lg font-medium mb-2">Discover. Connect. Thrive.</p>
-          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+          <p className="text-amber-200 text-xl font-semibold mb-6">Discover. Connect. Thrive.</p>
+          <p className="text-white/90 text-base leading-relaxed max-w-sm">
             We're building a curated community of trusted practitioners across holistic health, astrology, spirituality, and personal development.
           </p>
-          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+          <p className="text-white/70 text-sm leading-relaxed mt-4 max-w-sm">
             This short form takes around 5 minutes. If we feel your practice could be a good fit, we'll be in touch for a conversation.
           </p>
         </div>
@@ -143,7 +156,7 @@ export default function AstrologerOnboardingPage() {
           <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
         </div>
 
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-2xl">
           <StepBar step={1} />
 
           <div className="bg-white rounded-2xl shadow-xl border border-yellow-100 p-8">

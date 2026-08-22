@@ -78,7 +78,7 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
       const room = io!.sockets.adapter.rooms.get(`room:${sessionId}`);
       const roomSize = room ? room.size : 1;
 
-      prisma.session.findUnique({ where: { id: sessionId } }).then((sess) => {
+      prisma.session.findUnique({ where: { id: sessionId } }).then((sess: Awaited<ReturnType<typeof prisma.session.findUnique>>) => {
         if (!sess) return;
         
         // Timer only starts if the expert has accepted, and both are in the room.
@@ -172,7 +172,7 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
         for (const sessionId of joinedSessions) {
           prisma.session.findFirst({
             where: { id: sessionId, status: 'ACTIVE' },
-          }).then((session) => {
+          }).then((session: Awaited<ReturnType<typeof prisma.session.findFirst>>) => {
             if (!session) return;
             // Only mark DISCONNECTED if the disconnecting party actually owns this session
             const isParticipant =
@@ -192,7 +192,7 @@ export function initSocketServer(server: HttpServer): SocketIOServer {
               });
               console.log(`Session ${sessionId} marked DISCONNECTED (socket drop)`);
             });
-          }).catch((err) => {
+          }).catch((err: unknown) => {
             console.error(`[socket] disconnect session cleanup error for ${sessionId}:`, err);
           });
         }

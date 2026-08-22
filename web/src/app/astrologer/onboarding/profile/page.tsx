@@ -50,8 +50,8 @@ const OFFERING_OPTIONS = ['1-to-1 sessions', 'Readings / Consultations', 'Coachi
 
 function SectionLabel({ num, title, subtitle }: { num: string; title: string; subtitle?: string }) {
   return (
-    <div className="flex items-start gap-3 mb-4">
-      <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-600 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{num}</span>
+    <div className="flex items-start gap-3 mb-3">
+      <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{num}</span>
       <div>
         <p className="text-sm font-bold text-gray-800">{title}</p>
         {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
@@ -148,7 +148,7 @@ export default function AstrologerProfilePage() {
     <div className="min-h-screen bg-[#fffbf0] flex flex-col md:flex-row font-sans">
 
       {/* Left panel */}
-      <div className="hidden md:flex flex-col justify-between w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden">
+      <div className="hidden md:flex flex-col justify-start w-5/12 p-12 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-700 relative overflow-hidden sticky top-0 h-screen">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
@@ -156,17 +156,23 @@ export default function AstrologerProfilePage() {
             <Image src="/logo.png" alt="HealConnect" width={36} height={36} className="rounded-full" />
             <span className="text-2xl font-extrabold text-white">HealConnect</span>
           </Link>
-          <h1 className="text-4xl font-extrabold text-white mb-4 leading-tight">Your Practice</h1>
-          <p className="text-amber-100/80 text-sm leading-relaxed mt-4 max-w-xs">
+          <div className="mb-4 inline-flex items-center gap-2 bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-full tracking-wide">
+            STEP 2 OF 3
+          </div>
+          <h1 className="text-5xl font-extrabold text-white mb-4 leading-tight tracking-tight">
+            Your<br />Practice
+          </h1>
+          <p className="text-amber-200 text-lg font-semibold mb-5">Share your expertise with us.</p>
+          <p className="text-white/80 text-sm leading-relaxed max-w-sm">
             We welcome practitioners from all backgrounds — formal training, certification, mentorship, lineage, or years of dedicated practice.
           </p>
-          <div className="mt-8 space-y-3">
+          <div className="mt-8 flex flex-wrap gap-2">
             {['Astrology & Divination', 'Energy Healing', 'Meditation & Mindfulness', 'Holistic Wellness', 'Vastu & Space', 'Life Coaching'].map(tag => (
-              <span key={tag} className="inline-block mr-2 mb-2 px-3 py-1 bg-white/15 text-white text-xs rounded-full">{tag}</span>
+              <span key={tag} className="px-3 py-1 bg-white/15 text-white text-xs font-medium rounded-full">{tag}</span>
             ))}
           </div>
         </div>
-        <div className="relative z-10 border-t border-white/20 pt-6">
+        <div className="relative z-10 mt-auto pt-12 border-t border-white/20">
           <p className="text-amber-100/60 text-xs">© 2026 HealConnect. All rights reserved.</p>
         </div>
       </div>
@@ -179,13 +185,13 @@ export default function AstrologerProfilePage() {
           <span className="text-xl font-extrabold text-amber-500">HealConnect</span>
         </div>
 
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-2xl">
           <StepBar step={2} />
 
           <div className="bg-white rounded-2xl shadow-xl border border-yellow-100 p-8 space-y-8">
             <div>
-              <h2 className="text-xl font-extrabold text-gray-900 mb-1">What do you offer?</h2>
-              <p className="text-sm text-gray-500">Tell us about your practice and experience.</p>
+              <h2 className="text-xl font-extrabold text-gray-900 mb-1">Your Practice</h2>
+              <p className="text-sm text-gray-500">Select your areas, experience, and what you offer.</p>
             </div>
 
             {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}

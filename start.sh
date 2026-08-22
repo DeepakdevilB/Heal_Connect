@@ -3,11 +3,11 @@
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # Start backend
-cd "$ROOT/backend" && npm run dev &
+npm --prefix "$ROOT/backend" run dev &
 BACKEND_PID=$!
 
 # Start frontend
-cd "$ROOT/web" && npm run dev &
+npm --prefix "$ROOT/web" run dev &
 FRONTEND_PID=$!
 
 echo "Backend PID: $BACKEND_PID | Frontend PID: $FRONTEND_PID"
