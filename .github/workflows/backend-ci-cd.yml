@@ -73,15 +73,9 @@ jobs:
         working-directory: ./backend
         run: npx prisma@7.8.0 generate
 
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_283D2026274D4A1090B29EEFE12182D4 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_056593D5DFE94EA183417CF04240DEA9 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EC5E6C36C092435A9479FE47533BD7DC }}
-
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: "healconnect-backend"
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: ./backend
